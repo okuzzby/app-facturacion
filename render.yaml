@@ -1,0 +1,13 @@
+# Blueprint de Render (referencia). El servicio también puede crearse desde el
+# dashboard o vía la integración. Root del backend: ./backend
+services:
+  - type: web
+    name: app-facturacion-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
