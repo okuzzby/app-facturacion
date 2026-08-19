@@ -15,27 +15,109 @@ body {
   justify-content: center;
   background: #0f1115;
   color: #e8eaed;
+  padding: 1rem;
 }
 
 .card {
+  width: 100%;
+  max-width: 380px;
   text-align: center;
-  padding: 2.5rem 3rem;
+  padding: 2.5rem 2rem;
   border: 1px solid #2a2e37;
   border-radius: 16px;
   background: #161a22;
 }
 
 .card h1 {
-  margin: 0 0 0.5rem;
-  font-size: 1.6rem;
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
 }
 
 .card p {
-  margin: 0.25rem 0;
+  margin: 0.35rem 0;
   color: #9aa0a6;
 }
 
-.status {
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0.75rem;
+}
+
+input {
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid #2a2e37;
+  background: #0f1115;
+  color: #e8eaed;
+  font-size: 0.95rem;
+}
+
+input:focus {
+  outline: none;
+  border-color: #4c8bf5;
+}
+
+button {
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  border: none;
+  background: #4c8bf5;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button.google {
+  width: 100%;
+  margin-top: 0.5rem;
+  background: transparent;
+  border: 1px solid #2a2e37;
+  color: #e8eaed;
+  font-weight: 500;
+}
+
+button.secundario {
   margin-top: 1.25rem;
+  background: transparent;
+  border: 1px solid #2a2e37;
+  color: #e8eaed;
+}
+
+.switch {
+  margin-top: 1rem;
   font-size: 0.9rem;
+}
+
+.switch a {
+  color: #4c8bf5;
+  text-decoration: none;
+}
+
+.email-actual {
+  color: #e8eaed;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.status {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.ok {
+  color: #34d399;
+  font-size: 0.85rem;
+}
+
+.error {
+  color: #f87171;
+  font-size: 0.85rem;
 }
