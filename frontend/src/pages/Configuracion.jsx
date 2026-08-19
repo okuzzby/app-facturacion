@@ -68,10 +68,7 @@ export default function Configuracion() {
   async function borrarCredencial() {
     setCredError(null)
     setCredMsg(null)
-    const { error } = await supabase
-      .from('credenciales_arca')
-      .delete()
-      .eq('user_id', user.id)
+    const { error } = await supabase.rpc('borrar_credencial_arca')
     if (error) {
       setCredError(error.message)
       return
