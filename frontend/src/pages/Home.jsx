@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Home() {
@@ -9,9 +10,14 @@ export default function Home() {
       <p>Sesión iniciada como:</p>
       <p className="email-actual">{user?.email}</p>
       <p className="status">
-        Fase 1 lista. La pantalla de Configuración y el botón Facturar llegan en
-        la Fase 2.
+        El botón Facturar llega en la Fase 3. Por ahora podés dejar lista tu
+        Configuración.
       </p>
+
+      <Link to="/configuracion" className="boton-link">
+        Configuración
+      </Link>
+
       <button className="secundario" onClick={signOut} type="button">
         Cerrar sesión
       </button>

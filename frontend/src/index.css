@@ -28,6 +28,11 @@ body {
   background: #161a22;
 }
 
+.card.card-wide {
+  max-width: 560px;
+  text-align: left;
+}
+
 .card h1 {
   margin: 0 0 0.25rem;
   font-size: 1.5rem;
@@ -36,6 +41,31 @@ body {
 .card p {
   margin: 0.35rem 0;
   color: #9aa0a6;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.volver {
+  color: #4c8bf5;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.seccion {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #2a2e37;
+}
+
+.seccion h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem;
+  color: #e8eaed;
 }
 
 .form {
@@ -52,6 +82,7 @@ input {
   background: #0f1115;
   color: #e8eaed;
   font-size: 0.95rem;
+  width: 100%;
 }
 
 input:focus {
@@ -60,18 +91,18 @@ input:focus {
 }
 
 button {
-  padding: 0.7rem 1rem;
+  padding: 0.6rem 1rem;
   border-radius: 10px;
   border: none;
   background: #4c8bf5;
   color: white;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: default;
 }
 
@@ -85,10 +116,42 @@ button.google {
 }
 
 button.secundario {
-  margin-top: 1.25rem;
   background: transparent;
   border: 1px solid #2a2e37;
   color: #e8eaed;
+}
+
+button.peligro {
+  background: transparent;
+  border: 1px solid #5a2a2e;
+  color: #f87171;
+}
+
+.boton-link {
+  display: block;
+  margin: 1.25rem 0 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  background: #4c8bf5;
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.card .secundario {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.card.card-wide .secundario {
+  width: auto;
+}
+
+.fila-botones {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .switch {
@@ -110,6 +173,47 @@ button.secundario {
 .status {
   margin-top: 1rem;
   font-size: 0.85rem;
+}
+
+.sub {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.cred-cargada {
+  background: #0f1115;
+  border: 1px solid #2a2e37;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.lista-productos {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lista-productos li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.lista-productos li input {
+  flex: 1;
+}
+
+.agregar {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.agregar input {
+  flex: 1;
 }
 
 .ok {
