@@ -15,6 +15,11 @@ export default function Configuracion() {
   const [credError, setCredError] = useState(null)
   const [guardandoCred, setGuardandoCred] = useState(false)
 
+  // ---- verificación de conexión con el backend ----
+  const [verifMsg, setVerifMsg] = useState(null)
+  const [verifError, setVerifError] = useState(null)
+  const [verificando, setVerificando] = useState(false)
+
   // ---- productos ----
   const [productos, setProductos] = useState([])
   const [nuevoProducto, setNuevoProducto] = useState('')
@@ -77,6 +82,39 @@ export default function Configuracion() {
     setClave('')
     setCredencial(null)
     setEditandoCred(true)
+  }
+
+  async function verificarConexion() {
+    setVerifMsg(null)
+    setVerifError(null)
+    setVerificando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/verificar-credencial`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+
+      if (j.tiene_credencial) {
+        setVerifMsg(
+          `Conexión OK ✓ El backend te identificó y leyó tu credencial (CUIT ${j.cuit}).`
+        )
+      } else {
+        setVerifMsg('Conexión OK ✓ pero todavía no cargaste una credencial ARCA.')
+      }
+    } catch (e) {
+      setVerifError(e.message ?? String(e))
+    } finally {
+      setVerificando(false)
+    }
   }
 
   async function agregarProducto(e) {
@@ -192,6 +230,14 @@ export default function Configuracion() {
         )}
         {credMsg && <p className="ok">{credMsg}</p>}
         {credError && <p className="error">{credError}</p>}
+
+        <div className="verif">
+          <button type="button" className="secundario" onClick={verificarConexion} disabled={verificando}>
+            {verificando ? 'Verificando…' : 'Verificar conexión con el backend'}
+          </button>
+          {verifMsg && <p className="ok">{verifMsg}</p>}
+          {verifError && <p className="error">{verifError}</p>}
+        </div>
       </section>
 
       {/* ---------------- Productos ---------------- */}

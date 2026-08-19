@@ -180,6 +180,12 @@ button.peligro {
   color: #6b7280;
 }
 
+.verif {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #2a2e37;
+}
+
 .cred-cargada {
   background: #0f1115;
   border: 1px solid #2a2e37;
