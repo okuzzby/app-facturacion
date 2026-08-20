@@ -48,6 +48,48 @@ async function loginEnArca(page, cuit, clave, pasos) {
 
 const RUIDO = /^(salir|ingresar|volver|continuar|aceptar|cancelar|limpiar|siguiente|ayuda|inicio)$/i
 
+const PORTAL_URL = 'https://portalcf.cloud.afip.gob.ar/portal/app/'
+
+// Desde el portal (ya logueado), busca y abre "Comprobantes en línea".
+// No se puede entrar directo a la URL de RCEL (da Forbidden): hay que
+// clickear el servicio en el portal para que ARCA habilite el acceso.
+async function entrarARcel(page, pasos) {
+  const context = page.context()
+  if (!page.url().includes('portalcf')) {
+    await page
+      .goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
+      .catch(() => {})
+  }
+  await page.waitForTimeout(2000)
+  pasos.push('En el portal, buscando el servicio')
+
+  // Buscar "Comprobantes en línea" en el buscador del portal
+  const buscador = page
+    .locator(
+      '#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]'
+    )
+    .first()
+  try {
+    await buscador.fill('Comprobantes en línea', { timeout: 12000 })
+    await page.waitForTimeout(2500)
+    pasos.push('Servicio buscado en el portal')
+  } catch {
+    pasos.push('No se encontró el buscador; intento clickear por texto')
+  }
+
+  // Click en el resultado; puede abrir una pestaña nueva (popup)
+  const opcion = page.getByText(/comprobantes en l[ií]nea/i).first()
+  const [popup] = await Promise.all([
+    context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+    opcion.click({ timeout: 15000 }),
+  ])
+  const destino = popup || page
+  await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+  await destino.waitForTimeout(2500)
+  pasos.push('Servicio abierto (RCEL)')
+  return destino
+}
+
 // Login + entra a RCEL y devuelve la lista de empresas a representar.
 export async function listarEmpresasArca(cuit, clave) {
   const pasos = []
@@ -57,12 +99,9 @@ export async function listarEmpresasArca(cuit, clave) {
     ;({ browser, page } = await abrir())
     await loginEnArca(page, cuit, clave, pasos)
 
-    pasos.push('Abriendo Comprobantes en línea')
-    await page.goto(RCEL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {})
-    await page.waitForTimeout(1500)
+    const destino = await entrarARcel(page, pasos)
 
-    const candidatas = await page.$$eval(
+    const candidatas = await destino.$$eval(
       'input[type=button], input[type=submit], button, a',
       (els) => els.map((el) => (el.value || el.textContent || '').trim())
     )
@@ -75,11 +114,11 @@ export async function listarEmpresasArca(cuit, clave) {
     pasos.push(`Empresas detectadas: ${filtradas.length}`)
     return {
       ok: true,
-      url: page.url(),
-      title: await page.title().catch(() => null),
+      url: destino.url(),
+      title: await destino.title().catch(() => null),
       empresas: filtradas,
       pasos,
-      screenshot: await captura(page),
+      screenshot: await captura(destino),
     }
   } catch (e) {
     return {
