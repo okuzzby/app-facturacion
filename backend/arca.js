@@ -77,11 +77,18 @@ async function entrarARcel(page, pasos) {
     pasos.push('No se encontró el buscador; intento clickear por texto')
   }
 
-  // Click en el resultado; puede abrir una pestaña nueva (popup)
-  const opcion = page.getByText(/comprobantes en l[ií]nea/i).first()
+  // Click en el resultado VISIBLE del buscador. Apuntamos al subtítulo
+  // (único del resultado real) y forzamos que sea visible, para no caer en
+  // una copia oculta del texto "Comprobantes en línea".
+  const resultado = page
+    .getByText(/sistema de emisi[oó]n de comprobantes electr[oó]nicos/i)
+    .and(page.locator(':visible'))
+    .first()
+  await resultado.waitFor({ state: 'visible', timeout: 15000 })
+  await resultado.scrollIntoViewIfNeeded().catch(() => {})
   const [popup] = await Promise.all([
     context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
-    opcion.click({ timeout: 15000 }),
+    resultado.click({ timeout: 15000 }),
   ])
   const destino = popup || page
   await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
