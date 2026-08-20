@@ -498,10 +498,17 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
     )
     await destino.waitForTimeout(1000)
     const conds = d.condicionesVenta && d.condicionesVenta.length ? d.condicionesVenta : ['Contado']
-    for (const c of conds) {
-      const id = CV_MAP[String(c).toLowerCase().trim()]
-      if (id) await destino.locator(id).check().catch(() => {})
-    }
+    const idsCV = conds
+      .map((c) => CV_MAP[String(c).toLowerCase().trim()])
+      .filter(Boolean)
+      .map((s) => s.replace('#', ''))
+    await destino.evaluate((ids) => {
+      ids.forEach((id) => {
+        const el = document.getElementById(id)
+        if (el && !el.checked) el.click()
+      })
+    }, idsCV)
+    await destino.waitForTimeout(500)
     pasos.push('IVA = ' + (d.condicionIva || 'Consumidor Final') + ' · Venta: ' + conds.join(', '))
     await clickContinuar(destino, pasos, 'Receptor')
 
