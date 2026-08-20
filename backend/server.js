@@ -2,7 +2,12 @@ import express from 'express'
 import cors from 'cors'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
-import { probarLoginArca, listarEmpresasArca, abrirFormularioFactura } from './arca.js'
+import {
+  probarLoginArca,
+  listarEmpresasArca,
+  abrirFormularioFactura,
+  leerOpcionesComprobante,
+} from './arca.js'
 
 const app = express()
 app.use(cors())
@@ -141,6 +146,32 @@ app.post('/arca/factura-preview', requireAuth, async (req, res) => {
   }
 
   const resultado = await abrirFormularioFactura(cred.cuit, cred.clave, empresa)
+  res.json(resultado)
+})
+
+// Lee los puntos de venta y tipos de comprobante disponibles. No emite nada.
+app.post('/arca/opciones-comprobante', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  const empresa = row?.empresa_representada
+  if (!empresa) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  const resultado = await leerOpcionesComprobante(cred.cuit, cred.clave, empresa)
   res.json(resultado)
 })
 

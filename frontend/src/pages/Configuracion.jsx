@@ -34,6 +34,15 @@ export default function Configuracion() {
   const [empresaMsg, setEmpresaMsg] = useState(null)
   const [empresaError, setEmpresaError] = useState(null)
 
+  // ---- punto de venta y tipo de comprobante ----
+  const [pvOpciones, setPvOpciones] = useState([])
+  const [tipoOpciones, setTipoOpciones] = useState([])
+  const [pvSel, setPvSel] = useState('')
+  const [tipoSel, setTipoSel] = useState('')
+  const [detectandoOpc, setDetectandoOpc] = useState(false)
+  const [opcMsg, setOpcMsg] = useState(null)
+  const [opcError, setOpcError] = useState(null)
+
   // ---- productos ----
   const [productos, setProductos] = useState([])
   const [nuevoProducto, setNuevoProducto] = useState('')
@@ -42,7 +51,7 @@ export default function Configuracion() {
   async function cargarCredencial() {
     const { data } = await supabase
       .from('credenciales_arca')
-      .select('cuit, updated_at, empresa_representada')
+      .select('cuit, updated_at, empresa_representada, punto_venta, tipo_comprobante')
       .maybeSingle()
     setCredencial(data ?? null)
     setEditandoCred(!data)
@@ -239,6 +248,68 @@ export default function Configuracion() {
     }
   }
 
+  async function detectarOpciones() {
+    setOpcMsg(null)
+    setOpcError(null)
+    setPvOpciones([])
+    setTipoOpciones([])
+    setDetectandoOpc(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/opciones-comprobante`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      setArcaShot(j.screenshot || null)
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      if (!j.ok) throw new Error(j.error || 'No se pudieron leer las opciones')
+
+      setPvOpciones(j.puntosVenta || [])
+      setTipoOpciones(j.tiposComprobante || [])
+      setPvSel(credencial?.punto_venta || (j.puntosVenta?.[0] ?? ''))
+      const tipoDefault =
+        (j.tiposComprobante || []).find((t) => /factura c/i.test(t)) ||
+        (j.tiposComprobante?.[0] ?? '')
+      setTipoSel(credencial?.tipo_comprobante || tipoDefault)
+      if (!j.puntosVenta?.length) {
+        setOpcMsg('No se detectaron puntos de venta (revisá la captura).')
+      }
+    } catch (e) {
+      setOpcError(e.message ?? String(e))
+    } finally {
+      setDetectandoOpc(false)
+    }
+  }
+
+  async function guardarOpciones() {
+    setOpcMsg(null)
+    setOpcError(null)
+    if (!pvSel || !tipoSel) {
+      setOpcError('Elegí punto de venta y tipo de comprobante')
+      return
+    }
+    const { error } = await supabase
+      .from('credenciales_arca')
+      .update({ punto_venta: pvSel, tipo_comprobante: tipoSel })
+      .eq('user_id', user.id)
+    if (error) {
+      setOpcError(error.message)
+      return
+    }
+    setOpcMsg('Punto de venta y tipo guardados ✓')
+    setPvOpciones([])
+    setTipoOpciones([])
+    cargarCredencial()
+  }
+
   async function guardarEmpresa() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -320,6 +391,12 @@ export default function Configuracion() {
             <p>CUIT: <strong>{credencial.cuit}</strong></p>
             <p>
               Empresa: <strong>{credencial.empresa_representada || 'sin elegir'}</strong>
+            </p>
+            <p>
+              Punto de venta: <strong>{credencial.punto_venta || 'sin elegir'}</strong>
+            </p>
+            <p>
+              Comprobante: <strong>{credencial.tipo_comprobante || 'sin elegir'}</strong>
             </p>
             <p className="sub">
               Actualizada: {new Date(credencial.updated_at).toLocaleString('es-AR')}
@@ -419,6 +496,50 @@ export default function Configuracion() {
 
         {empresaMsg && <p className="ok">{empresaMsg}</p>}
         {empresaError && <p className="error">{empresaError}</p>}
+      </section>
+
+      {/* ---------------- Punto de venta y tipo de comprobante ---------------- */}
+      <section className="seccion">
+        <h2>Punto de venta y comprobante</h2>
+        <p className="sub">
+          El punto de venta y el tipo de comprobante con los que vas a emitir.
+          Se detectan de tu empresa y se guardan (normalmente Factura C).
+        </p>
+
+        <button type="button" onClick={detectarOpciones} disabled={detectandoOpc}>
+          {detectandoOpc ? 'Detectando (puede tardar)…' : 'Detectar punto de venta y tipo'}
+        </button>
+
+        {pvOpciones.length > 0 && (
+          <div className="opciones">
+            <label className="campo">
+              <span>Punto de venta</span>
+              <select value={pvSel} onChange={(e) => setPvSel(e.target.value)}>
+                {pvOpciones.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="campo">
+              <span>Tipo de comprobante</span>
+              <select value={tipoSel} onChange={(e) => setTipoSel(e.target.value)}>
+                {tipoOpciones.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={guardarOpciones}>
+              Guardar punto de venta y tipo
+            </button>
+          </div>
+        )}
+
+        {opcMsg && <p className="ok">{opcMsg}</p>}
+        {opcError && <p className="error">{opcError}</p>}
       </section>
 
       {/* ---------------- Productos ---------------- */}

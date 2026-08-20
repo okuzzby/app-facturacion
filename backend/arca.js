@@ -140,9 +140,34 @@ export async function listarEmpresasArca(cuit, clave) {
   }
 }
 
-// Login + entra a RCEL + selecciona la empresa + abre "Generar Comprobantes".
-// Se detiene en el primer paso del formulario y devuelve una captura.
-// NO emite nada.
+// Desde el login: entra a RCEL, selecciona la empresa y abre "Generar
+// Comprobantes". Devuelve la página que quedó en el paso 1 del formulario.
+async function irAGenerarComprobante(page, empresa, pasos) {
+  const destino = await entrarARcel(page, pasos)
+
+  pasos.push(`Seleccionando empresa: ${empresa}`)
+  const btnEmpresa = destino
+    .locator(
+      `input[value="${empresa}"], button:has-text("${empresa}"), a:has-text("${empresa}")`
+    )
+    .first()
+  await btnEmpresa.click({ timeout: 20000 })
+  await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+  await destino.waitForTimeout(2500)
+  pasos.push('Empresa seleccionada (menú RCEL)')
+
+  const generar = destino
+    .getByText(/generar comprobantes/i)
+    .and(destino.locator(':visible'))
+    .first()
+  await generar.click({ timeout: 20000 })
+  await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+  await destino.waitForTimeout(2500)
+  pasos.push('En Generar Comprobantes (paso 1)')
+  return destino
+}
+
+// Abre el formulario hasta el paso 1 y devuelve una captura. NO emite nada.
 export async function abrirFormularioFactura(cuit, clave, empresa) {
   const pasos = []
   let browser
@@ -151,34 +176,68 @@ export async function abrirFormularioFactura(cuit, clave, empresa) {
   try {
     ;({ browser, page } = await abrir())
     await loginEnArca(page, cuit, clave, pasos)
-    destino = await entrarARcel(page, pasos)
-
-    // Seleccionar la empresa a representar
-    pasos.push(`Seleccionando empresa: ${empresa}`)
-    const btnEmpresa = destino
-      .locator(
-        `input[value="${empresa}"], button:has-text("${empresa}"), a:has-text("${empresa}")`
-      )
-      .first()
-    await btnEmpresa.click({ timeout: 20000 })
-    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-    await destino.waitForTimeout(2500)
-    pasos.push('Empresa seleccionada (menú RCEL)')
-
-    // Abrir "Generar Comprobantes"
-    const generar = destino
-      .getByText(/generar comprobantes/i)
-      .and(destino.locator(':visible'))
-      .first()
-    await generar.click({ timeout: 20000 })
-    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-    await destino.waitForTimeout(2500)
-    pasos.push('En Generar Comprobantes (paso 1)')
-
+    destino = await irAGenerarComprobante(page, empresa, pasos)
     return {
       ok: true,
       url: destino.url(),
       title: await destino.title().catch(() => null),
+      pasos,
+      screenshot: await captura(destino || page),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      url: (destino || page) ? (destino || page).url() : null,
+      pasos,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
+// Lee las opciones de Punto de Venta y Tipo de Comprobante del paso 1.
+// El Tipo suele poblarse recién después de elegir un Punto de Venta, así que
+// se selecciona el primero para poder leer los tipos. NO emite nada.
+export async function leerOpcionesComprobante(cuit, clave, empresa) {
+  const pasos = []
+  let browser
+  let page
+  let destino
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    destino = await irAGenerarComprobante(page, empresa, pasos)
+
+    const selects = destino.locator('select')
+    const pvSel = selects.nth(0)
+    const tipoSel = selects.nth(1)
+
+    const limpiar = (arr) =>
+      arr.map((t) => t.trim()).filter((t) => t && !/seleccionar/i.test(t))
+
+    const puntosVenta = limpiar(
+      await pvSel.locator('option').evaluateAll((opts) => opts.map((o) => o.textContent))
+    )
+
+    // Seleccionar el primer punto de venta real para poblar los tipos
+    if (puntosVenta.length) {
+      await pvSel.selectOption({ index: 1 }).catch(() => {})
+      await destino.waitForTimeout(2500)
+      pasos.push('Punto de venta de prueba seleccionado')
+    }
+
+    const tiposComprobante = limpiar(
+      await tipoSel.locator('option').evaluateAll((opts) => opts.map((o) => o.textContent))
+    )
+
+    pasos.push(`Puntos de venta: ${puntosVenta.length} · Tipos: ${tiposComprobante.length}`)
+    return {
+      ok: true,
+      url: destino.url(),
+      puntosVenta,
+      tiposComprobante,
       pasos,
       screenshot: await captura(destino || page),
     }
