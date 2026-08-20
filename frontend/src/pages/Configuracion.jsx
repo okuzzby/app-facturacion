@@ -26,6 +26,7 @@ export default function Configuracion() {
   const [arcaError, setArcaError] = useState(null)
   const [arcaShot, setArcaShot] = useState(null)
   const [arcaPasos, setArcaPasos] = useState([])
+  const [arcaCampos, setArcaCampos] = useState(null)
 
   // ---- empresa a representar (ARCA) ----
   const [empresas, setEmpresas] = useState([])
@@ -182,6 +183,7 @@ export default function Configuracion() {
     setArcaError(null)
     setArcaShot(null)
     setArcaPasos([])
+    setArcaCampos(null)
     setArcaCargando(true)
     try {
       const backend = import.meta.env.VITE_BACKEND_URL
@@ -192,7 +194,7 @@ export default function Configuracion() {
       const token = session?.access_token
       if (!token) throw new Error('No hay sesión activa')
 
-      const r = await fetch(`${backend}/arca/factura-preview`, {
+      const r = await fetch(`${backend}/arca/inspeccionar-factura`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -200,6 +202,7 @@ export default function Configuracion() {
       if (!r.ok) throw new Error(j.error || 'Error del backend')
       setArcaPasos(j.pasos || [])
       setArcaShot(j.screenshot || null)
+      setArcaCampos(j.campos || null)
       setArcaMsg(
         `${j.ok ? 'Terminó ✓' : 'Terminó con aviso'} — URL: ${j.url || '-'} · Título: ${
           j.title || '-'
@@ -604,7 +607,7 @@ export default function Configuracion() {
             onClick={probarFormularioFactura}
             disabled={arcaCargando}
           >
-            {arcaCargando ? 'Abriendo…' : 'Abrir formulario de factura (3D)'}
+            {arcaCargando ? 'Inspeccionando…' : 'Inspeccionar formulario (3D)'}
           </button>
         </div>
         {arcaMsg && <p className="ok">{arcaMsg}</p>}
@@ -622,6 +625,9 @@ export default function Configuracion() {
             alt="captura ARCA"
             src={`data:image/png;base64,${arcaShot}`}
           />
+        )}
+        {arcaCampos && (
+          <pre className="campos-dump">{JSON.stringify(arcaCampos, null, 1)}</pre>
         )}
       </section>
     </div>

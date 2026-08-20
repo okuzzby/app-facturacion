@@ -30,6 +30,64 @@ async function captura(page) {
   }
 }
 
+// Lista los campos (input/select/textarea) visibles de la página actual.
+function dumpCampos(page) {
+  return page.evaluate(() => {
+    const visible = (el) => !!(el.offsetParent || el.offsetWidth || el.offsetHeight)
+    return [...document.querySelectorAll('input, select, textarea')]
+      .filter((el) => el.type !== 'hidden')
+      .map((el) => {
+        const o = {
+          tag: el.tagName.toLowerCase(),
+          type: el.type || '',
+          name: el.name || '',
+          id: el.id || '',
+          vis: visible(el),
+          ro: el.readOnly || false,
+        }
+        if (el.tagName.toLowerCase() === 'select') {
+          o.opts = [...el.options].map((op) => op.textContent.trim()).slice(0, 12)
+        } else {
+          o.val = (el.value || '').slice(0, 20)
+        }
+        return o
+      })
+  })
+}
+
+// Hace clic en el botón "Continuar" y espera la navegación.
+async function clickContinuar(page, pasos, etiqueta = 'Continuar') {
+  const btn = page
+    .locator(
+      'input[type=button][value*="Continuar"], input[type=submit][value*="Continuar"], button:has-text("Continuar")'
+    )
+    .first()
+  await btn.click({ timeout: 20000 })
+  await page.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+  await page.waitForTimeout(2500)
+  pasos.push(`${etiqueta} → Continuar`)
+}
+
+// Encuentra el <select> que contiene una opción que matchea regexOpcion, y
+// elige la opción que matchea regexElegir.
+async function selectConOpcion(page, regexOpcion, regexElegir) {
+  const selects = page.locator('select')
+  const n = await selects.count()
+  for (let i = 0; i < n; i++) {
+    const s = selects.nth(i)
+    const opciones = await s.locator('option').evaluateAll((os) => os.map((o) => o.textContent.trim()))
+    if (opciones.some((t) => regexOpcion.test(t))) {
+      const target = opciones.find((t) => regexElegir.test(t))
+      if (target) {
+        await s.selectOption({ label: target })
+        return target
+      }
+      return null
+    }
+  }
+  return null
+}
+
 // Login con Clave Fiscal. Deja la sesión abierta en el portal.
 async function loginEnArca(page, cuit, clave, pasos) {
   await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -247,6 +305,104 @@ export async function leerOpcionesComprobante(cuit, clave, empresa) {
       error: String((e && e.message) || e),
       url: (destino || page) ? (destino || page).url() : null,
       pasos,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
+// Inspección: avanza hasta el paso 3 del formulario y devuelve los campos
+// reales de cada paso (para armar el llenado). NO emite nada.
+export async function inspeccionarFactura(cuit, clave, empresa, pv, tipo) {
+  const pasos = []
+  const campos = {}
+  let browser
+  let page
+  let destino
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    destino = await irAGenerarComprobante(page, empresa, pasos)
+
+    // Paso previo: Punto de Venta + Tipo de Comprobante
+    const selects = destino.locator('select')
+    const pvSel = selects.nth(0)
+    const tipoSel = selects.nth(1)
+    const pvOpts = await pvSel.locator('option').evaluateAll((os) => os.map((o) => o.textContent.trim()))
+    const pvCodigo = pv ? String(pv).split('-')[0].trim() : ''
+    const pvTarget =
+      pvOpts.find((t) => pvCodigo && t.startsWith(pvCodigo)) ||
+      pvOpts.find((t) => t && !/seleccionar/i.test(t))
+    if (pvTarget) await pvSel.selectOption({ label: pvTarget })
+    await destino.waitForTimeout(2000)
+    const tipoOpts = await tipoSel.locator('option').evaluateAll((os) => os.map((o) => o.textContent.trim()))
+    const tipoTarget = tipoOpts.find((t) => t === tipo) || tipoOpts.find((t) => /factura c/i.test(t))
+    if (tipoTarget) await tipoSel.selectOption({ label: tipoTarget })
+    pasos.push(`PV=${pvTarget || '?'} · Tipo=${tipoTarget || '?'}`)
+    await clickContinuar(destino, pasos, 'PV/Tipo')
+
+    // PASO 1: Datos de Emisión (usamos "Productos" para evitar el período)
+    campos.paso1 = await dumpCampos(destino)
+    await selectConOpcion(destino, /Productos y Servicios/i, /^Productos$/i)
+    pasos.push('Concepto = Productos')
+    await clickContinuar(destino, pasos, 'Datos Emisión')
+
+    // PASO 2: Receptor
+    campos.paso2 = await dumpCampos(destino)
+    await selectConOpcion(destino, /Consumidor Final/i, /^Consumidor Final$/i)
+    await destino.waitForTimeout(800)
+    await destino.evaluate(() => {
+      const cbs = [...document.querySelectorAll('input[type=checkbox]')]
+      for (const cb of cbs) {
+        let t = ''
+        if (cb.id) {
+          const l = document.querySelector(`label[for="${cb.id}"]`)
+          if (l) t = l.textContent
+        }
+        if (!t && cb.closest('label')) t = cb.closest('label').textContent
+        if (!t) {
+          let n = cb.nextSibling
+          while (n) {
+            if (n.nodeType === 3 && n.textContent.trim()) {
+              t = n.textContent
+              break
+            }
+            if (n.nodeType === 1) {
+              t = n.textContent
+              break
+            }
+            n = n.nextSibling
+          }
+        }
+        if (/contado/i.test((t || '').trim()) && !cb.checked) {
+          cb.click()
+          break
+        }
+      }
+    })
+    pasos.push('Condición IVA = Consumidor Final · Contado tildado')
+    await clickContinuar(destino, pasos, 'Receptor')
+
+    // PASO 3: Operación (solo inspección)
+    campos.paso3 = await dumpCampos(destino)
+    pasos.push('En paso 3 (Datos de la Operación) — inspección')
+
+    return {
+      ok: true,
+      url: destino.url(),
+      title: await destino.title().catch(() => null),
+      pasos,
+      campos,
+      screenshot: await captura(destino),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      url: (destino || page) ? (destino || page).url() : null,
+      pasos,
+      campos,
       screenshot: await captura(destino || page),
     }
   } finally {
