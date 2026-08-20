@@ -168,6 +168,42 @@ export default function Configuracion() {
     }
   }
 
+  async function probarFormularioFactura() {
+    setArcaMsg(null)
+    setArcaError(null)
+    setArcaShot(null)
+    setArcaPasos([])
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/factura-preview`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaPasos(j.pasos || [])
+      setArcaShot(j.screenshot || null)
+      setArcaMsg(
+        `${j.ok ? 'Terminó ✓' : 'Terminó con aviso'} — URL: ${j.url || '-'} · Título: ${
+          j.title || '-'
+        }`
+      )
+      if (!j.ok && j.error) setArcaError(j.error)
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function detectarEmpresas() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -437,9 +473,19 @@ export default function Configuracion() {
           Hace login en ARCA con tu credencial y devuelve una captura de dónde
           llegó. No emite ni toca ningún comprobante.
         </p>
-        <button type="button" onClick={probarArca} disabled={arcaCargando}>
-          {arcaCargando ? 'Probando (puede tardar)…' : 'Probar login ARCA'}
-        </button>
+        <div className="fila-botones">
+          <button type="button" onClick={probarArca} disabled={arcaCargando}>
+            {arcaCargando ? 'Probando…' : 'Probar login ARCA'}
+          </button>
+          <button
+            type="button"
+            className="secundario"
+            onClick={probarFormularioFactura}
+            disabled={arcaCargando}
+          >
+            {arcaCargando ? 'Abriendo…' : 'Abrir formulario de factura (3D)'}
+          </button>
+        </div>
         {arcaMsg && <p className="ok">{arcaMsg}</p>}
         {arcaError && <p className="error">{arcaError}</p>}
         {arcaPasos.length > 0 && (

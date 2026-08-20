@@ -140,6 +140,61 @@ export async function listarEmpresasArca(cuit, clave) {
   }
 }
 
+// Login + entra a RCEL + selecciona la empresa + abre "Generar Comprobantes".
+// Se detiene en el primer paso del formulario y devuelve una captura.
+// NO emite nada.
+export async function abrirFormularioFactura(cuit, clave, empresa) {
+  const pasos = []
+  let browser
+  let page
+  let destino
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    destino = await entrarARcel(page, pasos)
+
+    // Seleccionar la empresa a representar
+    pasos.push(`Seleccionando empresa: ${empresa}`)
+    const btnEmpresa = destino
+      .locator(
+        `input[value="${empresa}"], button:has-text("${empresa}"), a:has-text("${empresa}")`
+      )
+      .first()
+    await btnEmpresa.click({ timeout: 20000 })
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Empresa seleccionada (menú RCEL)')
+
+    // Abrir "Generar Comprobantes"
+    const generar = destino
+      .getByText(/generar comprobantes/i)
+      .and(destino.locator(':visible'))
+      .first()
+    await generar.click({ timeout: 20000 })
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('En Generar Comprobantes (paso 1)')
+
+    return {
+      ok: true,
+      url: destino.url(),
+      title: await destino.title().catch(() => null),
+      pasos,
+      screenshot: await captura(destino || page),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      url: (destino || page) ? (destino || page).url() : null,
+      pasos,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
 // Solo login (diagnóstico). No toca comprobantes.
 export async function probarLoginArca(cuit, clave) {
   const pasos = []
