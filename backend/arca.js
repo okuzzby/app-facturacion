@@ -90,6 +90,25 @@ async function selectConOpcion(page, regexOpcion, regexElegir) {
   return null
 }
 
+function escapeRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Elige, en el <select> indicado por `selector`, la opción cuyo texto matchea
+// `regexText`. Selecciona por VALUE interno (evita problemas de espacios).
+async function elegirEnSelect(page, selector, regexText) {
+  const loc = page.locator(selector).first()
+  const pares = await loc
+    .locator('option')
+    .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+  const t = pares.find((p) => regexText.test(p.text))
+  if (t) {
+    await loc.selectOption({ value: t.value })
+    return t.text
+  }
+  return null
+}
+
 // Login con Clave Fiscal. Deja la sesión abierta en el portal.
 async function loginEnArca(page, cuit, clave, pasos) {
   await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
@@ -410,6 +429,128 @@ export async function inspeccionarFactura(cuit, clave, empresa, pv, tipo) {
       url: (destino || page) ? (destino || page).url() : null,
       pasos,
       campos,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
+// Mapa de condiciones de venta → id del checkbox en el paso 2.
+const CV_MAP = {
+  contado: '#formadepago1',
+  'transferencia bancaria': '#formadepago6',
+  transferencia: '#formadepago6',
+  otra: '#formadepago7',
+}
+
+// Llena todo el formulario de factura. Si confirmar=false, se detiene en el
+// Resumen (paso 4) SIN emitir. Si confirmar=true, emite la factura real.
+export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, confirmar = false) {
+  const pasos = []
+  const d = datos || {}
+  let browser
+  let page
+  let destino
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    destino = await irAGenerarComprobante(page, empresa, pasos)
+
+    // PV + Tipo (por valor interno)
+    const selects = destino.locator('select')
+    const pvSel = selects.nth(0)
+    const tipoSel = selects.nth(1)
+    const pvPares = await pvSel
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+    const pvCodigo = pv ? String(pv).split('-')[0].trim() : ''
+    const pvT =
+      pvPares.find((p) => pvCodigo && p.text.startsWith(pvCodigo)) ||
+      pvPares.find((p) => p.text && !/seleccionar/i.test(p.text))
+    if (pvT) await pvSel.selectOption({ value: pvT.value })
+    await destino.waitForTimeout(2500)
+    const tipoPares = await tipoSel
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+    const tipoT = tipoPares.find((p) => p.text === tipo) || tipoPares.find((p) => /factura c/i.test(p.text))
+    if (tipoT) await tipoSel.selectOption({ value: tipoT.value })
+    pasos.push(`PV=${pvT ? pvT.text : '?'} · Tipo=${tipoT ? tipoT.text : '?'}`)
+    await clickContinuar(destino, pasos, 'PV/Tipo')
+
+    // PASO 1: Datos de Emisión
+    const concepto = d.concepto || 'Productos'
+    await elegirEnSelect(destino, '#idconcepto', new RegExp('^' + escapeRe(concepto) + '$', 'i'))
+    await destino.waitForTimeout(1500)
+    if (/servicio/i.test(concepto)) {
+      if (d.periodoDesde) await destino.locator('#fsd').fill(d.periodoDesde).catch(() => {})
+      if (d.periodoHasta) await destino.locator('#fsh').fill(d.periodoHasta).catch(() => {})
+      if (d.vtoPago) await destino.locator('#vencimientopago').fill(d.vtoPago).catch(() => {})
+    }
+    pasos.push('Concepto = ' + concepto)
+    await clickContinuar(destino, pasos, 'Datos Emisión')
+
+    // PASO 2: Receptor
+    await elegirEnSelect(
+      destino,
+      '#idivareceptor',
+      new RegExp('^' + escapeRe(d.condicionIva || 'Consumidor Final') + '$', 'i')
+    )
+    await destino.waitForTimeout(1000)
+    const conds = d.condicionesVenta && d.condicionesVenta.length ? d.condicionesVenta : ['Contado']
+    for (const c of conds) {
+      const id = CV_MAP[String(c).toLowerCase().trim()]
+      if (id) await destino.locator(id).check().catch(() => {})
+    }
+    pasos.push('IVA = ' + (d.condicionIva || 'Consumidor Final') + ' · Venta: ' + conds.join(', '))
+    await clickContinuar(destino, pasos, 'Receptor')
+
+    // PASO 3: Datos de la Operación
+    await destino.locator('#detalle_descripcion1').fill(String(d.producto || ''))
+    await destino.locator('#detalle_cantidad1').fill('1')
+    await elegirEnSelect(destino, '#detalle_medida1', /unidades/i)
+    await destino.locator('#detalle_precio1').fill(String(d.precio || ''))
+    await destino.locator('#detalle_precio1').press('Tab').catch(() => {})
+    await destino.waitForTimeout(1200)
+    pasos.push(`Detalle: ${d.producto || ''} · $${d.precio || ''}`)
+    await clickContinuar(destino, pasos, 'Operación')
+
+    // PASO 4: Resumen
+    await destino.waitForTimeout(1500)
+    pasos.push('En Resumen (paso 4)')
+    const shotResumen = await captura(destino)
+
+    if (confirmar) {
+      const btn = destino
+        .locator('input[value*="Confirmar"], button:has-text("Confirmar")')
+        .first()
+      await btn.click({ timeout: 20000 })
+      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+      await destino.waitForTimeout(3500)
+      pasos.push('CONFIRMADO — factura emitida')
+      return {
+        ok: true,
+        emitida: true,
+        url: destino.url(),
+        pasos,
+        screenshot: await captura(destino),
+      }
+    }
+
+    return {
+      ok: true,
+      emitida: false,
+      url: destino.url(),
+      title: await destino.title().catch(() => null),
+      pasos,
+      screenshot: shotResumen,
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      url: (destino || page) ? (destino || page).url() : null,
+      pasos,
       screenshot: await captura(destino || page),
     }
   } finally {

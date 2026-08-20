@@ -8,6 +8,7 @@ import {
   abrirFormularioFactura,
   leerOpcionesComprobante,
   inspeccionarFactura,
+  generarFactura,
 } from './arca.js'
 
 const app = express()
@@ -203,6 +204,46 @@ app.post('/arca/inspeccionar-factura', requireAuth, async (req, res) => {
     row.empresa_representada,
     row.punto_venta,
     row.tipo_comprobante
+  )
+  res.json(resultado)
+})
+
+// Genera la factura. Con confirmar=false llena todo y frena en el Resumen (sin
+// emitir). Con confirmar=true emite la factura real en ARCA.
+app.post('/arca/factura-generar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const datos = req.body?.datos || {}
+  const confirmar = req.body?.confirmar === true
+
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada, punto_venta, tipo_comprobante')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.empresa_representada) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+  if (!row?.punto_venta) {
+    return res.status(400).json({ error: 'No configuraste el punto de venta' })
+  }
+
+  const resultado = await generarFactura(
+    cred.cuit,
+    cred.clave,
+    row.empresa_representada,
+    row.punto_venta,
+    row.tipo_comprobante,
+    datos,
+    confirmar
   )
   res.json(resultado)
 })

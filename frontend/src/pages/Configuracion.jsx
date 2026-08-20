@@ -194,9 +194,20 @@ export default function Configuracion() {
       const token = session?.access_token
       if (!token) throw new Error('No hay sesión activa')
 
-      const r = await fetch(`${backend}/arca/inspeccionar-factura`, {
+      const datosPrueba = {
+        concepto: 'Productos',
+        condicionIva: 'Consumidor Final',
+        condicionesVenta: ['Contado'],
+        producto: 'PRUEBA - Servicio de Taxi',
+        precio: '100',
+      }
+      const r = await fetch(`${backend}/arca/factura-generar`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ datos: datosPrueba, confirmar: false }),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Error del backend')
@@ -607,7 +618,7 @@ export default function Configuracion() {
             onClick={probarFormularioFactura}
             disabled={arcaCargando}
           >
-            {arcaCargando ? 'Inspeccionando…' : 'Inspeccionar formulario (3D)'}
+            {arcaCargando ? 'Llenando…' : 'Probar llenado hasta resumen (3D)'}
           </button>
         </div>
         {arcaMsg && <p className="ok">{arcaMsg}</p>}
