@@ -138,6 +138,66 @@ button.peligro {
   text-decoration: none;
 }
 
+.boton-facturar {
+  display: block;
+  margin: 1.5rem 0 0.75rem;
+  padding: 1.1rem 1rem;
+  border-radius: 12px;
+  background: #34d399;
+  color: #08110c;
+  font-weight: 700;
+  font-size: 1.15rem;
+  text-decoration: none;
+}
+
+.secundario-link {
+  background: transparent;
+  border: 1px solid #2a2e37;
+  color: #e8eaed;
+  font-weight: 500;
+}
+
+.periodo,
+.fila-fija {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.periodo .campo,
+.fila-fija .campo {
+  flex: 1;
+}
+
+.cv-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 0.3rem;
+}
+
+.cv-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #e8eaed;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.cv-opt input {
+  width: auto;
+}
+
+.aviso {
+  margin-top: 1rem;
+  font-size: 0.82rem;
+  color: #fbbf24;
+  background: #211c0a;
+  border: 1px solid #4a3f16;
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+}
+
 .card .secundario {
   margin-top: 0.5rem;
   width: 100%;

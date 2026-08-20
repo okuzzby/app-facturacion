@@ -7,14 +7,11 @@ export default function Home() {
   return (
     <div className="card">
       <h1>App Facturación</h1>
-      <p>Sesión iniciada como:</p>
       <p className="email-actual">{user?.email}</p>
-      <p className="status">
-        El botón Facturar llega en la Fase 3. Por ahora podés dejar lista tu
-        Configuración.
-      </p>
 
-      <Link to="/configuracion" className="boton-link">
+      <Link to="/facturar" className="boton-facturar">Facturar</Link>
+
+      <Link to="/configuracion" className="boton-link secundario-link">
         Configuración
       </Link>
 
