@@ -75,12 +75,14 @@ async function selectConOpcion(page, regexOpcion, regexElegir) {
   const n = await selects.count()
   for (let i = 0; i < n; i++) {
     const s = selects.nth(i)
-    const opciones = await s.locator('option').evaluateAll((os) => os.map((o) => o.textContent.trim()))
-    if (opciones.some((t) => regexOpcion.test(t))) {
-      const target = opciones.find((t) => regexElegir.test(t))
+    const pares = await s
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+    if (pares.some((p) => regexOpcion.test(p.text))) {
+      const target = pares.find((p) => regexElegir.test(p.text))
       if (target) {
-        await s.selectOption({ label: target })
-        return target
+        await s.selectOption({ value: target.value })
+        return target.text
       }
       return null
     }
@@ -329,17 +331,22 @@ export async function inspeccionarFactura(cuit, clave, empresa, pv, tipo) {
     const selects = destino.locator('select')
     const pvSel = selects.nth(0)
     const tipoSel = selects.nth(1)
-    const pvOpts = await pvSel.locator('option').evaluateAll((os) => os.map((o) => o.textContent.trim()))
+    const pvPares = await pvSel
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
     const pvCodigo = pv ? String(pv).split('-')[0].trim() : ''
-    const pvTarget =
-      pvOpts.find((t) => pvCodigo && t.startsWith(pvCodigo)) ||
-      pvOpts.find((t) => t && !/seleccionar/i.test(t))
-    if (pvTarget) await pvSel.selectOption({ label: pvTarget })
-    await destino.waitForTimeout(2000)
-    const tipoOpts = await tipoSel.locator('option').evaluateAll((os) => os.map((o) => o.textContent.trim()))
-    const tipoTarget = tipoOpts.find((t) => t === tipo) || tipoOpts.find((t) => /factura c/i.test(t))
-    if (tipoTarget) await tipoSel.selectOption({ label: tipoTarget })
-    pasos.push(`PV=${pvTarget || '?'} · Tipo=${tipoTarget || '?'}`)
+    const pvT =
+      pvPares.find((p) => pvCodigo && p.text.startsWith(pvCodigo)) ||
+      pvPares.find((p) => p.text && !/seleccionar/i.test(p.text))
+    if (pvT) await pvSel.selectOption({ value: pvT.value })
+    await destino.waitForTimeout(2500)
+    const tipoPares = await tipoSel
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+    const tipoT =
+      tipoPares.find((p) => p.text === tipo) || tipoPares.find((p) => /factura c/i.test(p.text))
+    if (tipoT) await tipoSel.selectOption({ value: tipoT.value })
+    pasos.push(`PV=${pvT ? pvT.text : '?'} · Tipo=${tipoT ? tipoT.text : '?'}`)
     await clickContinuar(destino, pasos, 'PV/Tipo')
 
     // PASO 1: Datos de Emisión (usamos "Productos" para evitar el período)
