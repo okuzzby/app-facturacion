@@ -180,6 +180,26 @@ button.peligro {
   color: #6b7280;
 }
 
+.empresas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.9rem 0;
+}
+
+.empresa-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #e8eaed;
+  cursor: pointer;
+}
+
+.empresa-opt input {
+  width: auto;
+}
+
 .pasos {
   font-size: 0.8rem;
   color: #9aa0a6;

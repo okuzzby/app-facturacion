@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
-import { probarLoginArca } from './arca.js'
+import { probarLoginArca, listarEmpresasArca } from './arca.js'
 
 const app = express()
 app.use(cors())
@@ -99,6 +99,22 @@ app.post('/arca/login-test', requireAuth, async (req, res) => {
   if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
 
   const resultado = await probarLoginArca(cred.cuit, cred.clave)
+  res.json(resultado)
+})
+
+// Detecta las empresas (representados) del usuario en RCEL. No emite nada.
+app.post('/arca/empresas', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const resultado = await listarEmpresasArca(cred.cuit, cred.clave)
   res.json(resultado)
 })
 

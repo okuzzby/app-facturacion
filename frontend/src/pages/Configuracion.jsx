@@ -27,6 +27,13 @@ export default function Configuracion() {
   const [arcaShot, setArcaShot] = useState(null)
   const [arcaPasos, setArcaPasos] = useState([])
 
+  // ---- empresa a representar (ARCA) ----
+  const [empresas, setEmpresas] = useState([])
+  const [empresaSel, setEmpresaSel] = useState('')
+  const [detectando, setDetectando] = useState(false)
+  const [empresaMsg, setEmpresaMsg] = useState(null)
+  const [empresaError, setEmpresaError] = useState(null)
+
   // ---- productos ----
   const [productos, setProductos] = useState([])
   const [nuevoProducto, setNuevoProducto] = useState('')
@@ -35,7 +42,7 @@ export default function Configuracion() {
   async function cargarCredencial() {
     const { data } = await supabase
       .from('credenciales_arca')
-      .select('cuit, updated_at')
+      .select('cuit, updated_at, empresa_representada')
       .maybeSingle()
     setCredencial(data ?? null)
     setEditandoCred(!data)
@@ -161,6 +168,61 @@ export default function Configuracion() {
     }
   }
 
+  async function detectarEmpresas() {
+    setEmpresaMsg(null)
+    setEmpresaError(null)
+    setEmpresas([])
+    setDetectando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/empresas`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaShot(j.screenshot || null)
+      if (!j.ok) throw new Error(j.error || 'No se pudo entrar a RCEL')
+
+      setEmpresas(j.empresas || [])
+      setEmpresaSel(credencial?.empresa_representada || (j.empresas?.[0] ?? ''))
+      if (!j.empresas || j.empresas.length === 0) {
+        setEmpresaMsg('No se detectaron empresas (revisá la captura de abajo).')
+      }
+    } catch (e) {
+      setEmpresaError(e.message ?? String(e))
+    } finally {
+      setDetectando(false)
+    }
+  }
+
+  async function guardarEmpresa() {
+    setEmpresaMsg(null)
+    setEmpresaError(null)
+    if (!empresaSel) {
+      setEmpresaError('Elegí una empresa primero')
+      return
+    }
+    const { error } = await supabase
+      .from('credenciales_arca')
+      .update({ empresa_representada: empresaSel })
+      .eq('user_id', user.id)
+    if (error) {
+      setEmpresaError(error.message)
+      return
+    }
+    setEmpresaMsg('Empresa guardada ✓')
+    setEmpresas([])
+    cargarCredencial()
+  }
+
   async function agregarProducto(e) {
     e.preventDefault()
     setProdError(null)
@@ -220,6 +282,9 @@ export default function Configuracion() {
           <div className="cred-cargada">
             <p className="ok">Credencial cargada ✓</p>
             <p>CUIT: <strong>{credencial.cuit}</strong></p>
+            <p>
+              Empresa: <strong>{credencial.empresa_representada || 'sin elegir'}</strong>
+            </p>
             <p className="sub">
               Actualizada: {new Date(credencial.updated_at).toLocaleString('es-AR')}
             </p>
@@ -282,6 +347,42 @@ export default function Configuracion() {
           {verifMsg && <p className="ok">{verifMsg}</p>}
           {verifError && <p className="error">{verifError}</p>}
         </div>
+      </section>
+
+      {/* ---------------- Empresa a representar (ARCA) ---------------- */}
+      <section className="seccion">
+        <h2>Empresa a representar</h2>
+        <p className="sub">
+          Es la empresa con la que vas a emitir en ARCA. El sistema detecta las
+          disponibles en tu cuenta y guardás la que quieras operar.
+        </p>
+
+        <button type="button" onClick={detectarEmpresas} disabled={detectando}>
+          {detectando ? 'Detectando (puede tardar)…' : 'Detectar empresas de ARCA'}
+        </button>
+
+        {empresas.length > 0 && (
+          <div className="empresas">
+            {empresas.map((e) => (
+              <label key={e} className="empresa-opt">
+                <input
+                  type="radio"
+                  name="empresa"
+                  value={e}
+                  checked={empresaSel === e}
+                  onChange={() => setEmpresaSel(e)}
+                />
+                <span>{e}</span>
+              </label>
+            ))}
+            <button type="button" onClick={guardarEmpresa}>
+              Guardar empresa
+            </button>
+          </div>
+        )}
+
+        {empresaMsg && <p className="ok">{empresaMsg}</p>}
+        {empresaError && <p className="error">{empresaError}</p>}
       </section>
 
       {/* ---------------- Productos ---------------- */}
