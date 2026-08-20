@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
+import { probarLoginArca } from './arca.js'
 
 const app = express()
 app.use(cors())
@@ -42,7 +43,7 @@ async function requireAuth(req, res, next) {
 
 // ---------------- Endpoints públicos ----------------
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'app-facturacion-backend', phase: '3B' })
+  res.json({ status: 'ok', service: 'app-facturacion-backend', phase: '3C' })
 })
 
 app.get('/playwright-test', async (req, res) => {
@@ -81,6 +82,24 @@ app.get('/verificar-credencial', requireAuth, async (req, res) => {
     cuit: cred.cuit,
     clave_descifrada_ok: Boolean(cred.clave && cred.clave.length > 0),
   })
+})
+
+// Prueba de login a ARCA (3C). Lee la credencial del usuario, se loguea y
+// devuelve una captura. No emite ni modifica comprobantes.
+app.post('/arca/login-test', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const resultado = await probarLoginArca(cred.cuit, cred.clave)
+  res.json(resultado)
 })
 
 app.get('/', (req, res) => {

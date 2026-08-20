@@ -20,6 +20,13 @@ export default function Configuracion() {
   const [verifError, setVerifError] = useState(null)
   const [verificando, setVerificando] = useState(false)
 
+  // ---- prueba de login ARCA (3C, desarrollo) ----
+  const [arcaCargando, setArcaCargando] = useState(false)
+  const [arcaMsg, setArcaMsg] = useState(null)
+  const [arcaError, setArcaError] = useState(null)
+  const [arcaShot, setArcaShot] = useState(null)
+  const [arcaPasos, setArcaPasos] = useState([])
+
   // ---- productos ----
   const [productos, setProductos] = useState([])
   const [nuevoProducto, setNuevoProducto] = useState('')
@@ -114,6 +121,43 @@ export default function Configuracion() {
       setVerifError(e.message ?? String(e))
     } finally {
       setVerificando(false)
+    }
+  }
+
+  async function probarArca() {
+    setArcaMsg(null)
+    setArcaError(null)
+    setArcaShot(null)
+    setArcaPasos([])
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/login-test`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+
+      setArcaPasos(j.pasos || [])
+      setArcaShot(j.screenshot || null)
+      setArcaMsg(
+        `${j.ok ? 'Terminó ✓' : 'Terminó con aviso'} — URL: ${j.url || '-'} · Título: ${
+          j.title || '-'
+        }`
+      )
+      if (!j.ok && j.error) setArcaError(j.error)
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
     }
   }
 
@@ -283,6 +327,34 @@ export default function Configuracion() {
           <button type="submit">Agregar</button>
         </form>
         {prodError && <p className="error">{prodError}</p>}
+      </section>
+
+      {/* ---------------- Prueba login ARCA (3C, desarrollo) ---------------- */}
+      <section className="seccion">
+        <h2>Prueba de conexión ARCA (desarrollo)</h2>
+        <p className="sub">
+          Hace login en ARCA con tu credencial y devuelve una captura de dónde
+          llegó. No emite ni toca ningún comprobante.
+        </p>
+        <button type="button" onClick={probarArca} disabled={arcaCargando}>
+          {arcaCargando ? 'Probando (puede tardar)…' : 'Probar login ARCA'}
+        </button>
+        {arcaMsg && <p className="ok">{arcaMsg}</p>}
+        {arcaError && <p className="error">{arcaError}</p>}
+        {arcaPasos.length > 0 && (
+          <ol className="pasos">
+            {arcaPasos.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ol>
+        )}
+        {arcaShot && (
+          <img
+            className="shot"
+            alt="captura ARCA"
+            src={`data:image/png;base64,${arcaShot}`}
+          />
+        )}
       </section>
     </div>
   )
