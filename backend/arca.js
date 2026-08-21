@@ -528,12 +528,22 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
     const shotResumen = await captura(destino)
 
     if (confirmar) {
-      const btn = destino
-        .locator('input[value*="Confirmar"], button:has-text("Confirmar")')
+      // 1) Botón "Confirmar Datos..." del resumen
+      const btnDatos = destino
+        .locator('input[value*="Confirmar"], button:has-text("Confirmar Datos")')
         .first()
-      await btn.click({ timeout: 20000 })
+      await btnDatos.click({ timeout: 20000 })
+      await destino.waitForTimeout(2500)
+      pasos.push('Clic en "Confirmar Datos"')
+
+      // 2) Cartel final "¿Confirma la Operación?" → botón "Confirmar" (exacto)
+      const btnModal = destino
+        .getByText('Confirmar', { exact: true })
+        .and(destino.locator(':visible'))
+        .first()
+      await btnModal.click({ timeout: 20000 })
       await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-      await destino.waitForTimeout(3500)
+      await destino.waitForTimeout(4500)
       pasos.push('CONFIRMADO — factura emitida')
       return {
         ok: true,
