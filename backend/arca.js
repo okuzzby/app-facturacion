@@ -661,6 +661,71 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
   }
 }
 
+// Inspección de la Nota de Crédito C: avanza hasta el paso 2 (donde está el
+// "Comprobante Asociado") y devuelve los campos. NO emite nada.
+export async function inspeccionarNotaCredito(cuit, clave, empresa, pv) {
+  const pasos = []
+  const campos = {}
+  let browser
+  let page
+  let destino
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    destino = await irAGenerarComprobante(page, empresa, pasos)
+
+    // PV + Tipo = Nota de Crédito C
+    const selects = destino.locator('select')
+    const pvSel = selects.nth(0)
+    const tipoSel = selects.nth(1)
+    const pvPares = await pvSel
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+    const pvCodigo = pv ? String(pv).split('-')[0].trim() : ''
+    const pvT =
+      pvPares.find((p) => pvCodigo && p.text.startsWith(pvCodigo)) ||
+      pvPares.find((p) => p.text && !/seleccionar/i.test(p.text))
+    if (pvT) await pvSel.selectOption({ value: pvT.value })
+    await destino.waitForTimeout(2500)
+    const tipoPares = await tipoSel
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+    const tipoT = tipoPares.find((p) => /nota de cr[eé]dito c/i.test(p.text))
+    if (tipoT) await tipoSel.selectOption({ value: tipoT.value })
+    pasos.push(`Tipo=${tipoT ? tipoT.text : '?'} · tipos: ${tipoPares.map((p) => p.text).join(' | ')}`)
+    await clickContinuar(destino, pasos, 'PV/Tipo')
+
+    // PASO 1
+    campos.paso1 = await dumpCampos(destino)
+    await selectConOpcion(destino, /Productos y Servicios/i, /^Productos$/i)
+    await clickContinuar(destino, pasos, 'Datos Emisión')
+
+    // PASO 2: acá está el "Comprobante Asociado" de la NC
+    campos.paso2 = await dumpCampos(destino)
+    pasos.push('En paso 2 (Receptor + Comprobante Asociado) — inspección NC')
+
+    return {
+      ok: true,
+      url: destino.url(),
+      title: await destino.title().catch(() => null),
+      pasos,
+      campos,
+      screenshot: await captura(destino),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      url: (destino || page) ? (destino || page).url() : null,
+      pasos,
+      campos,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
 // Solo login (diagnóstico). No toca comprobantes.
 export async function probarLoginArca(cuit, clave) {
   const pasos = []

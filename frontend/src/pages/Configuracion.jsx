@@ -227,6 +227,40 @@ export default function Configuracion() {
     }
   }
 
+  async function inspeccionarNC() {
+    setArcaMsg(null)
+    setArcaError(null)
+    setArcaShot(null)
+    setArcaPasos([])
+    setArcaCampos(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/inspeccionar-nc`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaPasos(j.pasos || [])
+      setArcaShot(j.screenshot || null)
+      setArcaCampos(j.campos || null)
+      setArcaMsg(`${j.ok ? 'OK' : 'Aviso'} — ${j.url || '-'}`)
+      if (!j.ok && j.error) setArcaError(j.error)
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function detectarEmpresas() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -619,6 +653,14 @@ export default function Configuracion() {
             disabled={arcaCargando}
           >
             {arcaCargando ? 'Llenando…' : 'Probar llenado hasta resumen (3D)'}
+          </button>
+          <button
+            type="button"
+            className="secundario"
+            onClick={inspeccionarNC}
+            disabled={arcaCargando}
+          >
+            {arcaCargando ? 'Inspeccionando…' : 'Inspeccionar Nota de Crédito (4C)'}
           </button>
         </div>
         {arcaMsg && <p className="ok">{arcaMsg}</p>}

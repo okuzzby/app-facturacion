@@ -9,6 +9,7 @@ import {
   leerOpcionesComprobante,
   inspeccionarFactura,
   generarFactura,
+  inspeccionarNotaCredito,
 } from './arca.js'
 
 const app = express()
@@ -204,6 +205,36 @@ app.post('/arca/inspeccionar-factura', requireAuth, async (req, res) => {
     row.empresa_representada,
     row.punto_venta,
     row.tipo_comprobante
+  )
+  res.json(resultado)
+})
+
+// Inspección del formulario de Nota de Crédito (para armar la anulación). No emite.
+app.post('/arca/inspeccionar-nc', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada, punto_venta')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.empresa_representada) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  const resultado = await inspeccionarNotaCredito(
+    cred.cuit,
+    cred.clave,
+    row.empresa_representada,
+    row.punto_venta
   )
   res.json(resultado)
 })
