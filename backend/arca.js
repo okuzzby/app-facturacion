@@ -147,12 +147,14 @@ async function capturarPdf(destino) {
 }
 
 function extraerNumero(texto) {
+  // Fuente autoritativa: el PDF muestra "Punto de Venta: 00001  Comp. Nro: 00000813"
+  const pv = (texto.match(/Punto de Venta:?\s*0*(\d{1,5})/i) || [])[1]
+  const nro = (texto.match(/Comp\.?\s*Nro\.?:?\s*0*(\d{1,8})/i) || [])[1]
+  if (pv && nro) return `${pv.padStart(5, '0')}-${nro.padStart(8, '0')}`
+  // Fallback: patrón explícito NNNNN-NNNNNNNN
   const m = texto.match(/(\d{4,5})\s*-\s*(\d{7,8})/)
   if (m) return `${m[1]}-${m[2]}`
-  const pv = (texto.match(/Punto de Venta:?\s*(\d{3,5})/i) || [])[1]
-  const nro = (texto.match(/Comp\.?\s*Nro:?\s*(\d{6,8})/i) || [])[1]
-  if (pv && nro) return `${pv}-${nro}`
-  return nro || null
+  return nro ? nro.padStart(8, '0') : null
 }
 
 // Login con Clave Fiscal. Deja la sesión abierta en el portal.
