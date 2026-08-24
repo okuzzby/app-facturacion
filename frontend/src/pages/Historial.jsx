@@ -9,6 +9,7 @@ export default function Historial() {
   const [confirmando, setConfirmando] = useState(null)
   const [anulando, setAnulando] = useState(null)
   const [msg, setMsg] = useState(null)
+  const [errorShot, setErrorShot] = useState(null)
 
   async function cargar() {
     setCargando(true)
@@ -44,6 +45,7 @@ export default function Historial() {
   async function anular(f) {
     setError(null)
     setMsg(null)
+    setErrorShot(null)
     setConfirmando(null)
     setAnulando(f.id)
     try {
@@ -64,8 +66,14 @@ export default function Historial() {
         body: JSON.stringify({ facturaId: f.id }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Error del backend')
-      if (!j.ok) throw new Error(j.error || 'ARCA no pudo generar la Nota de Crédito')
+      if (!r.ok) {
+        setErrorShot(j.screenshot || null)
+        throw new Error(j.error || 'Error del backend')
+      }
+      if (!j.ok) {
+        setErrorShot(j.screenshot || null)
+        throw new Error(j.error || 'ARCA no pudo generar la Nota de Crédito')
+      }
       setMsg(`Factura anulada con Nota de Crédito Nº ${j.numero || ''}.`)
       await cargar()
     } catch (e) {
@@ -149,6 +157,9 @@ export default function Historial() {
       )}
       {msg && <p className="ok">{msg}</p>}
       {error && <p className="error">{error}</p>}
+      {errorShot && (
+        <img className="shot" alt="captura del error" src={`data:image/png;base64,${errorShot}`} />
+      )}
     </div>
   )
 }
