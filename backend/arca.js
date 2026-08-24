@@ -147,9 +147,18 @@ async function capturarPdf(destino) {
 }
 
 function extraerNumero(texto) {
-  // Fuente autoritativa: el PDF muestra "Punto de Venta: 00001  Comp. Nro: 00000813"
-  const pv = (texto.match(/Punto de Venta:?\s*0*(\d{1,5})/i) || [])[1]
-  const nro = (texto.match(/Comp\.?\s*Nro\.?:?\s*0*(\d{1,8})/i) || [])[1]
+  // Caso ARCA: pdf-parse deja las etiquetas juntas y los valores pegados debajo:
+  //   "Punto de Venta:Comp. Nro:\n0000100000009"  ->  PV=00001, Nro=00000009
+  // (13 dígitos = 5 de PV + 8 de número). Es la fuente más confiable.
+  const junto = texto.match(/Punto de Venta:\s*Comp\.?\s*Nro\.?:?\s*(\d{13})/i)
+  if (junto) {
+    const d = junto[1]
+    return `${d.slice(0, 5)}-${d.slice(5)}`
+  }
+  // Caso separado: "Punto de Venta: 00001  Comp. Nro: 00000813"
+  // El lookahead (?!\d) evita cortar el número si tiene ceros a la izquierda.
+  const pv = (texto.match(/Punto de Venta:?\s*(\d{1,5})(?!\d)/i) || [])[1]
+  const nro = (texto.match(/Comp\.?\s*Nro\.?:?\s*(\d{1,8})(?!\d)/i) || [])[1]
   if (pv && nro) return `${pv.padStart(5, '0')}-${nro.padStart(8, '0')}`
   // Fallback: patrón explícito NNNNN-NNNNNNNN
   const m = texto.match(/(\d{4,5})\s*-\s*(\d{7,8})/)
