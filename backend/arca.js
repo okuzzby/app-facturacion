@@ -8,6 +8,13 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
+// Cronómetro para diagnóstico de velocidad. Se reinicia al empezar cada emisión.
+const _timer = { t0: 0 }
+function marcaT() {
+  if (!_timer.t0) return ''
+  return `[+${((Date.now() - _timer.t0) / 1000).toFixed(1)}s] `
+}
+
 async function abrir() {
   const browser = await chromium.launch({
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
@@ -66,10 +73,10 @@ async function clickContinuar(page, pasos, etiqueta = 'Continuar') {
   await btn.click({ timeout: 20000 })
   await page.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
   // En vez de dormir fijo, esperamos a que la red se aquiete (JSF terminó de
-  // renderar) y dejamos un colchón chico. Suele resolver mucho antes de 2.5s.
-  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
-  await page.waitForTimeout(400)
-  pasos.push(`${etiqueta} → Continuar`)
+  // renderar). Timeout corto para que NUNCA cuelgue si ARCA hace polling.
+  await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {})
+  await page.waitForTimeout(300)
+  pasos.push(`${marcaT()}${etiqueta} → Continuar`)
 }
 
 // Encuentra el <select> que contiene una opción que matchea regexOpcion, y
@@ -231,7 +238,7 @@ async function entrarARcel(page, pasos) {
   ])
   const destino = popup || page
   await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await destino.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await destino.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {})
   await destino.waitForTimeout(500)
   pasos.push('Servicio abierto (RCEL)')
   return destino
@@ -293,7 +300,7 @@ async function irAGenerarComprobante(page, empresa, pasos) {
     .first()
   await btnEmpresa.click({ timeout: 20000 })
   await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await destino.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await destino.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {})
   await destino.waitForTimeout(500)
   pasos.push('Empresa seleccionada (menú RCEL)')
 
@@ -303,7 +310,7 @@ async function irAGenerarComprobante(page, empresa, pasos) {
     .first()
   await generar.click({ timeout: 20000 })
   await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await destino.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await destino.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {})
   // Esperamos a que el paso 1 tenga sus <select> (PV/Tipo) antes de seguir.
   await destino.locator('select').first().waitFor({ timeout: 15000 }).catch(() => {})
   await destino.waitForTimeout(400)
@@ -517,10 +524,14 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
   let browser
   let page
   let destino
+  _timer.t0 = Date.now() // arranca el cronómetro de diagnóstico
   try {
     ;({ browser, page } = await abrir())
+    pasos.push(`${marcaT()}Browser lanzado`)
     await loginEnArca(page, cuit, clave, pasos)
+    pasos.push(`${marcaT()}Login ARCA listo`)
     destino = await irAGenerarComprobante(page, empresa, pasos)
+    pasos.push(`${marcaT()}En formulario (paso 1)`)
 
     // PV + Tipo (por valor interno)
     const selects = destino.locator('select')
@@ -617,7 +628,7 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
 
     // PASO 4: Resumen
     await destino.waitForTimeout(700)
-    pasos.push('En Resumen (paso 4)')
+    pasos.push(`${marcaT()}En Resumen (paso 4)`)
     const shotResumen = await captura(destino)
 
     if (confirmar) {
@@ -647,14 +658,14 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
         .waitFor({ state: 'visible', timeout: 30000 })
         .catch(() => {})
       await destino.waitForTimeout(400)
-      pasos.push('CONFIRMADO — factura emitida')
+      pasos.push(`${marcaT()}CONFIRMADO — factura emitida`)
 
       const shotFinal = await captura(destino)
       const finalText = await destino.evaluate(() => document.body.innerText).catch(() => '')
 
       // Capturar el PDF oficial y leer número/CAE
       const pdfInfo = await capturarPdf(destino)
-      pasos.push('PDF: ' + pdfInfo.via)
+      pasos.push(`${marcaT()}PDF capturado (${pdfInfo.via})`)
       let pdfText = ''
       if (pdfInfo.base64) {
         try {
@@ -675,6 +686,9 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
         (texto.match(/(?:Vto\.?|Vencimiento)[^\d]{0,20}(\d{2}\/\d{2}\/\d{4})/i) || [])[1] || null
       const fecha =
         (texto.match(/Fecha de Emisi[oó]n:?\s*(\d{2}\/\d{2}\/\d{4})/i) || [])[1] || null
+
+      pasos.push(`${marcaT()}FIN (total)`)
+      console.log('[TIMING]', pasos.join(' | '))
 
       return {
         ok: true,
