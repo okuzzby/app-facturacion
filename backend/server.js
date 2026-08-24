@@ -249,10 +249,11 @@ app.post('/arca/anular', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Una Nota de Crédito no se anula' })
   }
 
-  // Comprobante asociado: separar PV y número de "00001-00000813"
+  // Comprobante asociado: separar PV y número de "00001-00000813".
+  // ARCA exige el formato con ceros: PV a 5 dígitos y número a 8.
   const partes = String(f.numero || '').split('-')
-  const pvAsoc = partes[0] ? String(parseInt(partes[0], 10)) : ''
-  const nroAsoc = partes[1] ? String(parseInt(partes[1], 10)) : ''
+  const pvAsoc = partes[0] ? String(parseInt(partes[0], 10)).padStart(5, '0') : ''
+  const nroAsoc = partes[1] ? String(parseInt(partes[1], 10)).padStart(8, '0') : ''
 
   const datos = {
     concepto: f.concepto || 'Productos',
