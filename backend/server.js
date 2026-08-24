@@ -62,11 +62,7 @@ app.get('/arca/ws-spike', async (req, res) => {
     return res.status(403).json({ error: 'no autorizado' })
   }
   try {
-    const out = await emitirSpike({
-      cuit: req.query.cuit || 20960814909,
-      pv: req.query.pv || 1,
-      importe: req.query.importe || 100,
-    })
+    const out = await emitirSpike(req.query)
     res.json(out)
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e), stack: (e && e.stack) || null })
