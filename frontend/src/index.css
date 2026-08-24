@@ -188,6 +188,70 @@ button.peligro {
   width: auto;
 }
 
+.lista-facturas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.factura-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #2a2e37;
+  border-radius: 12px;
+  background: #0f1115;
+}
+
+.factura-item.anulada {
+  opacity: 0.6;
+}
+
+.factura-datos {
+  min-width: 0;
+}
+
+.factura-linea1 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.factura-linea1 .numero {
+  color: #9aa0a6;
+  font-size: 0.9rem;
+}
+
+.factura-linea2 {
+  color: #e8eaed;
+  font-size: 0.95rem;
+  margin-top: 0.15rem;
+}
+
+.estado {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.estado-emitida {
+  background: #0e2c20;
+  color: #34d399;
+  border: 1px solid #1c4d38;
+}
+
+.estado-anulada {
+  background: #2c1416;
+  color: #f87171;
+  border: 1px solid #5a2a2e;
+}
+
 .aviso {
   margin-top: 1rem;
   font-size: 0.82rem;

@@ -11,6 +11,10 @@ export default function Home() {
 
       <Link to="/facturar" className="boton-facturar">Facturar</Link>
 
+      <Link to="/historial" className="boton-link secundario-link">
+        Historial
+      </Link>
+
       <Link to="/configuracion" className="boton-link secundario-link">
         Configuración
       </Link>

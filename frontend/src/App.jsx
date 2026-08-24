@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Home from './pages/Home'
 import Configuracion from './pages/Configuracion'
 import Facturar from './pages/Facturar'
+import Historial from './pages/Historial'
 
 export default function App() {
   return (
@@ -22,6 +23,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Facturar />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/historial"
+        element={
+          <ProtectedRoute>
+            <Historial />
           </ProtectedRoute>
         }
       />

@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 
 const LOGIN_URL = 'https://auth.afip.gob.ar/contribuyente_/login.xhtml'
 const RCEL_URL = 'https://fe.afip.gob.ar/rcel/jsp/index_bis.jsp'
@@ -107,6 +108,51 @@ async function elegirEnSelect(page, selector, regexText) {
     return t.text
   }
   return null
+}
+
+// Aprieta "Imprimir..." y captura el PDF del comprobante (por popup o descarga).
+async function capturarPdf(destino) {
+  const context = destino.context()
+  const btn = destino
+    .locator('input[value*="Imprimir"], button:has-text("Imprimir")')
+    .first()
+  try {
+    const [popup, download] = await Promise.all([
+      context.waitForEvent('page', { timeout: 12000 }).catch(() => null),
+      destino.waitForEvent('download', { timeout: 12000 }).catch(() => null),
+      btn.click({ timeout: 15000 }).catch(() => {}),
+    ])
+
+    if (download) {
+      const stream = await download.createReadStream()
+      const chunks = []
+      for await (const ch of stream) chunks.push(ch)
+      const buf = Buffer.concat(chunks)
+      return { base64: buf.toString('base64'), via: 'download', bytes: buf.length }
+    }
+    if (popup) {
+      await popup.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {})
+      const url = popup.url()
+      const resp = await context.request.get(url).catch(() => null)
+      if (resp) {
+        const buf = await resp.body()
+        return { base64: buf.toString('base64'), via: 'popup', url, bytes: buf.length }
+      }
+      return { base64: null, via: 'popup-sin-cuerpo', url }
+    }
+    return { base64: null, via: 'sin-popup-ni-descarga' }
+  } catch (e) {
+    return { base64: null, via: 'error', error: String((e && e.message) || e) }
+  }
+}
+
+function extraerNumero(texto) {
+  const m = texto.match(/(\d{4,5})\s*-\s*(\d{7,8})/)
+  if (m) return `${m[1]}-${m[2]}`
+  const pv = (texto.match(/Punto de Venta:?\s*(\d{3,5})/i) || [])[1]
+  const nro = (texto.match(/Comp\.?\s*Nro:?\s*(\d{6,8})/i) || [])[1]
+  if (pv && nro) return `${pv}-${nro}`
+  return nro || null
 }
 
 // Login con Clave Fiscal. Deja la sesión abierta en el portal.
@@ -545,12 +591,50 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
       await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
       await destino.waitForTimeout(4500)
       pasos.push('CONFIRMADO — factura emitida')
+
+      const shotFinal = await captura(destino)
+      const finalText = await destino.evaluate(() => document.body.innerText).catch(() => '')
+
+      // Capturar el PDF oficial y leer número/CAE
+      const pdfInfo = await capturarPdf(destino)
+      pasos.push('PDF: ' + pdfInfo.via)
+      let pdfText = ''
+      if (pdfInfo.base64) {
+        try {
+          const parsed = await pdfParse(Buffer.from(pdfInfo.base64, 'base64'))
+          pdfText = parsed.text || ''
+        } catch (e) {
+          pdfInfo.parseError = String((e && e.message) || e)
+        }
+      }
+
+      const texto = `${pdfText}\n${finalText}`
+      const numero = extraerNumero(texto)
+      const cae =
+        (texto.match(/CAE\s*N?º?\s*:?\s*(\d{14})/i) || [])[1] ||
+        (texto.match(/\b(\d{14})\b/) || [])[1] ||
+        null
+      const caeVto =
+        (texto.match(/(?:Vto\.?|Vencimiento)[^\d]{0,20}(\d{2}\/\d{2}\/\d{4})/i) || [])[1] || null
+      const fecha =
+        (texto.match(/Fecha de Emisi[oó]n:?\s*(\d{2}\/\d{2}\/\d{4})/i) || [])[1] || null
+
       return {
         ok: true,
         emitida: true,
         url: destino.url(),
+        numero,
+        cae,
+        caeVto,
+        fecha,
+        pdf: pdfInfo.base64 || null,
+        pdfInfo: { via: pdfInfo.via, bytes: pdfInfo.bytes, url: pdfInfo.url, error: pdfInfo.error, parseError: pdfInfo.parseError },
+        diagnostico: {
+          finalText: (finalText || '').slice(0, 1200),
+          pdfText: (pdfText || '').slice(0, 1200),
+        },
         pasos,
-        screenshot: await captura(destino),
+        screenshot: shotFinal,
       }
     }
 

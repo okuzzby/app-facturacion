@@ -161,6 +161,12 @@ export default function Facturar() {
           <h1>Factura emitida ✓</h1>
         </div>
         <p className="ok">La factura se generó en ARCA.</p>
+        {resultado.numero && (
+          <p>
+            Comprobante Nº <strong>{resultado.numero}</strong>
+            {resultado.cae ? ` · CAE ${resultado.cae}` : ''}
+          </p>
+        )}
         {resultado.screenshot && (
           <img
             className="shot"
@@ -168,7 +174,10 @@ export default function Facturar() {
             src={`data:image/png;base64,${resultado.screenshot}`}
           />
         )}
-        <button type="button" onClick={nuevaFactura}>Hacer otra factura</button>
+        <div className="fila-botones">
+          <button type="button" onClick={nuevaFactura}>Hacer otra factura</button>
+          <Link to="/historial" className="boton-link secundario-link">Ver historial</Link>
+        </div>
       </div>
     )
   }

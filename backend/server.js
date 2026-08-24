@@ -245,6 +245,67 @@ app.post('/arca/factura-generar', requireAuth, async (req, res) => {
     datos,
     confirmar
   )
+
+  // Si se emitió de verdad, guardamos el registro y el PDF.
+  if (confirmar && resultado.ok && resultado.emitida) {
+    try {
+      const { data: ins, error: insErr } = await supabaseAdmin
+        .from('facturas_emitidas')
+        .insert({
+          user_id: req.user.id,
+          tipo: row.tipo_comprobante || 'Factura C',
+          punto_venta: row.punto_venta,
+          numero: resultado.numero,
+          cae: resultado.cae,
+          cae_vto: resultado.caeVto,
+          fecha: resultado.fecha,
+          concepto: datos.concepto,
+          condicion_iva: datos.condicionIva,
+          condiciones_venta: Array.isArray(datos.condicionesVenta)
+            ? datos.condicionesVenta.join(', ')
+            : datos.condicionesVenta,
+          producto: datos.producto,
+          cantidad: 1,
+          precio: Number(datos.precio) || null,
+          importe_total: Number(datos.precio) || null,
+          estado: 'emitida',
+        })
+        .select('id')
+        .single()
+
+      if (insErr) {
+        resultado.guardado = false
+        resultado.guardadoError = insErr.message
+      } else {
+        resultado.facturaId = ins.id
+        resultado.guardado = true
+
+        if (resultado.pdf) {
+          const path = `${req.user.id}/${ins.id}.pdf`
+          const buf = Buffer.from(resultado.pdf, 'base64')
+          const { error: upErr } = await supabaseAdmin.storage
+            .from('facturas')
+            .upload(path, buf, { contentType: 'application/pdf', upsert: true })
+          if (!upErr) {
+            await supabaseAdmin
+              .from('facturas_emitidas')
+              .update({ pdf_path: path })
+              .eq('id', ins.id)
+            resultado.pdfGuardado = true
+          } else {
+            resultado.pdfGuardado = false
+            resultado.pdfGuardadoError = upErr.message
+          }
+        }
+      }
+    } catch (e) {
+      resultado.guardado = false
+      resultado.guardadoError = String((e && e.message) || e)
+    }
+  }
+
+  // No devolvemos el PDF crudo al frontend (se descarga desde Storage).
+  delete resultado.pdf
   res.json(resultado)
 })
 
