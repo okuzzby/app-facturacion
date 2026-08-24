@@ -209,6 +209,130 @@ app.post('/arca/inspeccionar-factura', requireAuth, async (req, res) => {
   res.json(resultado)
 })
 
+// Anula una factura emitiendo una Nota de Crédito C asociada. EMITE de verdad.
+app.post('/arca/anular', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const facturaId = req.body?.facturaId
+  if (!facturaId) return res.status(400).json({ error: 'Falta facturaId' })
+
+  // Credencial + empresa/PV
+  const { data: credData, error: credErr } = await supabaseAdmin.rpc(
+    'get_credencial_arca_interna',
+    { p_user: req.user.id }
+  )
+  if (credErr) return res.status(500).json({ error: credErr.message })
+  const cred = Array.isArray(credData) ? credData[0] : credData
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: crow } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada, punto_venta')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!crow?.empresa_representada) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  // Factura original (propia)
+  const { data: f, error: fErr } = await supabaseAdmin
+    .from('facturas_emitidas')
+    .select('*')
+    .eq('id', facturaId)
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (fErr) return res.status(500).json({ error: fErr.message })
+  if (!f) return res.status(404).json({ error: 'Factura no encontrada' })
+  if (f.estado === 'anulada') return res.status(400).json({ error: 'La factura ya está anulada' })
+  if (/nota de cr/i.test(f.tipo || '')) {
+    return res.status(400).json({ error: 'Una Nota de Crédito no se anula' })
+  }
+
+  // Comprobante asociado: separar PV y número de "00001-00000813"
+  const partes = String(f.numero || '').split('-')
+  const pvAsoc = partes[0] ? String(parseInt(partes[0], 10)) : ''
+  const nroAsoc = partes[1] ? String(parseInt(partes[1], 10)) : ''
+
+  const datos = {
+    concepto: f.concepto || 'Productos',
+    condicionIva: f.condicion_iva || 'Consumidor Final',
+    condicionesVenta: f.condiciones_venta
+      ? String(f.condiciones_venta).split(',').map((s) => s.trim()).filter(Boolean)
+      : ['Contado'],
+    producto: f.producto,
+    precio: f.precio,
+  }
+
+  const resultado = await generarFactura(
+    cred.cuit,
+    cred.clave,
+    crow.empresa_representada,
+    crow.punto_venta,
+    'Nota de Crédito C',
+    datos,
+    true,
+    {
+      comprobanteAsociado: {
+        tipo: 'Factura C',
+        ptoVta: pvAsoc,
+        nro: nroAsoc,
+        fecha: f.fecha || null,
+      },
+    }
+  )
+
+  if (resultado.ok && resultado.emitida) {
+    try {
+      // Guardar la NC como comprobante propio
+      const { data: ncIns } = await supabaseAdmin
+        .from('facturas_emitidas')
+        .insert({
+          user_id: req.user.id,
+          tipo: 'Nota de Crédito C',
+          punto_venta: crow.punto_venta,
+          numero: resultado.numero,
+          cae: resultado.cae,
+          cae_vto: resultado.caeVto,
+          fecha: resultado.fecha,
+          concepto: datos.concepto,
+          condicion_iva: datos.condicionIva,
+          condiciones_venta: datos.condicionesVenta.join(', '),
+          producto: f.producto,
+          cantidad: 1,
+          precio: f.precio,
+          importe_total: f.importe_total,
+          estado: 'emitida',
+          anula_a: f.id,
+        })
+        .select('id')
+        .single()
+
+      if (ncIns && resultado.pdf) {
+        const path = `${req.user.id}/${ncIns.id}.pdf`
+        const buf = Buffer.from(resultado.pdf, 'base64')
+        const { error: upErr } = await supabaseAdmin.storage
+          .from('facturas')
+          .upload(path, buf, { contentType: 'application/pdf', upsert: true })
+        if (!upErr) {
+          await supabaseAdmin.from('facturas_emitidas').update({ pdf_path: path }).eq('id', ncIns.id)
+        }
+      }
+
+      // Marcar la factura original como anulada
+      await supabaseAdmin
+        .from('facturas_emitidas')
+        .update({ estado: 'anulada', nc_numero: resultado.numero })
+        .eq('id', f.id)
+    } catch (e) {
+      resultado.guardadoError = String((e && e.message) || e)
+    }
+  }
+
+  delete resultado.pdf
+  res.json(resultado)
+})
+
 // Inspección del formulario de Nota de Crédito (para armar la anulación). No emite.
 app.post('/arca/inspeccionar-nc', requireAuth, async (req, res) => {
   if (!supabaseAdmin) {

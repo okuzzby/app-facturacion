@@ -494,7 +494,7 @@ const CV_MAP = {
 
 // Llena todo el formulario de factura. Si confirmar=false, se detiene en el
 // Resumen (paso 4) SIN emitir. Si confirmar=true, emite la factura real.
-export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, confirmar = false) {
+export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, confirmar = false, extra = {}) {
   const pasos = []
   const d = datos || {}
   let browser
@@ -521,7 +521,10 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
     const tipoPares = await tipoSel
       .locator('option')
       .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
-    const tipoT = tipoPares.find((p) => p.text === tipo) || tipoPares.find((p) => /factura c/i.test(p.text))
+    const tipoT =
+      tipoPares.find((p) => p.text === tipo) ||
+      (tipo && tipoPares.find((p) => p.text.toLowerCase().includes(String(tipo).toLowerCase()))) ||
+      tipoPares.find((p) => /factura c/i.test(p.text))
     if (tipoT) await tipoSel.selectOption({ value: tipoT.value })
     pasos.push(`PV=${pvT ? pvT.text : '?'} · Tipo=${tipoT ? tipoT.text : '?'}`)
     await clickContinuar(destino, pasos, 'PV/Tipo')
@@ -558,6 +561,28 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
     }, idsCV)
     await destino.waitForTimeout(500)
     pasos.push('IVA = ' + (d.condicionIva || 'Consumidor Final') + ' · Venta: ' + conds.join(', '))
+
+    // Comprobante asociado (para Nota de Crédito): apunta a la factura original
+    if (extra.comprobanteAsociado) {
+      const a = extra.comprobanteAsociado
+      await elegirEnSelect(
+        destino,
+        '#cmp_asoc_tipo',
+        new RegExp('^' + escapeRe(a.tipo || 'Factura C') + '$', 'i')
+      )
+      await destino.locator('[name="cmpAsociadoPtoVta"]').first().fill(String(a.ptoVta || ''))
+      await destino.locator('[name="cmpAsociadoNro"]').first().fill(String(a.nro || ''))
+      if (a.fecha) {
+        await destino
+          .locator('[name="cmpAsociadoFechaEmision"]')
+          .first()
+          .fill(String(a.fecha))
+          .catch(() => {})
+      }
+      await destino.waitForTimeout(500)
+      pasos.push(`Comprobante asociado: ${a.tipo} ${a.ptoVta}-${a.nro}`)
+    }
+
     await clickContinuar(destino, pasos, 'Receptor')
 
     // PASO 3: Datos de la Operación

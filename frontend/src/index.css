@@ -252,6 +252,28 @@ button.peligro {
   border: 1px solid #5a2a2e;
 }
 
+.factura-acciones {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.confirmar-anular {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #f87171;
+}
+
+.factura-acciones button {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+}
+
 .aviso {
   margin-top: 1rem;
   font-size: 0.82rem;
