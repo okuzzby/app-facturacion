@@ -65,7 +65,10 @@ async function clickContinuar(page, pasos, etiqueta = 'Continuar') {
     .first()
   await btn.click({ timeout: 20000 })
   await page.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await page.waitForTimeout(2500)
+  // En vez de dormir fijo, esperamos a que la red se aquiete (JSF terminó de
+  // renderar) y dejamos un colchón chico. Suele resolver mucho antes de 2.5s.
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(400)
   pasos.push(`${etiqueta} → Continuar`)
 }
 
@@ -207,7 +210,7 @@ async function entrarARcel(page, pasos) {
     .first()
   try {
     await buscador.fill('Comprobantes en línea', { timeout: 12000 })
-    await page.waitForTimeout(2500)
+    await page.waitForTimeout(800)
     pasos.push('Servicio buscado en el portal')
   } catch {
     pasos.push('No se encontró el buscador; intento clickear por texto')
@@ -228,7 +231,8 @@ async function entrarARcel(page, pasos) {
   ])
   const destino = popup || page
   await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await destino.waitForTimeout(2500)
+  await destino.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await destino.waitForTimeout(500)
   pasos.push('Servicio abierto (RCEL)')
   return destino
 }
@@ -289,7 +293,8 @@ async function irAGenerarComprobante(page, empresa, pasos) {
     .first()
   await btnEmpresa.click({ timeout: 20000 })
   await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await destino.waitForTimeout(2500)
+  await destino.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  await destino.waitForTimeout(500)
   pasos.push('Empresa seleccionada (menú RCEL)')
 
   const generar = destino
@@ -298,7 +303,10 @@ async function irAGenerarComprobante(page, empresa, pasos) {
     .first()
   await generar.click({ timeout: 20000 })
   await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await destino.waitForTimeout(2500)
+  await destino.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+  // Esperamos a que el paso 1 tenga sus <select> (PV/Tipo) antes de seguir.
+  await destino.locator('select').first().waitFor({ timeout: 15000 }).catch(() => {})
+  await destino.waitForTimeout(400)
   pasos.push('En Generar Comprobantes (paso 1)')
   return destino
 }
@@ -526,7 +534,10 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
       pvPares.find((p) => pvCodigo && p.text.startsWith(pvCodigo)) ||
       pvPares.find((p) => p.text && !/seleccionar/i.test(p.text))
     if (pvT) await pvSel.selectOption({ value: pvT.value })
-    await destino.waitForTimeout(2500)
+    // Al elegir PV, ARCA repuebla el select de Tipo por AJAX. Esperamos a que
+    // tenga opciones reales en vez de dormir 2.5s fijos.
+    await tipoSel.locator('option').nth(2).waitFor({ timeout: 10000 }).catch(() => {})
+    await destino.waitForTimeout(300)
     const tipoPares = await tipoSel
       .locator('option')
       .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
@@ -541,7 +552,7 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
     // PASO 1: Datos de Emisión
     const concepto = d.concepto || 'Productos'
     await elegirEnSelect(destino, '#idconcepto', new RegExp('^' + escapeRe(concepto) + '$', 'i'))
-    await destino.waitForTimeout(1500)
+    await destino.waitForTimeout(500)
     if (/servicio/i.test(concepto)) {
       if (d.periodoDesde) await destino.locator('#fsd').fill(d.periodoDesde).catch(() => {})
       if (d.periodoHasta) await destino.locator('#fsh').fill(d.periodoHasta).catch(() => {})
@@ -556,7 +567,7 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
       '#idivareceptor',
       new RegExp('^' + escapeRe(d.condicionIva || 'Consumidor Final') + '$', 'i')
     )
-    await destino.waitForTimeout(1000)
+    await destino.waitForTimeout(400)
     const conds = d.condicionesVenta && d.condicionesVenta.length ? d.condicionesVenta : ['Contado']
     const idsCV = conds
       .map((c) => CV_MAP[String(c).toLowerCase().trim()])
@@ -600,12 +611,12 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
     await elegirEnSelect(destino, '#detalle_medida1', /unidades/i)
     await destino.locator('#detalle_precio1').fill(String(d.precio || ''))
     await destino.locator('#detalle_precio1').press('Tab').catch(() => {})
-    await destino.waitForTimeout(1200)
+    await destino.waitForTimeout(600)
     pasos.push(`Detalle: ${d.producto || ''} · $${d.precio || ''}`)
     await clickContinuar(destino, pasos, 'Operación')
 
     // PASO 4: Resumen
-    await destino.waitForTimeout(1500)
+    await destino.waitForTimeout(700)
     pasos.push('En Resumen (paso 4)')
     const shotResumen = await captura(destino)
 
@@ -615,7 +626,9 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
         .locator('input[value*="Confirmar"], button:has-text("Confirmar Datos")')
         .first()
       await btnDatos.click({ timeout: 20000 })
-      await destino.waitForTimeout(2500)
+      // El click del modal siguiente ya auto-espera a que sea visible, así que
+      // alcanza con un colchón chico para que aparezca el cartel de confirmación.
+      await destino.waitForTimeout(600)
       pasos.push('Clic en "Confirmar Datos"')
 
       // 2) Cartel final "¿Confirma la Operación?" → botón "Confirmar" (exacto)
@@ -625,7 +638,15 @@ export async function generarFactura(cuit, clave, empresa, pv, tipo, datos, conf
         .first()
       await btnModal.click({ timeout: 20000 })
       await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-      await destino.waitForTimeout(4500)
+      // La señal de que ARCA terminó de emitir es la pantalla final con el botón
+      // "Imprimir". Esperar por ese botón es más rápido y más confiable que un
+      // sleep fijo: resuelve apenas está listo, y aguanta si ARCA tarda más.
+      await destino
+        .locator('input[value*="Imprimir"], button:has-text("Imprimir")')
+        .first()
+        .waitFor({ state: 'visible', timeout: 30000 })
+        .catch(() => {})
+      await destino.waitForTimeout(400)
       pasos.push('CONFIRMADO — factura emitida')
 
       const shotFinal = await captura(destino)
