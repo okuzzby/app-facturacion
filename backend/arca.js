@@ -127,12 +127,13 @@ async function capturarPdf(destino) {
     .locator('input[value*="Imprimir"], button:has-text("Imprimir")')
     .first()
   try {
-    const [popup, download] = await Promise.all([
-      context.waitForEvent('page', { timeout: 12000 }).catch(() => null),
-      destino.waitForEvent('download', { timeout: 12000 }).catch(() => null),
-      btn.click({ timeout: 15000 }).catch(() => {}),
-    ])
+    // Preparamos ambos listeners ANTES del click. La descarga suele dispararse
+    // en 1-2s y resuelve apenas ocurre (no esperamos el timeout completo).
+    const downloadP = destino.waitForEvent('download', { timeout: 9000 }).catch(() => null)
+    const popupP = context.waitForEvent('page', { timeout: 9000 }).catch(() => null)
+    await btn.click({ timeout: 15000 }).catch(() => {})
 
+    const download = await downloadP
     if (download) {
       const stream = await download.createReadStream()
       const chunks = []
@@ -140,6 +141,7 @@ async function capturarPdf(destino) {
       const buf = Buffer.concat(chunks)
       return { base64: buf.toString('base64'), via: 'download', bytes: buf.length }
     }
+    const popup = await popupP
     if (popup) {
       await popup.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {})
       const url = popup.url()
@@ -188,7 +190,11 @@ async function loginEnArca(page, cuit, clave, pasos) {
   await page.fill('[id="F1:password"]', clave)
   pasos.push('Clave ingresada')
   await page.click('[id="F1:btnIngresar"]')
-  await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {})
+  // No esperamos networkidle completo del portal (SPA que puede seguir pidiendo
+  // datos). Con domcontentloaded + un colchón acotado alcanza; el buscador del
+  // portal se auto-espera después en entrarARcel.
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {})
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
   pasos.push('Login OK')
 }
 
@@ -206,7 +212,8 @@ async function entrarARcel(page, pasos) {
       .goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
       .catch(() => {})
   }
-  await page.waitForTimeout(2000)
+  // El buscador se auto-espera al hacer fill; solo dejamos un colchón chico.
+  await page.waitForTimeout(600)
   pasos.push('En el portal, buscando el servicio')
 
   // Buscar "Comprobantes en línea" en el buscador del portal
