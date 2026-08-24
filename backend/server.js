@@ -11,6 +11,7 @@ import {
   generarFactura,
   inspeccionarNotaCredito,
 } from './arca.js'
+import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
 
 const app = express()
 app.use(cors())
@@ -52,6 +53,24 @@ async function requireAuth(req, res, next) {
 // ---------------- Endpoints públicos ----------------
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'app-facturacion-backend', phase: '3C' })
+})
+
+// TEMPORAL — Fase 0: prueba de emisión por Web Service en HOMOLOGACIÓN.
+// Protegido con SPIKE_SECRET. Se elimina cuando termine el spike.
+app.get('/arca/ws-spike', async (req, res) => {
+  if (!process.env.SPIKE_SECRET || req.query.key !== process.env.SPIKE_SECRET) {
+    return res.status(403).json({ error: 'no autorizado' })
+  }
+  try {
+    const out = await emitirSpike({
+      cuit: req.query.cuit || 20960814909,
+      pv: req.query.pv || 1,
+      importe: req.query.importe || 100,
+    })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e), stack: (e && e.stack) || null })
+  }
 })
 
 app.get('/playwright-test', async (req, res) => {
