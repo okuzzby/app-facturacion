@@ -198,17 +198,21 @@ export async function crearCertificado(cuit, clave, alias) {
       .catch(() => [])
 
     if (!certPem) {
-      const dlP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
-      const desc = destino.getByText(/Descargar/i).first()
-      if (await desc.count().catch(() => 0)) {
-        await desc.click({ timeout: 15000 }).catch(() => {})
+      const dlP = destino.waitForEvent('download', { timeout: 15000 }).catch(() => null)
+      // "Descargar" es un input[type=image] con alt "Descargar" (postback ASP.NET).
+      const btnDesc = destino
+        .locator('input[type=image][alt*="Descargar" i], input[alt="Descargar"]')
+        .first()
+      if (await btnDesc.count().catch(() => 0)) {
+        await btnDesc.click({ timeout: 15000 }).catch(() => {})
       } else {
         await destino
-          .locator('a:has(img), input[type=image], a[href*=".cer"], a[href*=".crt"], a[href*=".pem"]')
-          .last()
+          .getByRole('button', { name: /descargar/i })
+          .first()
           .click({ timeout: 15000 })
           .catch(() => {})
       }
+      await destino.waitForTimeout(2500)
       const dl = await dlP
       if (dl) {
         const stream = await dl.createReadStream()
@@ -216,6 +220,17 @@ export async function crearCertificado(cuit, clave, alias) {
         for await (const ch of stream) chunks.push(ch)
         certPem = bytesACert(Buffer.concat(chunks))
         if (certPem) via = 'descarga'
+      }
+      // Si no fue descarga, tal vez el cert quedó en el texto de la página.
+      if (!certPem) {
+        for (const c of await scrapeAll(destino)) {
+          const p = buscarPem(c)
+          if (p) {
+            certPem = p
+            via = 'texto2'
+            break
+          }
+        }
       }
     }
     pasos.push(`Resultado (${via})${certPem ? ' — certificado capturado' : ' — sin certificado'}`)
