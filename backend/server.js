@@ -110,7 +110,8 @@ app.post('/arca/setup-crear-cert', requireAuth, async (req, res) => {
   const cred = Array.isArray(data) ? data[0] : data
   if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
   try {
-    const out = await crearCertificado(cred.cuit, cred.clave, req.query.alias || 'apptest1')
+    const aliasAuto = 'app' + String(Date.now()).slice(-8)
+    const out = await crearCertificado(cred.cuit, cred.clave, req.query.alias || aliasAuto)
     const { privateKeyPem, ...safe } = out // no exponemos la clave privada al frontend
     res.json(safe)
   } catch (e) {

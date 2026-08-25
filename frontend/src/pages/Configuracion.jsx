@@ -319,7 +319,7 @@ export default function Configuracion() {
       if (!r.ok) throw new Error(j.error || 'Error del backend')
       setArcaPasos(j.pasos || [])
       setArcaShot(j.screenshot || null)
-      setArcaCampos({ ok: j.ok, alias: j.alias, via: j.via, certPem: j.certPem })
+      setArcaCampos({ ok: j.ok, alias: j.alias, via: j.via, certPem: j.certPem, diag: j.diag })
       setArcaMsg(`${j.ok ? 'Certificado creado ✓' : 'Aviso'} — ${j.url || '-'}`)
       if (!j.ok && j.error) setArcaError(j.error)
     } catch (e) {

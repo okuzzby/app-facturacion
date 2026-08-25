@@ -110,14 +110,21 @@ export async function crearCertificado(cuit, clave, alias) {
     await destino.locator('#archivo').setInputFiles(tmpCsr)
     pasos.push(`Alias "${alias}" + CSR cargados`)
 
+    const context = destino.context()
     const downloadP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
+    const popupP = context.waitForEvent('page', { timeout: 12000 }).catch(() => null)
     await destino
       .locator('#cmdIngresar, input[name="cmdIngresar"]')
       .first()
       .click({ timeout: 15000 })
       .catch(() => {})
     await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-    await destino.waitForTimeout(3000)
+    await destino.waitForTimeout(4000)
+
+    const buscarPem = (s) => {
+      const m = String(s || '').match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/)
+      return m ? m[0] : null
+    }
 
     let certPem = null
     let via = 'pagina'
@@ -126,13 +133,39 @@ export async function crearCertificado(cuit, clave, alias) {
       const stream = await download.createReadStream()
       const chunks = []
       for await (const ch of stream) chunks.push(ch)
-      certPem = Buffer.concat(chunks).toString('utf8')
-      via = 'download'
+      certPem = buscarPem(Buffer.concat(chunks).toString('utf8'))
+      if (certPem) via = 'download'
     }
+
+    // Textos de la página (innerText + valores de textarea/input)
+    const scrape = async (pg) => {
+      if (!pg) return { url: null, text: '', fieldVals: [] }
+      const text = await pg.evaluate(() => document.body?.innerText || '').catch(() => '')
+      const fieldVals = await pg
+        .evaluate(() =>
+          [...document.querySelectorAll('textarea, input[type=text], pre')]
+            .map((el) => el.value || el.textContent || '')
+            .filter((v) => v && v.length > 40)
+        )
+        .catch(() => [])
+      return { url: pg.url(), text: text.slice(0, 1500), fieldVals }
+    }
+
+    const popup = await popupP
+    const dPage = await scrape(destino)
+    const dPopup = popup ? await scrape(popup) : null
+
     if (!certPem) {
-      const txt = await destino.evaluate(() => document.body.innerText).catch(() => '')
-      const m = txt.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/)
-      if (m) certPem = m[0]
+      const candidatos = [dPage.text, ...(dPage.fieldVals || [])]
+      if (dPopup) candidatos.push(dPopup.text, ...(dPopup.fieldVals || []))
+      for (const c of candidatos) {
+        const p = buscarPem(c)
+        if (p) {
+          certPem = p
+          via = dPopup && buscarPem(dPopup.text) ? 'popup' : 'campo'
+          break
+        }
+      }
     }
     pasos.push(`Resultado (${via})${certPem ? ' — certificado capturado' : ' — sin certificado'}`)
 
@@ -143,8 +176,15 @@ export async function crearCertificado(cuit, clave, alias) {
       privateKeyPem: certPem ? privateKeyPem : null,
       via,
       url: destino.url(),
+      diag: {
+        pageUrl: dPage.url,
+        pageText: dPage.text,
+        pageFields: (dPage.fieldVals || []).map((v) => v.slice(0, 80)),
+        popupUrl: dPopup?.url || null,
+        popupText: dPopup?.text || null,
+      },
       pasos,
-      screenshot: await captura(destino),
+      screenshot: await captura(popup || destino),
     }
   } catch (e) {
     return {
