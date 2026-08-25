@@ -111,20 +111,34 @@ export async function crearCertificado(cuit, clave, alias) {
     pasos.push(`Alias "${alias}" + CSR cargados`)
 
     const context = destino.context()
-    const downloadP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
-    const popupP = context.waitForEvent('page', { timeout: 12000 }).catch(() => null)
+    const buscarPem = (s) => {
+      const m = String(s || '').match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/)
+      return m ? m[0] : null
+    }
+
+    // Enviar el formulario: ARCA crea el cert y vuelve a la lista de alias.
     await destino
       .locator('#cmdIngresar, input[name="cmdIngresar"]')
       .first()
       .click({ timeout: 15000 })
       .catch(() => {})
     await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-    await destino.waitForTimeout(4000)
+    await destino.waitForTimeout(3000)
+    pasos.push('Certificado creado — de vuelta en la lista')
 
-    const buscarPem = (s) => {
-      const m = String(s || '').match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/)
-      return m ? m[0] : null
+    // Abrir "Ver" del alias recién creado para obtener el certificado.
+    const fila = destino.locator('tr').filter({ hasText: alias }).first()
+    const downloadP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
+    const popupP = context.waitForEvent('page', { timeout: 12000 }).catch(() => null)
+    const verEnFila = fila.getByText(/^\s*Ver\s*$/i).first()
+    if (await verEnFila.count().catch(() => 0)) {
+      await verEnFila.click({ timeout: 15000 }).catch(() => {})
+    } else {
+      await fila.locator('a, input[type=image], input[type=button]').last().click({ timeout: 15000 }).catch(() => {})
     }
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(3000)
+    pasos.push('Clic en "Ver" del alias')
 
     let certPem = null
     let via = 'pagina'
@@ -137,32 +151,34 @@ export async function crearCertificado(cuit, clave, alias) {
       if (certPem) via = 'download'
     }
 
-    // Textos de la página (innerText + valores de textarea/input)
-    const scrape = async (pg) => {
-      if (!pg) return { url: null, text: '', fieldVals: [] }
-      const text = await pg.evaluate(() => document.body?.innerText || '').catch(() => '')
-      const fieldVals = await pg
-        .evaluate(() =>
-          [...document.querySelectorAll('textarea, input[type=text], pre')]
-            .map((el) => el.value || el.textContent || '')
-            .filter((v) => v && v.length > 40)
-        )
-        .catch(() => [])
-      return { url: pg.url(), text: text.slice(0, 1500), fieldVals }
+    // Scrape de TODOS los frames (texto + textareas/inputs/pre)
+    const scrapeAll = async (pg) => {
+      if (!pg) return []
+      const out = []
+      for (const fr of pg.frames()) {
+        const t = await fr
+          .evaluate(() => {
+            const body = document.body ? document.body.innerText : ''
+            const fields = [...document.querySelectorAll('textarea, input[type=text], pre')].map(
+              (e) => e.value || e.textContent || ''
+            )
+            return [body, ...fields]
+          })
+          .catch(() => [])
+        out.push(...t)
+      }
+      return out.filter((s) => s && s.length > 20)
     }
 
     const popup = await popupP
-    const dPage = await scrape(destino)
-    const dPopup = popup ? await scrape(popup) : null
-
+    const muestrasDest = await scrapeAll(destino)
+    const muestrasPopup = popup ? await scrapeAll(popup) : []
     if (!certPem) {
-      const candidatos = [dPage.text, ...(dPage.fieldVals || [])]
-      if (dPopup) candidatos.push(dPopup.text, ...(dPopup.fieldVals || []))
-      for (const c of candidatos) {
+      for (const c of [...muestrasDest, ...muestrasPopup]) {
         const p = buscarPem(c)
         if (p) {
           certPem = p
-          via = dPopup && buscarPem(dPopup.text) ? 'popup' : 'campo'
+          via = popup ? 'popup' : 'campo'
           break
         }
       }
@@ -175,13 +191,11 @@ export async function crearCertificado(cuit, clave, alias) {
       certPem: certPem || null,
       privateKeyPem: certPem ? privateKeyPem : null,
       via,
-      url: destino.url(),
+      url: (popup || destino).url(),
       diag: {
-        pageUrl: dPage.url,
-        pageText: dPage.text,
-        pageFields: (dPage.fieldVals || []).map((v) => v.slice(0, 80)),
-        popupUrl: dPopup?.url || null,
-        popupText: dPopup?.text || null,
+        destinoUrl: destino.url(),
+        popupUrl: popup?.url || null,
+        muestras: [...muestrasDest, ...muestrasPopup].slice(0, 8).map((s) => s.slice(0, 140)),
       },
       pasos,
       screenshot: await captura(popup || destino),
