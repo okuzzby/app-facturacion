@@ -6,6 +6,7 @@
 // las pantallas de WSASS.
 
 import forge from 'node-forge'
+import fs from 'fs'
 import { abrir, loginEnArca, captura, dumpCampos } from './arca.js'
 
 const PORTAL_URL = 'https://portalcf.cloud.afip.gob.ar/portal/app/'
@@ -49,6 +50,115 @@ async function dumpNavegacion(page) {
       inputs: inputs.slice(0, 40),
     }
   })
+}
+
+// Navega hasta el formulario "Agregar alias" de Administración de Certificados
+// Digitales y devuelve la página (destino).
+async function irAAgregarCertificado(page, pasos) {
+  const context = page.context()
+  if (!page.url().includes('portalcf')) {
+    await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+  }
+  await page.waitForTimeout(1500)
+  const buscador = page
+    .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+    .first()
+  await buscador.fill('Administración de Certificados Digitales', { timeout: 12000 }).catch(() => {})
+  await page.waitForTimeout(2000)
+  const link = page
+    .getByText(/Administraci[oó]n de Certificados Digitales/i)
+    .and(page.locator(':visible'))
+    .first()
+  await link.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+  const [popup] = await Promise.all([
+    context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+    link.click({ timeout: 15000 }).catch(() => {}),
+  ])
+  const destino = popup || page
+  await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+  await destino.waitForTimeout(2500)
+  pasos.push('En Administración de Certificados Digitales')
+  // Clic "Agregar alias"
+  await destino
+    .locator('#cmdIngresar, input[name="cmdIngresar"]')
+    .first()
+    .click({ timeout: 15000 })
+    .catch(() => {})
+  await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+  await destino.waitForTimeout(2500)
+  pasos.push('En formulario Agregar alias')
+  return destino
+}
+
+// Crea un certificado nuevo en ARCA (producción): genera el CSR, llena el alias,
+// sube el CSR como archivo y captura el certificado resultante.
+// Devuelve { ok, alias, certPem, privateKeyPem, screenshot, pasos }.
+export async function crearCertificado(cuit, clave, alias) {
+  const pasos = []
+  let browser
+  let page
+  let destino
+  const { privateKeyPem, csrPem } = generarCsr(cuit, alias)
+  const tmpCsr = `/tmp/csr-${cuit}-${Date.now()}.csr`
+  fs.writeFileSync(tmpCsr, csrPem)
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    destino = await irAAgregarCertificado(page, pasos)
+
+    await destino.locator('#txtAliasCertificado').fill(alias, { timeout: 15000 })
+    await destino.locator('#archivo').setInputFiles(tmpCsr)
+    pasos.push(`Alias "${alias}" + CSR cargados`)
+
+    const downloadP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
+    await destino
+      .locator('#cmdIngresar, input[name="cmdIngresar"]')
+      .first()
+      .click({ timeout: 15000 })
+      .catch(() => {})
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(3000)
+
+    let certPem = null
+    let via = 'pagina'
+    const download = await downloadP
+    if (download) {
+      const stream = await download.createReadStream()
+      const chunks = []
+      for await (const ch of stream) chunks.push(ch)
+      certPem = Buffer.concat(chunks).toString('utf8')
+      via = 'download'
+    }
+    if (!certPem) {
+      const txt = await destino.evaluate(() => document.body.innerText).catch(() => '')
+      const m = txt.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/)
+      if (m) certPem = m[0]
+    }
+    pasos.push(`Resultado (${via})${certPem ? ' — certificado capturado' : ' — sin certificado'}`)
+
+    return {
+      ok: !!certPem,
+      alias,
+      certPem: certPem || null,
+      privateKeyPem: certPem ? privateKeyPem : null,
+      via,
+      url: destino.url(),
+      pasos,
+      screenshot: await captura(destino),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      pasos,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    try {
+      fs.unlinkSync(tmpCsr)
+    } catch {}
+    if (browser) await browser.close()
+  }
 }
 
 // Entra al portal, busca "Administración de Certificados Digitales", lo abre y

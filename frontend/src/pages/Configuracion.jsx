@@ -295,6 +295,40 @@ export default function Configuracion() {
     }
   }
 
+  async function crearCertAuto() {
+    setArcaMsg(null)
+    setArcaError(null)
+    setArcaShot(null)
+    setArcaPasos([])
+    setArcaCampos(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/setup-crear-cert`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaPasos(j.pasos || [])
+      setArcaShot(j.screenshot || null)
+      setArcaCampos({ ok: j.ok, alias: j.alias, via: j.via, certPem: j.certPem })
+      setArcaMsg(`${j.ok ? 'Certificado creado ✓' : 'Aviso'} — ${j.url || '-'}`)
+      if (!j.ok && j.error) setArcaError(j.error)
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function detectarEmpresas() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -703,6 +737,14 @@ export default function Configuracion() {
             disabled={arcaCargando}
           >
             {arcaCargando ? 'Inspeccionando…' : 'Inspeccionar WSASS (certificados)'}
+          </button>
+          <button
+            type="button"
+            className="secundario"
+            onClick={crearCertAuto}
+            disabled={arcaCargando}
+          >
+            {arcaCargando ? 'Creando…' : 'Crear certificado de prueba (auto)'}
           </button>
         </div>
         {arcaMsg && <p className="ok">{arcaMsg}</p>}
