@@ -359,12 +359,11 @@ export async function inspeccionarRelaciones(cuit, clave) {
     const serviciosTree = await destino
       .evaluate(() =>
         [...document.querySelectorAll('a[href*="setService"]')]
-          .map((a) => {
-            const href = a.getAttribute('href') || ''
-            const m = href.match(/web:\/\/([^']+)/)
-            return { text: (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70), id: m ? m[1] : '' }
-          })
-          .filter((s) => /factura|comprob|wsfe|electr/i.test(s.text + s.id))
+          .map((a) => ({
+            text: (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70),
+            href: (a.getAttribute('href') || '').slice(0, 120),
+          }))
+          .filter((s) => /facturaci[oó]n electr|wsfe|comprobantes t|constataci/i.test(s.text))
       )
       .catch(() => [])
 
