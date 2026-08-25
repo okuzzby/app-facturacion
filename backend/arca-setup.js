@@ -354,47 +354,30 @@ export async function inspeccionarRelaciones(cuit, clave) {
       pasos.push('Clic en Buscar servicio')
     }
 
-    // Capturar los organismos (imágenes/links) para identificar ARCA/AFIP.
-    const orgEls = await destino
+    // El árbol de servicios ya está en el DOM: cada servicio es un link
+    // setService('relationAdd','web://<id>'). Listamos los relacionados a factura.
+    const serviciosTree = await destino
       .evaluate(() =>
-        [...document.querySelectorAll('a, input[type=image], img')]
-          .map((e) => ({
-            tag: e.tagName,
-            alt: (e.alt || '').slice(0, 40),
-            title: (e.title || '').slice(0, 40),
-            src: (e.getAttribute('src') || '').slice(-45),
-            onclick: (e.getAttribute('onclick') || '').slice(0, 90),
-            href: (e.getAttribute('href') || '').slice(0, 90),
-            id: e.id || '',
-            name: e.name || '',
-          }))
-          .filter((e) => /arca|afip|dgi|factura|comprob/i.test(e.alt + e.title + e.src + e.onclick + e.href + e.id + e.name))
+        [...document.querySelectorAll('a[href*="setService"]')]
+          .map((a) => {
+            const href = a.getAttribute('href') || ''
+            const m = href.match(/web:\/\/([^']+)/)
+            return { text: (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70), id: m ? m[1] : '' }
+          })
+          .filter((s) => /factura|comprob|wsfe|electr/i.test(s.text + s.id))
       )
       .catch(() => [])
 
-    // Intentar clic en ARCA/AFIP para ver sus servicios.
-    const arca = destino
-      .locator(
-        'a:has(img[alt*="ARCA" i]), a:has(img[alt*="AFIP" i]), img[alt*="ARCA" i], img[alt*="AFIP" i], input[type=image][alt*="ARCA" i], input[type=image][alt*="AFIP" i]'
-      )
-      .first()
-    let clicArca = false
-    if (await arca.count().catch(() => 0)) {
-      await arca.click({ timeout: 15000 }).catch(() => {})
-      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-      await destino.waitForTimeout(2500)
-      clicArca = true
-      pasos.push('Clic en ARCA')
-    }
+    const totalServicios = await destino
+      .evaluate(() => document.querySelectorAll('a[href*="setService"]').length)
+      .catch(() => 0)
 
     return {
       ok: true,
       url: destino.url(),
       title: await destino.title().catch(() => null),
       pasos,
-      diag: { clicArca, orgEls },
-      nav: await dumpNavegacion(destino),
-      campos: await dumpCampos(destino).catch(() => null),
+      diag: { totalServicios, serviciosTree },
       screenshot: await captura(destino),
     }
   } catch (e) {
