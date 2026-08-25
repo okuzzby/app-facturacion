@@ -115,8 +115,17 @@ export async function crearCertificado(cuit, clave, alias) {
       const m = String(s || '').match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/)
       return m ? m[0] : null
     }
+    const derAPem = (buf) => {
+      try {
+        const asn1 = forge.asn1.fromDer(forge.util.createBuffer(buf.toString('binary')))
+        return forge.pki.certificateToPem(forge.pki.certificateFromAsn1(asn1))
+      } catch {
+        return null
+      }
+    }
+    const bytesACert = (buf) => buscarPem(buf.toString('utf8')) || derAPem(buf)
 
-    // Enviar el formulario: ARCA crea el cert y vuelve a la lista de alias.
+    // 1) Enviar el formulario -> ARCA crea el cert y vuelve a la lista.
     await destino
       .locator('#cmdIngresar, input[name="cmdIngresar"]')
       .first()
@@ -126,51 +135,21 @@ export async function crearCertificado(cuit, clave, alias) {
     await destino.waitForTimeout(3000)
     pasos.push('Certificado creado — de vuelta en la lista')
 
-    // Diagnóstico: cómo está implementado el "Ver" de la fila del alias.
-    const verInfo = await destino
-      .evaluate((al) => {
-        const rows = [...document.querySelectorAll('tr')].filter((r) => (r.textContent || '').includes(al))
-        if (!rows.length) return { encontrado: false, filas: document.querySelectorAll('tr').length }
-        const row = rows[0]
-        const els = [...row.querySelectorAll('a, input, button')].map((e) => ({
-          tag: e.tagName,
-          type: e.type || '',
-          text: (e.textContent || e.value || '').trim().slice(0, 20),
-          href: e.getAttribute('href'),
-          onclick: (e.getAttribute('onclick') || '').slice(0, 120),
-          id: e.id || '',
-          name: e.name || '',
-        }))
-        return { encontrado: true, rowHtml: row.outerHTML.slice(0, 600), els }
-      }, alias)
-      .catch(() => null)
-
-    // Abrir "Ver" del alias recién creado para obtener el certificado.
-    const fila = destino.locator('tr').filter({ hasText: alias }).first()
-    const downloadP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
-    const popupP = context.waitForEvent('page', { timeout: 12000 }).catch(() => null)
-    const verEnFila = fila.getByText(/^\s*Ver\s*$/i).first()
-    if (await verEnFila.count().catch(() => 0)) {
-      await verEnFila.click({ timeout: 15000 }).catch(() => {})
-    } else {
-      await fila.locator('a, input[type=image], input[type=button]').last().click({ timeout: 15000 }).catch(() => {})
-    }
+    // 2) Clic en el primer "Ver" (el alias recién creado aparece primero) -> detalle.
+    await destino
+      .locator('a')
+      .filter({ hasText: /^\s*Ver\s*$/ })
+      .first()
+      .click({ timeout: 15000 })
+      .catch(() => {})
     await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
     await destino.waitForTimeout(3000)
-    pasos.push('Clic en "Ver" del alias')
+    pasos.push('En el detalle del certificado')
 
     let certPem = null
-    let via = 'pagina'
-    const download = await downloadP
-    if (download) {
-      const stream = await download.createReadStream()
-      const chunks = []
-      for await (const ch of stream) chunks.push(ch)
-      certPem = buscarPem(Buffer.concat(chunks).toString('utf8'))
-      if (certPem) via = 'download'
-    }
+    let via = 'sin'
 
-    // Scrape de TODOS los frames (texto + textareas/inputs/pre)
+    // ¿El PEM ya está en el texto de la página?
     const scrapeAll = async (pg) => {
       if (!pg) return []
       const out = []
@@ -188,18 +167,55 @@ export async function crearCertificado(cuit, clave, alias) {
       }
       return out.filter((s) => s && s.length > 20)
     }
+    for (const c of await scrapeAll(destino)) {
+      const p = buscarPem(c)
+      if (p) {
+        certPem = p
+        via = 'texto'
+        break
+      }
+    }
 
-    const popup = await popupP
-    const muestrasDest = await scrapeAll(destino)
-    const muestrasPopup = popup ? await scrapeAll(popup) : []
+    // 3) Si no está, apretar "Descargar" y bajar el archivo del certificado.
+    const detalleEls = await destino
+      .evaluate(() =>
+        [...document.querySelectorAll('a, input, img, button')]
+          .map((e) => ({
+            tag: e.tagName,
+            text: (e.textContent || e.value || e.alt || '').trim().slice(0, 30),
+            href: e.getAttribute('href'),
+            onclick: (e.getAttribute('onclick') || '').slice(0, 100),
+            src: (e.getAttribute('src') || '').slice(-50),
+            id: e.id || '',
+            name: e.name || '',
+          }))
+          .filter((e) =>
+            /descarg|\.cer|\.crt|\.pem|certificad|download/i.test(
+              (e.text || '') + (e.href || '') + (e.onclick || '') + (e.src || '') + (e.name || '')
+            )
+          )
+      )
+      .catch(() => [])
+
     if (!certPem) {
-      for (const c of [...muestrasDest, ...muestrasPopup]) {
-        const p = buscarPem(c)
-        if (p) {
-          certPem = p
-          via = popup ? 'popup' : 'campo'
-          break
-        }
+      const dlP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
+      const desc = destino.getByText(/Descargar/i).first()
+      if (await desc.count().catch(() => 0)) {
+        await desc.click({ timeout: 15000 }).catch(() => {})
+      } else {
+        await destino
+          .locator('a:has(img), input[type=image], a[href*=".cer"], a[href*=".crt"], a[href*=".pem"]')
+          .last()
+          .click({ timeout: 15000 })
+          .catch(() => {})
+      }
+      const dl = await dlP
+      if (dl) {
+        const stream = await dl.createReadStream()
+        const chunks = []
+        for await (const ch of stream) chunks.push(ch)
+        certPem = bytesACert(Buffer.concat(chunks))
+        if (certPem) via = 'descarga'
       }
     }
     pasos.push(`Resultado (${via})${certPem ? ' — certificado capturado' : ' — sin certificado'}`)
@@ -210,15 +226,13 @@ export async function crearCertificado(cuit, clave, alias) {
       certPem: certPem || null,
       privateKeyPem: certPem ? privateKeyPem : null,
       via,
-      url: (popup || destino).url(),
+      url: destino.url(),
       diag: {
         destinoUrl: destino.url(),
-        popupUrl: popup?.url || null,
-        verInfo,
-        muestras: [...muestrasDest, ...muestrasPopup].slice(0, 8).map((s) => s.slice(0, 140)),
+        detalleEls,
       },
       pasos,
-      screenshot: await captura(popup || destino),
+      screenshot: await captura(destino),
     }
   } catch (e) {
     return {
