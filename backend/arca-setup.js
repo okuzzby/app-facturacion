@@ -330,6 +330,30 @@ export async function inspeccionarRelaciones(cuit, clave) {
       pasos.push('Clic en Nueva Relación')
     }
 
+    // Representado = el propio usuario.
+    const cboRep = destino.locator('#cboRepresentado, select[name="cboRepresentado"]').first()
+    if (await cboRep.count().catch(() => 0)) {
+      const opts = await cboRep
+        .locator('option')
+        .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+      const cd = String(cuit).replace(/\D/g, '')
+      const t = opts.find((o) => o.text.replace(/\D/g, '').includes(cd))
+      if (t) {
+        await cboRep.selectOption({ value: t.value }).catch(() => {})
+        await destino.waitForTimeout(1000)
+        pasos.push('Representado = ' + t.text)
+      }
+    }
+
+    // Buscar servicio -> abre el árbol de servicios (para elegir wsfe).
+    const btnBuscar = destino.locator('#cmdBuscarServicio, input[name="cmdBuscarServicio"]').first()
+    if (await btnBuscar.count().catch(() => 0)) {
+      await btnBuscar.click({ timeout: 15000 }).catch(() => {})
+      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+      await destino.waitForTimeout(2500)
+      pasos.push('Clic en Buscar servicio')
+    }
+
     return {
       ok: true,
       url: destino.url(),
