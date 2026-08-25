@@ -264,6 +264,63 @@ export async function crearCertificado(cuit, clave, alias) {
   }
 }
 
+// Inspecciona el "Administrador de Relaciones" (donde se autoriza el cert al
+// servicio wsfe). Abre el servicio y devuelve captura + mapa. NO cambia nada.
+export async function inspeccionarRelaciones(cuit, clave) {
+  const pasos = []
+  let browser
+  let page
+  let destino
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const context = page.context()
+    if (!page.url().includes('portalcf')) {
+      await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    }
+    await page.waitForTimeout(1500)
+    const buscador = page
+      .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+      .first()
+    await buscador.fill('Administrador de Relaciones', { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(2000)
+    pasos.push('Buscado: Administrador de Relaciones')
+    const link = page
+      .getByText(/Administrador de Relaciones/i)
+      .and(page.locator(':visible'))
+      .first()
+    await link.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+    const [popup] = await Promise.all([
+      context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+      link.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    destino = popup || page
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Abierto Administrador de Relaciones')
+
+    return {
+      ok: true,
+      url: destino.url(),
+      title: await destino.title().catch(() => null),
+      pasos,
+      nav: await dumpNavegacion(destino),
+      campos: await dumpCampos(destino).catch(() => null),
+      screenshot: await captura(destino),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      url: (destino || page) ? (destino || page).url() : null,
+      pasos,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
 // Entra al portal, busca "Administración de Certificados Digitales", lo abre y
 // devuelve una captura + el mapa de la pantalla de adentro. NO crea nada.
 export async function inspeccionarWSASS(cuit, clave, termino = 'Certificados') {
