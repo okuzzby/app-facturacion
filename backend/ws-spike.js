@@ -4,7 +4,7 @@
 import { emitirWS } from './arca-ws.js'
 
 export async function emitirSpike(q) {
-  const tipo = /nota/i.test(q.tipo || '') ? 'Nota de Crédito C' : 'Factura C'
+  const tipo = /nc|nota/i.test(q.tipo || '') ? 'Nota de Crédito C' : 'Factura C'
   const opts = {
     cuit: q.cuit || 20960814909,
     pv: q.pv || 1,
