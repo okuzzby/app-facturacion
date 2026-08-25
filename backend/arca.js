@@ -15,7 +15,7 @@ function marcaT() {
   return `[+${((Date.now() - _timer.t0) / 1000).toFixed(1)}s] `
 }
 
-async function abrir() {
+export async function abrir() {
   const browser = await chromium.launch({
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   })
@@ -28,7 +28,7 @@ async function abrir() {
   return { browser, page }
 }
 
-async function captura(page) {
+export async function captura(page) {
   try {
     if (!page) return null
     const buf = await page.screenshot({ fullPage: false })
@@ -39,7 +39,7 @@ async function captura(page) {
 }
 
 // Lista los campos (input/select/textarea) visibles de la página actual.
-function dumpCampos(page) {
+export function dumpCampos(page) {
   return page.evaluate(() => {
     const visible = (el) => !!(el.offsetParent || el.offsetWidth || el.offsetHeight)
     return [...document.querySelectorAll('input, select, textarea')]
@@ -179,7 +179,7 @@ function extraerNumero(texto) {
 }
 
 // Login con Clave Fiscal. Deja la sesión abierta en el portal.
-async function loginEnArca(page, cuit, clave, pasos) {
+export async function loginEnArca(page, cuit, clave, pasos) {
   await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
   const cuitLimpio = String(cuit).replace(/[^0-9]/g, '')
   await page.waitForSelector('[id="F1:username"]', { timeout: 30000 })

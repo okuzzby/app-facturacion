@@ -13,6 +13,7 @@ import {
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
 import { emitirFacturaFlow, anularFlow } from './ws-flow.js'
+import { inspeccionarWSASS } from './arca-setup.js'
 
 const app = express()
 app.use(cors())
@@ -80,6 +81,21 @@ app.post('/arca/ws/factura-generar', requireAuth, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
   try {
     const out = await emitirFacturaFlow({ supabaseAdmin, userId: req.user.id, body: req.body || {} })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// --- Onboarding automático (Opción A): inspección de WSASS/certificados ---
+app.post('/arca/setup-inspeccionar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const out = await inspeccionarWSASS(cred.cuit, cred.clave, req.query.t || 'Certificados')
     res.json(out)
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
