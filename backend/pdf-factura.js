@@ -109,15 +109,17 @@ export async function generarPdfComprobante(datos) {
 
     y = hTop + hH
 
-    // ---- Período facturado ----
-    box(L, y, CW, 18)
-    doc.font('Helvetica-Bold').fontSize(8).text('Período Facturado Desde: ', L + 8, y + 5, { continued: true })
-    doc.font('Helvetica').text(fechaAR(datos.periodo?.desde || datos.fecha), { continued: true })
-    doc.font('Helvetica-Bold').text('   Hasta: ', { continued: true })
-    doc.font('Helvetica').text(fechaAR(datos.periodo?.hasta || datos.fecha), { continued: true })
-    doc.font('Helvetica-Bold').text('     Fecha de Vto. para el pago: ', { continued: true })
-    doc.font('Helvetica').text(fechaAR(datos.periodo?.vtoPago || datos.fecha))
-    y += 18
+    // ---- Período facturado (solo Servicios / Prod. y Servicios) ----
+    if (Number(datos.concepto) !== 1) {
+      box(L, y, CW, 18)
+      doc.font('Helvetica-Bold').fontSize(8).text('Período Facturado Desde: ', L + 8, y + 5, { continued: true })
+      doc.font('Helvetica').text(fechaAR(datos.periodo?.desde || datos.fecha), { continued: true })
+      doc.font('Helvetica-Bold').text('   Hasta: ', { continued: true })
+      doc.font('Helvetica').text(fechaAR(datos.periodo?.hasta || datos.fecha), { continued: true })
+      doc.font('Helvetica-Bold').text('     Fecha de Vto. para el pago: ', { continued: true })
+      doc.font('Helvetica').text(fechaAR(datos.periodo?.vtoPago || datos.fecha))
+      y += 18
+    }
 
     // ---- Receptor ----
     const recH = 52

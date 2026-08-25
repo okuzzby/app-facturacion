@@ -12,6 +12,7 @@ import {
   inspeccionarNotaCredito,
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
+import { emitirFacturaFlow, anularFlow } from './ws-flow.js'
 
 const app = express()
 app.use(cors())
@@ -73,6 +74,29 @@ async function handlerSpike(req, res) {
 }
 app.get('/arca/ws-spike', handlerSpike)
 app.get('/wscheck', handlerSpike)
+
+// --- Emisión por Web Service (flujo real: emite + PDF + Storage + base) ---
+app.post('/arca/ws/factura-generar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const out = await emitirFacturaFlow({ supabaseAdmin, userId: req.user.id, body: req.body || {} })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+app.post('/arca/ws/anular', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const facturaId = req.body?.facturaId
+  if (!facturaId) return res.status(400).json({ error: 'Falta facturaId' })
+  try {
+    const out = await anularFlow({ supabaseAdmin, userId: req.user.id, facturaId })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
 
 app.get('/playwright-test', async (req, res) => {
   let browser
@@ -495,6 +519,22 @@ async function selfTestWS() {
   const t = process.env.WS_SELFTEST
   if (!t) return
   try {
+    // Modo "flow": prueba el flujo completo (emite + PDF + Storage + base).
+    if (/flow/i.test(t)) {
+      const out = await emitirFacturaFlow({
+        supabaseAdmin,
+        userId: process.env.WS_ST_USER,
+        body: {
+          producto: 'Servicio de prueba',
+          precio: process.env.WS_ST_IMP || 2500,
+          concepto: process.env.WS_ST_CONCEPTO || 'Servicios',
+          condicionIva: 'Consumidor Final',
+          condicionesVenta: ['Contado'],
+        },
+      })
+      console.log('[WSTEST]', JSON.stringify(out))
+      return
+    }
     const esNc = /nc|nota/i.test(t)
     const q = {
       key: process.env.SPIKE_SECRET,
