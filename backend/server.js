@@ -55,19 +55,24 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'app-facturacion-backend', phase: '3C' })
 })
 
-// TEMPORAL — Fase 0: prueba de emisión por Web Service en HOMOLOGACIÓN.
+// TEMPORAL — Fase 0/2: prueba de emisión por Web Service en HOMOLOGACIÓN.
 // Protegido con SPIKE_SECRET. Se elimina cuando termine el spike.
-app.get('/arca/ws-spike', async (req, res) => {
+// Montado en dos rutas (una de nivel superior para poder alcanzarlo).
+async function handlerSpike(req, res) {
   if (!process.env.SPIKE_SECRET || req.query.key !== process.env.SPIKE_SECRET) {
     return res.status(403).json({ error: 'no autorizado' })
   }
   try {
     const out = await emitirSpike(req.query)
+    console.log('[WSTEST]', JSON.stringify(out))
     res.json(out)
   } catch (e) {
+    console.log('[WSTEST-ERR]', String((e && e.message) || e))
     res.status(500).json({ error: String((e && e.message) || e), stack: (e && e.stack) || null })
   }
-})
+}
+app.get('/arca/ws-spike', handlerSpike)
+app.get('/wscheck', handlerSpike)
 
 app.get('/playwright-test', async (req, res) => {
   let browser
