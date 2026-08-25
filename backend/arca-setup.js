@@ -319,6 +319,17 @@ export async function inspeccionarRelaciones(cuit, clave) {
       }
     }
 
+    // Clic en "Nueva Relación" para crear la autorización del servicio.
+    const btnNueva = destino
+      .locator('#cmdNuevaRelacion, input[name="cmdNuevaRelacion"]')
+      .first()
+    if (await btnNueva.count().catch(() => 0)) {
+      await btnNueva.click({ timeout: 15000 }).catch(() => {})
+      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+      await destino.waitForTimeout(2500)
+      pasos.push('Clic en Nueva Relación')
+    }
+
     return {
       ok: true,
       url: destino.url(),
