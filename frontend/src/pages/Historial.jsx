@@ -57,7 +57,7 @@ export default function Historial() {
       const token = session?.access_token
       if (!token) throw new Error('No hay sesión activa')
 
-      const r = await fetch(`${backend}/arca/anular`, {
+      const r = await fetch(`${backend}/arca/ws/anular`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

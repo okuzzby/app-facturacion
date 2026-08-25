@@ -88,26 +88,22 @@ export default function Facturar() {
       const token = session?.access_token
       if (!token) throw new Error('No hay sesión activa')
 
-      const datos = {
+      const body = {
+        producto: productoFinal,
+        precio: String(precio),
+        cantidad: 1,
         concepto,
         condicionIva,
         condicionesVenta,
-        producto: productoFinal,
-        precio: String(precio),
-      }
-      if (esServicio) {
-        datos.periodoDesde = periodoDesde
-        datos.periodoHasta = periodoHasta
-        datos.vtoPago = vtoPago
       }
 
-      const r = await fetch(`${backend}/arca/factura-generar`, {
+      const r = await fetch(`${backend}/arca/ws/factura-generar`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ datos, confirmar: true }),
+        body: JSON.stringify(body),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Error del backend')
@@ -214,7 +210,7 @@ export default function Facturar() {
             Volver
           </button>
           <button type="button" onClick={confirmar} disabled={enviando}>
-            {enviando ? 'Emitiendo (puede tardar)…' : 'Confirmar y emitir'}
+            {enviando ? 'Emitiendo…' : 'Confirmar y emitir'}
           </button>
         </div>
         {error && <p className="error">{error}</p>}
