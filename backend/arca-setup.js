@@ -299,6 +299,26 @@ export async function inspeccionarRelaciones(cuit, clave) {
     await destino.waitForTimeout(2500)
     pasos.push('Abierto Administrador de Relaciones')
 
+    // Seleccionar el contribuyente = el propio CUIT del usuario (si hay dropdown).
+    const sel = destino
+      .locator('#tblAutoridadAplicacion_cmbCont, select[name="tblAutoridadAplicacion:cmbCont"], select')
+      .first()
+    if (await sel.count().catch(() => 0)) {
+      const opts = await sel
+        .locator('option')
+        .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+      const cuitDigits = String(cuit).replace(/\D/g, '')
+      const target = opts.find((o) => o.text.replace(/\D/g, '').includes(cuitDigits))
+      if (target) {
+        await sel.selectOption({ value: target.value }).catch(() => {})
+        await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+        await destino.waitForTimeout(2500)
+        pasos.push('Contribuyente seleccionado: ' + target.text)
+      } else {
+        pasos.push('No se encontró el contribuyente en el dropdown')
+      }
+    }
+
     return {
       ok: true,
       url: destino.url(),
