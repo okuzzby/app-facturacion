@@ -6,7 +6,7 @@
 // las pantallas de WSASS.
 
 import forge from 'node-forge'
-import { abrir, loginEnArca, captura } from './arca.js'
+import { abrir, loginEnArca, captura, dumpCampos } from './arca.js'
 
 const PORTAL_URL = 'https://portalcf.cloud.afip.gob.ar/portal/app/'
 
@@ -90,12 +90,32 @@ export async function inspeccionarWSASS(cuit, clave, termino = 'Certificados') {
     await destino.waitForTimeout(2500)
     pasos.push('Abierto Administración de Certificados Digitales')
 
+    // Volcamos los alias/certificados ya existentes
+    const aliasExistentes = await destino.evaluate(() =>
+      [...document.querySelectorAll('table tr')]
+        .map((tr) => (tr.textContent || '').replace(/\s+/g, ' ').trim())
+        .filter((t) => t && t.length < 120)
+        .slice(0, 20)
+    ).catch(() => [])
+
+    // Clic en "Agregar alias" para ver el formulario de creación
+    await destino
+      .locator('#cmdIngresar, input[name="cmdIngresar"], input[value*="Agregar"], a:has-text("Agregar")')
+      .first()
+      .click({ timeout: 15000 })
+      .catch(() => {})
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Clic en "Agregar alias"')
+
     return {
       ok: true,
       url: destino.url(),
       title: await destino.title().catch(() => null),
       pasos,
+      aliasExistentes,
       nav: await dumpNavegacion(destino),
+      campos: await dumpCampos(destino).catch(() => null),
       screenshot: await captura(destino),
     }
   } catch (e) {

@@ -285,7 +285,7 @@ export default function Configuracion() {
       if (!r.ok) throw new Error(j.error || 'Error del backend')
       setArcaPasos(j.pasos || [])
       setArcaShot(j.screenshot || null)
-      setArcaCampos({ resultadosBusqueda: j.resultadosBusqueda, nav: j.nav })
+      setArcaCampos({ aliasExistentes: j.aliasExistentes, nav: j.nav, campos: j.campos })
       setArcaMsg(`${j.ok ? 'OK' : 'Aviso'} — ${j.url || '-'}`)
       if (!j.ok && j.error) setArcaError(j.error)
     } catch (e) {
