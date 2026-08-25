@@ -51,12 +51,13 @@ async function dumpNavegacion(page) {
   })
 }
 
-// Inspección: entra al portal, busca el servicio (WSASS/certificados) y devuelve
-// una captura + el mapa de navegación. NO crea ni autoriza nada.
+// Entra al portal, busca "Administración de Certificados Digitales", lo abre y
+// devuelve una captura + el mapa de la pantalla de adentro. NO crea nada.
 export async function inspeccionarWSASS(cuit, clave, termino = 'Certificados') {
   const pasos = []
   let browser
   let page
+  let destino
   try {
     ;({ browser, page } = await abrir())
     await loginEnArca(page, cuit, clave, pasos)
@@ -70,38 +71,40 @@ export async function inspeccionarWSASS(cuit, clave, termino = 'Certificados') {
     const buscador = page
       .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
       .first()
-    let dumpBusqueda = null
-    try {
-      await buscador.fill(termino, { timeout: 12000 })
-      await page.waitForTimeout(2000)
-      pasos.push(`Buscado en el portal: ${termino}`)
-      // Capturamos las opciones que ofrece el buscador
-      dumpBusqueda = await page.evaluate(() =>
-        [...document.querySelectorAll('a, li, .resultado, [class*="result"]')]
-          .map((e) => (e.textContent || '').trim())
-          .filter((t) => t && t.length > 3 && t.length < 120)
-          .slice(0, 40)
-      )
-    } catch {
-      pasos.push('No se encontró el buscador del portal')
-    }
+    await buscador.fill('Administración de Certificados Digitales', { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(2000)
+    pasos.push('Buscado: Administración de Certificados Digitales')
+
+    // Abrir el servicio (suele abrirse en una pestaña nueva)
+    const link = page
+      .getByText(/Administraci[oó]n de Certificados Digitales/i)
+      .and(page.locator(':visible'))
+      .first()
+    await link.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+    const [popup] = await Promise.all([
+      context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+      link.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    destino = popup || page
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Abierto Administración de Certificados Digitales')
 
     return {
       ok: true,
-      url: page.url(),
-      title: await page.title().catch(() => null),
+      url: destino.url(),
+      title: await destino.title().catch(() => null),
       pasos,
-      resultadosBusqueda: [...new Set(dumpBusqueda || [])],
-      nav: await dumpNavegacion(page),
-      screenshot: await captura(page),
+      nav: await dumpNavegacion(destino),
+      screenshot: await captura(destino),
     }
   } catch (e) {
     return {
       ok: false,
       error: String((e && e.message) || e),
-      url: page ? page.url() : null,
+      url: (destino || page) ? (destino || page).url() : null,
       pasos,
-      screenshot: await captura(page),
+      screenshot: await captura(destino || page),
     }
   } finally {
     if (browser) await browser.close()
