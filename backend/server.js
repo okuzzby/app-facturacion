@@ -489,7 +489,33 @@ app.get('/', (req, res) => {
   res.send('app-facturacion backend (Docker + Playwright + Supabase). Ver /health')
 })
 
+// TEMPORAL — Fase 2: auto-test de emisión WS al arrancar, disparado por env.
+// Se controla con WS_SELFTEST (factura|nc) + WS_ST_* y se lee en los logs.
+async function selfTestWS() {
+  const t = process.env.WS_SELFTEST
+  if (!t) return
+  try {
+    const esNc = /nc|nota/i.test(t)
+    const q = {
+      key: process.env.SPIKE_SECRET,
+      tipo: esNc ? 'nc' : 'factura',
+      pv: process.env.WS_ST_PV || 1,
+      importe: process.env.WS_ST_IMP || 2500,
+      concepto: process.env.WS_ST_CONCEPTO || 'Servicios',
+    }
+    if (esNc) {
+      q.ncpv = process.env.WS_ST_PV || 1
+      q.ncnro = process.env.WS_ST_NCNRO || 1
+    }
+    const out = await emitirSpike(q)
+    console.log('[WSTEST]', JSON.stringify(out))
+  } catch (e) {
+    console.log('[WSTEST-ERR]', String((e && e.message) || e), (e && e.stack) || '')
+  }
+}
+
 const port = process.env.PORT || 3000
 app.listen(port, () => {
   console.log(`Backend escuchando en puerto ${port}`)
+  selfTestWS()
 })
