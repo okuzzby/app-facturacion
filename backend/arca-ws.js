@@ -3,6 +3,43 @@
 // guardado en base se arman aparte (server.js + pdf-factura.js).
 
 import { AfipServices } from 'facturajs'
+import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
+
+const CACHE_PATH = '/tmp/.wsaa-tokens'
+
+// --- Persistencia del token WSAA en Supabase ---
+// El disco de Render es efímero (se borra en cada deploy). ARCA solo permite
+// UN token válido a la vez (12 h en producción), así que si perdemos el caché
+// quedamos bloqueados. Guardamos el token en la base y lo restauramos al arrancar.
+const _sb =
+  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+      })
+    : null
+
+let _cacheRestaurada = false
+async function restaurarCache(cacheKey) {
+  if (_cacheRestaurada || !_sb) return
+  try {
+    const { data } = await _sb.from('wsaa_cache').select('contenido').eq('id', cacheKey).maybeSingle()
+    if (data?.contenido) fs.writeFileSync(CACHE_PATH, data.contenido)
+  } catch (e) {
+    console.log('[WSAA] no se pudo restaurar el caché:', String((e && e.message) || e))
+  }
+  _cacheRestaurada = true
+}
+async function guardarCache(cacheKey) {
+  if (!_sb) return
+  try {
+    if (!fs.existsSync(CACHE_PATH)) return
+    const contenido = fs.readFileSync(CACHE_PATH, 'utf8')
+    await _sb.from('wsaa_cache').upsert({ id: cacheKey, contenido, updated_at: new Date().toISOString() })
+  } catch (e) {
+    console.log('[WSAA] no se pudo guardar el caché:', String((e && e.message) || e))
+  }
+}
 
 // --- Certificado / clave desde el entorno (base64 o PEM directo) ---
 function leerCredencial() {
@@ -17,6 +54,7 @@ function leerCredencial() {
 
 // Homologación por defecto; en producción se pone WS_HOMO=false.
 const ES_HOMO = String(process.env.WS_HOMO ?? 'true').toLowerCase() !== 'false'
+const CACHE_KEY = ES_HOMO ? 'homo' : 'prod'
 
 let _afip = null
 function afip() {
@@ -25,7 +63,7 @@ function afip() {
   _afip = new AfipServices({
     certContents,
     privateKeyContents,
-    cacheTokensPath: '/tmp/.wsaa-tokens', // caché del token WSAA (12 h)
+    cacheTokensPath: CACHE_PATH, // caché del token WSAA (persistido en Supabase)
     homo: ES_HOMO,
     tokensExpireInHours: 12,
   })
@@ -54,11 +92,13 @@ function hoyYYYYMMDD() {
 
 // Devuelve el próximo número disponible para (cuit, pv, tipo).
 export async function proximoNumero({ cuit, pv, tipo }) {
+  await restaurarCache(CACHE_KEY)
   const CbteTipo = codigoTipo(tipo)
   const last = await afip().getLastBillNumber({
     Auth: { Cuit: Number(cuit) },
     params: { CbteTipo, PtoVta: Number(pv) },
   })
+  await guardarCache(CACHE_KEY)
   return { CbteTipo, ultimo: Number(last.CbteNro), proximo: Number(last.CbteNro) + 1 }
 }
 
@@ -125,6 +165,7 @@ export async function emitirWS(opts) {
       },
     },
   })
+  await guardarCache(CACHE_KEY)
 
   const cab = res.FeCabResp || {}
   const detArr = (res.FeDetResp && res.FeDetResp.FECAEDetResponse) || {}
