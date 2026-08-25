@@ -126,6 +126,25 @@ export async function crearCertificado(cuit, clave, alias) {
     await destino.waitForTimeout(3000)
     pasos.push('Certificado creado — de vuelta en la lista')
 
+    // Diagnóstico: cómo está implementado el "Ver" de la fila del alias.
+    const verInfo = await destino
+      .evaluate((al) => {
+        const rows = [...document.querySelectorAll('tr')].filter((r) => (r.textContent || '').includes(al))
+        if (!rows.length) return { encontrado: false, filas: document.querySelectorAll('tr').length }
+        const row = rows[0]
+        const els = [...row.querySelectorAll('a, input, button')].map((e) => ({
+          tag: e.tagName,
+          type: e.type || '',
+          text: (e.textContent || e.value || '').trim().slice(0, 20),
+          href: e.getAttribute('href'),
+          onclick: (e.getAttribute('onclick') || '').slice(0, 120),
+          id: e.id || '',
+          name: e.name || '',
+        }))
+        return { encontrado: true, rowHtml: row.outerHTML.slice(0, 600), els }
+      }, alias)
+      .catch(() => null)
+
     // Abrir "Ver" del alias recién creado para obtener el certificado.
     const fila = destino.locator('tr').filter({ hasText: alias }).first()
     const downloadP = destino.waitForEvent('download', { timeout: 12000 }).catch(() => null)
@@ -195,6 +214,7 @@ export async function crearCertificado(cuit, clave, alias) {
       diag: {
         destinoUrl: destino.url(),
         popupUrl: popup?.url || null,
+        verInfo,
         muestras: [...muestrasDest, ...muestrasPopup].slice(0, 8).map((s) => s.slice(0, 140)),
       },
       pasos,
