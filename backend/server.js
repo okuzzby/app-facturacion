@@ -293,11 +293,29 @@ async function correrOnboardingWsfe(userId, cuit, clave) {
       console.log('[SETUP] detectar PV falló:', String((e && e.message) || e))
     }
 
+    // Si no tiene ningún punto de venta WS, se lo creamos automáticamente.
+    if (!pvSeteado) {
+      await marcarSetup(userId, 'creando_pv', 'Creando tu punto de venta…')
+      try {
+        const cre = await crearPuntoVentaWS(cuit, clave, { dryRun: false, nombre: 'Ventas' })
+        if (cre && cre.creado && cre.numero != null) {
+          pvSeteado = String(cre.numero)
+          await supabaseAdmin
+            .from('credenciales_arca')
+            .update({ punto_venta_ws: pvSeteado })
+            .eq('user_id', userId)
+        } else {
+          console.log('[SETUP] crear PV no confirmado:', JSON.stringify(cre?.diag || cre?.error || {}))
+        }
+      } catch (e) {
+        console.log('[SETUP] crear PV falló:', String((e && e.message) || e))
+      }
+    }
+
     if (pvSeteado) {
       await marcarSetup(userId, 'listo', 'Todo listo para facturar ✓')
     } else {
-      // Etapa siguiente: crear el punto de venta automáticamente por RPA.
-      await marcarSetup(userId, 'falta_pv', 'Falta habilitar un punto de venta para facturación electrónica')
+      await marcarSetup(userId, 'falta_pv', 'No pudimos habilitar un punto de venta automáticamente')
     }
   } catch (e) {
     await marcarSetup(userId, 'error', null, String((e && e.message) || e))

@@ -574,6 +574,48 @@ export default function Configuracion() {
     }
   }
 
+  async function crearPvReal() {
+    const ok = window.confirm(
+      'Esto CREA un punto de venta de Web Service REAL en ARCA (no se puede deshacer con un clic). ¿Continuar?'
+    )
+    if (!ok) return
+    setArcaMsg(null)
+    setArcaError(null)
+    setArcaShot(null)
+    setArcaPasos([])
+    setArcaCampos(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/setup-crear-pv?real=1`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaPasos(j.pasos || [])
+      setArcaShot(j.screenshot || null)
+      setArcaCampos({ ok: j.ok, creado: j.creado, numero: j.numero, diag: j.diag })
+      setArcaMsg(
+        j.creado
+          ? `Punto de venta ${j.numero} creado ✓`
+          : `No confirmado (nº ${j.numero ?? '-'}) — revisá la captura`
+      )
+      if (!j.ok && j.error) setArcaError(j.error)
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function emitirWsPrueba() {
     // Emite una Factura C REAL en producción con el cert propio. Confirmamos
     // primero porque genera un comprobante fiscal verdadero (se anula con NC).
@@ -1132,6 +1174,13 @@ export default function Configuracion() {
             disabled={arcaCargando}
           >
             {arcaCargando ? 'Probando…' : 'Crear PV WS (dry-run)'}
+          </button>
+          <button
+            type="button"
+            onClick={crearPvReal}
+            disabled={arcaCargando}
+          >
+            {arcaCargando ? 'Creando…' : 'Crear PV WS (REAL)'}
           </button>
           <button
             type="button"
