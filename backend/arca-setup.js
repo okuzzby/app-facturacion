@@ -319,88 +319,20 @@ export async function inspeccionarRelaciones(cuit, clave) {
       }
     }
 
-    // Clic en "Nueva Relación" para crear la autorización del servicio.
-    const btnNueva = destino
-      .locator('#cmdNuevaRelacion, input[name="cmdNuevaRelacion"]')
-      .first()
-    if (await btnNueva.count().catch(() => 0)) {
-      await btnNueva.click({ timeout: 15000 }).catch(() => {})
-      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-      await destino.waitForTimeout(2500)
-      pasos.push('Clic en Nueva Relación')
-    }
-
-    // Representado = el propio usuario.
-    const cboRep = destino.locator('#cboRepresentado, select[name="cboRepresentado"]').first()
-    if (await cboRep.count().catch(() => 0)) {
-      const opts = await cboRep
-        .locator('option')
-        .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
-      const cd = String(cuit).replace(/\D/g, '')
-      const t = opts.find((o) => o.text.replace(/\D/g, '').includes(cd))
-      if (t) {
-        await cboRep.selectOption({ value: t.value }).catch(() => {})
-        await destino.waitForTimeout(1000)
-        pasos.push('Representado = ' + t.text)
-      }
-    }
-
-    // Buscar servicio -> abre la lista de organismos.
-    const btnBuscar = destino.locator('#cmdBuscarServicio, input[name="cmdBuscarServicio"]').first()
-    if (await btnBuscar.count().catch(() => 0)) {
-      await btnBuscar.click({ timeout: 15000 }).catch(() => {})
-      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-      await destino.waitForTimeout(2500)
-      pasos.push('Clic en Buscar servicio')
-    }
-
-    // El árbol de servicios ya está en el DOM: cada servicio es un link
-    // setService('relationAdd','web://<id>'). Listamos los relacionados a factura.
-    const serviciosTree = await destino
-      .evaluate(() =>
-        [...document.querySelectorAll('a[href*="setService"]')]
-          .map((a) => ({
-            text: (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70),
-            href: (a.getAttribute('href') || '').slice(0, 120),
-          }))
-          .filter((s) => /facturaci[oó]n electr|wsfe|comprobantes t|constataci/i.test(s.text))
-      )
-      .catch(() => [])
-
-    const totalServicios = await destino
-      .evaluate(() => document.querySelectorAll('a[href*="setService"]').length)
-      .catch(() => 0)
-
-    // Invocar el servicio wsfe (Facturación Electrónica). setService navega a la
-    // pantalla donde se elige el Representante (alias del certificado) y se confirma.
-    let wsfeInvocado = false
-    const okSetService = await destino
-      .evaluate(() => {
-        if (typeof setService === 'function') {
-          setService('relationAdd', 'ws://wsfe')
-          return true
-        }
-        return false
-      })
-      .catch(() => false)
-    if (okSetService) {
-      wsfeInvocado = true
-      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-      await destino.waitForTimeout(2500)
-      pasos.push('Invocado setService ws://wsfe')
-    } else {
-      // Fallback: click directo sobre el link del servicio.
-      const linkWsfe = destino.locator('a[href*="ws://wsfe"]').first()
-      if (await linkWsfe.count().catch(() => 0)) {
-        await linkWsfe.click({ timeout: 15000 }).catch(() => {})
-        await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-        await destino.waitForTimeout(2500)
-        wsfeInvocado = true
-        pasos.push('Click en link ws://wsfe')
-      } else {
-        pasos.push('No se pudo invocar wsfe (setService no disponible ni link)')
-      }
-    }
+    // En vez de navegar el árbol de servicios (inestable en producción), vamos
+    // DIRECTO al formulario de la relación con el servicio wsfe ya seteado. Esta
+    // es la URL que dio el run exitoso: relationAdd.aspx?representado=<cuit>&servicename=ws://wsfe
+    const cuitDigits2 = String(cuit).replace(/\D/g, '')
+    let origin = 'https://serviciosweb.afip.gob.ar'
+    try {
+      origin = new URL(destino.url()).origin
+    } catch {}
+    const relUrl = `${origin}/clavefiscal/adminRel/relationAdd.aspx?representado=${cuitDigits2}&servicename=ws://wsfe`
+    await destino.goto(relUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Navegado directo a relationAdd.aspx (wsfe)')
+    pasos.push('URL relacion: ' + destino.url())
+    const wsfeInvocado = /relationadd/i.test(destino.url()) && /wsfe/i.test(destino.url())
 
     // Mapear la pantalla resultante: selects (representante/computador) + botones.
     const selects = await destino
@@ -496,7 +428,7 @@ export async function inspeccionarRelaciones(cuit, clave) {
       url: destino.url(),
       title: await destino.title().catch(() => null),
       pasos,
-      diag: { totalServicios, serviciosTree, wsfeInvocado, selects, controles, repBuscar },
+      diag: { relUrl, wsfeInvocado, selects, controles, repBuscar },
       screenshot: await captura(destino),
     }
   } catch (e) {
