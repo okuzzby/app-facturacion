@@ -371,12 +371,70 @@ export async function inspeccionarRelaciones(cuit, clave) {
       .evaluate(() => document.querySelectorAll('a[href*="setService"]').length)
       .catch(() => 0)
 
+    // Invocar el servicio wsfe (Facturación Electrónica). setService navega a la
+    // pantalla donde se elige el Representante (alias del certificado) y se confirma.
+    let wsfeInvocado = false
+    const okSetService = await destino
+      .evaluate(() => {
+        if (typeof setService === 'function') {
+          setService('relationAdd', 'ws://wsfe')
+          return true
+        }
+        return false
+      })
+      .catch(() => false)
+    if (okSetService) {
+      wsfeInvocado = true
+      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+      await destino.waitForTimeout(2500)
+      pasos.push('Invocado setService ws://wsfe')
+    } else {
+      // Fallback: click directo sobre el link del servicio.
+      const linkWsfe = destino.locator('a[href*="ws://wsfe"]').first()
+      if (await linkWsfe.count().catch(() => 0)) {
+        await linkWsfe.click({ timeout: 15000 }).catch(() => {})
+        await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+        await destino.waitForTimeout(2500)
+        wsfeInvocado = true
+        pasos.push('Click en link ws://wsfe')
+      } else {
+        pasos.push('No se pudo invocar wsfe (setService no disponible ni link)')
+      }
+    }
+
+    // Mapear la pantalla resultante: selects (representante/computador) + botones.
+    const selects = await destino
+      .evaluate(() =>
+        [...document.querySelectorAll('select')].map((s) => ({
+          id: s.id || null,
+          name: s.getAttribute('name') || null,
+          opciones: [...s.options].slice(0, 30).map((o) => ({
+            value: o.value,
+            text: (o.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+          })),
+        }))
+      )
+      .catch(() => [])
+
+    const controles = await destino
+      .evaluate(() =>
+        [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button')]
+          .map((el) => ({
+            tipo: el.type || el.tagName.toLowerCase(),
+            id: el.id || null,
+            name: el.getAttribute('name') || null,
+            valor: (el.value || el.alt || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+          }))
+          .slice(0, 40)
+      )
+      .catch(() => [])
+
     return {
       ok: true,
       url: destino.url(),
       title: await destino.title().catch(() => null),
       pasos,
-      diag: { totalServicios, serviciosTree },
+      diag: { totalServicios, serviciosTree, wsfeInvocado, selects, controles },
       screenshot: await captura(destino),
     }
   } catch (e) {
