@@ -392,6 +392,9 @@ export default function Configuracion() {
         autorizado: j.autorizado,
         guardado: j.guardado,
         etapa: j.etapa,
+        puntoVentaWsSeteado: j.puntoVentaWsSeteado,
+        faltaPuntoVentaWS: j.faltaPuntoVentaWS,
+        puntosVentaWS: j.puntosVentaWS,
         diag: j.diag,
       })
       const estado = j.autorizado
@@ -399,7 +402,12 @@ export default function Configuracion() {
         : j.ok
         ? 'Cert creado (autorización a revisar)'
         : 'Aviso'
-      setArcaMsg(`${estado}${j.guardado ? ' · guardado ✓' : ''} — ${j.url || '-'}`)
+      const pv = j.puntoVentaWsSeteado
+        ? ` · PV WS ${j.puntoVentaWsSeteado} ✓`
+        : j.faltaPuntoVentaWS
+        ? ' · falta punto de venta WS'
+        : ''
+      setArcaMsg(`${estado}${j.guardado ? ' · guardado ✓' : ''}${pv} — ${j.url || '-'}`)
       if (j.error) setArcaError(j.error)
     } catch (e) {
       setArcaError(e.message ?? String(e))

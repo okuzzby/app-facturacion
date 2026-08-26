@@ -13,6 +13,7 @@ import {
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
 import { emitirFacturaFlow, anularFlow, puntosVentaFlow } from './ws-flow.js'
+import { puntosVentaWS } from './arca-ws.js'
 import {
   inspeccionarWSASS,
   crearCertificado,
@@ -172,6 +173,40 @@ app.post('/arca/setup-wsfe', requireAuth, async (req, res) => {
       }
     } else {
       out.guardado = false
+    }
+
+    // Auto-detectar el punto de venta de Web Service y setearlo (mejor esfuerzo).
+    // Los PV de "Comprobantes en línea" no sirven por WS; acá tomamos el primero
+    // habilitado (no bloqueado, sin baja) que reporta FEParamGetPtosVenta.
+    if (out.autorizado && out.certPem && out.privateKeyPem) {
+      try {
+        const pv = await puntosVentaWS({
+          cuit: cred.cuit,
+          certPem: out.certPem,
+          keyPem: out.privateKeyPem,
+        })
+        const habil = (pv.puntos || []).filter(
+          (p) =>
+            String(p.Bloqueado).toUpperCase() !== 'S' &&
+            (p.FchBaja == null || String(p.FchBaja).toUpperCase() === 'NULL')
+        )
+        out.puntosVentaWS = habil.map((p) => ({ nro: p.Nro, tipo: p.EmisionTipo }))
+        if (habil.length > 0) {
+          const nro = String(habil[0].Nro)
+          const { error: pvErr } = await supabaseAdmin
+            .from('credenciales_arca')
+            .update({ punto_venta_ws: nro })
+            .eq('user_id', req.user.id)
+          out.puntoVentaWsSeteado = pvErr ? null : nro
+          if (pvErr) out.puntoVentaWsError = pvErr.message
+        } else {
+          out.puntoVentaWsSeteado = null
+          out.faltaPuntoVentaWS = true
+        }
+      } catch (e) {
+        // Un cert recién autorizado puede tardar en propagar: no rompemos el setup.
+        out.puntoVentaWsError = String((e && e.message) || e)
+      }
     }
 
     // Nunca exponemos la clave privada (ni el blob cifrado) al frontend.
