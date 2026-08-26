@@ -838,10 +838,9 @@ export default function Configuracion() {
     (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dev'))
 
   return (
-    <div className="card card-wide">
-      <div className="topbar">
-        <Link to="/" className="volver">← Volver</Link>
-        <h1>Configuración</h1>
+    <div className="page">
+      <div className="page-head">
+        <div><h1>Configuración</h1><div className="sub">Tu conexión con ARCA y tus productos</div></div>
       </div>
 
       {/* ---------------- Credencial ARCA ---------------- */}

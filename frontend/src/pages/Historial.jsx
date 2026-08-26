@@ -86,13 +86,12 @@ export default function Historial() {
   const esFactura = (f) => !/nota de cr/i.test(f.tipo || '')
 
   return (
-    <div className="card card-wide">
-      <div className="topbar">
-        <Link to="/" className="volver">← Volver</Link>
-        <h1>Historial</h1>
+    <div className="page">
+      <div className="page-head">
+        <div><h1>Historial</h1><div className="sub">Todos tus comprobantes emitidos</div></div>
       </div>
-
-      {cargando && <p>Cargando…</p>}
+      <div className="card">
+      {cargando && <p className="sub">Cargando…</p>}
       {!cargando && facturas.length === 0 && (
         <p className="sub">Todavía no emitiste comprobantes desde la app.</p>
       )}
@@ -160,6 +159,7 @@ export default function Historial() {
       {errorShot && (
         <img className="shot" alt="captura del error" src={`data:image/png;base64,${errorShot}`} />
       )}
+      </div>
     </div>
   )
 }

@@ -136,8 +136,8 @@ export default function Facturar() {
 
   if (cargandoInit) {
     return (
-      <div className="card">
-        <p>Cargando…</p>
+      <div className="page">
+        <div className="card"><p className="sub">Cargando…</p></div>
       </div>
     )
   }
@@ -149,23 +149,24 @@ export default function Facturar() {
 
   if (!setupListo) {
     return (
-      <div className="card">
-        <div className="topbar">
-          <Link to="/" className="volver">← Volver</Link>
-          <h1>Facturar</h1>
+      <div className="page">
+        <div className="page-head"><h1>Facturar</h1></div>
+        <div className="card">
+          {setupEnProgreso ? (
+            <p style={{ margin: 0 }}>
+              <span className="spinner-inline" /> Estamos configurando tu facturación electrónica…
+              Andá a Configuración para ver el avance; en unos minutos vas a poder facturar.
+            </p>
+          ) : (
+            <p className="error" style={{ margin: 0 }}>
+              Primero configurá tu facturación electrónica: cargá tu CUIT y Clave Fiscal en
+              Configuración y el sistema deja todo listo solo.
+            </p>
+          )}
+          <div style={{ marginTop: 14 }}>
+            <Link to="/configuracion" className="boton-link">Ir a Configuración</Link>
+          </div>
         </div>
-        {setupEnProgreso ? (
-          <p>
-            Estamos configurando tu facturación electrónica… Andá a Configuración para ver el
-            avance; en unos minutos vas a poder facturar.
-          </p>
-        ) : (
-          <p className="error">
-            Primero configurá tu facturación electrónica: cargá tu CUIT y Clave Fiscal en
-            Configuración y el sistema deja todo listo solo.
-          </p>
-        )}
-        <Link to="/configuracion" className="boton-link">Ir a Configuración</Link>
       </div>
     )
   }
@@ -173,28 +174,22 @@ export default function Facturar() {
   // Resultado (factura emitida)
   if (resultado) {
     return (
-      <div className="card card-wide">
-        <div className="topbar">
-          <Link to="/" className="volver">← Inicio</Link>
-          <h1>Factura emitida ✓</h1>
-        </div>
-        <p className="ok">La factura se generó en ARCA.</p>
-        {resultado.numero && (
-          <p>
-            Comprobante Nº <strong>{resultado.numero}</strong>
-            {resultado.cae ? ` · CAE ${resultado.cae}` : ''}
-          </p>
-        )}
-        {resultado.screenshot && (
-          <img
-            className="shot"
-            alt="factura ARCA"
-            src={`data:image/png;base64,${resultado.screenshot}`}
-          />
-        )}
-        <div className="fila-botones">
-          <button type="button" onClick={nuevaFactura}>Hacer otra factura</button>
-          <Link to="/historial" className="boton-link secundario-link">Ver historial</Link>
+      <div className="page">
+        <div className="page-head"><h1>Factura emitida ✓</h1></div>
+        <div className="card">
+          <div className="setup-box setup-ok">
+            <p className="ok" style={{ margin: 0 }}>La factura se generó en ARCA.</p>
+            {resultado.numero && (
+              <p style={{ margin: '6px 0 0' }}>
+                Comprobante Nº <strong>{resultado.numero}</strong>
+                {resultado.cae ? ` · CAE ${resultado.cae}` : ''}
+              </p>
+            )}
+          </div>
+          <div className="fila-botones" style={{ marginTop: 16 }}>
+            <button type="button" onClick={nuevaFactura}>Hacer otra factura</button>
+            <Link to="/historial" className="boton-link secundario-link">Ver historial</Link>
+          </div>
         </div>
       </div>
     )
@@ -203,51 +198,57 @@ export default function Facturar() {
   // Vista previa
   if (paso === 'preview') {
     return (
-      <div className="card card-wide">
-        <div className="topbar">
-          <h1>Revisá la factura</h1>
+      <div className="page">
+        <div className="page-head">
+          <div><h1>Revisá la factura</h1><div className="sub">Confirmá los datos antes de emitir.</div></div>
         </div>
-        <div className="cred-cargada">
-          <p>Emisor: <strong>CUIT {cred.cuit}</strong></p>
-          <p>Punto de venta: <strong>{cred.punto_venta_ws}</strong></p>
-          <p>Comprobante: <strong>Factura C</strong></p>
-          <p>Fecha: <strong>Hoy ({hoyDDMMYYYY()})</strong></p>
-          <p>Concepto: <strong>{concepto}</strong></p>
-          {esServicio && (
-            <p className="sub">Período: {periodoDesde} a {periodoHasta} · Vto: {vtoPago}</p>
-          )}
-          <p>Condición IVA: <strong>{condicionIva}</strong></p>
-          <p>Condición de venta: <strong>{condicionesVenta.join(', ')}</strong></p>
-          <p>Producto: <strong>{productoFinal}</strong></p>
-          <p>Cantidad: <strong>1</strong> · Precio: <strong>${precio}</strong></p>
-        </div>
+        <div className="card">
+          <dl className="resumen">
+            <div><dt>Emisor</dt><dd>CUIT {cred.cuit}</dd></div>
+            <div><dt>Punto de venta</dt><dd>{cred.punto_venta_ws}</dd></div>
+            <div><dt>Comprobante</dt><dd>Factura C</dd></div>
+            <div><dt>Fecha</dt><dd>Hoy ({hoyDDMMYYYY()})</dd></div>
+            <div><dt>Concepto</dt><dd>{concepto}</dd></div>
+            {esServicio && (
+              <div><dt>Período</dt><dd>{periodoDesde} a {periodoHasta} · Vto {vtoPago}</dd></div>
+            )}
+            <div><dt>Condición IVA</dt><dd>{condicionIva}</dd></div>
+            <div><dt>Condición de venta</dt><dd>{condicionesVenta.join(', ')}</dd></div>
+            <div><dt>Producto</dt><dd>{productoFinal}</dd></div>
+            <div><dt>Precio</dt><dd>Cantidad 1 · ${precio}</dd></div>
+          </dl>
 
-        <p className="aviso">
-          Al confirmar se emite una factura REAL en ARCA. Esta acción no se puede deshacer
-          automáticamente.
-        </p>
+          <div className="setup-box setup-aviso" style={{ marginTop: 4 }}>
+            <p style={{ margin: 0 }}>
+              Al confirmar se emite una factura <strong>real</strong> en ARCA. No se puede deshacer
+              automáticamente (se anula con Nota de Crédito).
+            </p>
+          </div>
 
-        <div className="fila-botones">
-          <button type="button" className="secundario" onClick={() => setPaso('form')} disabled={enviando}>
-            Volver
-          </button>
-          <button type="button" onClick={confirmar} disabled={enviando}>
-            {enviando ? 'Emitiendo…' : 'Confirmar y emitir'}
-          </button>
+          <div className="fila-botones" style={{ marginTop: 16 }}>
+            <button type="button" className="secundario" onClick={() => setPaso('form')} disabled={enviando}>
+              Volver
+            </button>
+            <button type="button" onClick={confirmar} disabled={enviando}>
+              {enviando ? 'Emitiendo…' : 'Confirmar y emitir'}
+            </button>
+          </div>
+          {error && <p className="error" style={{ marginTop: 10 }}>{error}</p>}
         </div>
-        {error && <p className="error">{error}</p>}
       </div>
     )
   }
 
   // Formulario
   return (
-    <div className="card card-wide">
-      <div className="topbar">
-        <Link to="/" className="volver">← Volver</Link>
-        <h1>Facturar</h1>
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <h1>Nueva factura</h1>
+          <div className="sub">Factura C · Punto de venta {cred.punto_venta_ws} · Fecha hoy</div>
+        </div>
       </div>
-
+      <div className="card">
       <form onSubmit={irAPreview} className="form">
         <label className="campo">
           <span>Fecha</span>
@@ -350,9 +351,10 @@ export default function Facturar() {
           />
         </label>
 
-        <button type="submit">Continuar</button>
+        <button type="submit">Continuar →</button>
       </form>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" style={{ marginTop: 10 }}>{error}</p>}
+      </div>
     </div>
   )
 }
