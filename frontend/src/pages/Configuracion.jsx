@@ -965,13 +965,15 @@ export default function Configuracion() {
         {credMsg && <p className="ok">{credMsg}</p>}
         {credError && <p className="error">{credError}</p>}
 
-        <div className="verif">
-          <button type="button" className="secundario" onClick={verificarConexion} disabled={verificando}>
-            {verificando ? 'Verificando…' : 'Verificar conexión con el backend'}
-          </button>
-          {verifMsg && <p className="ok">{verifMsg}</p>}
-          {verifError && <p className="error">{verifError}</p>}
-        </div>
+        {mostrarDev && (
+          <div className="verif">
+            <button type="button" className="secundario" onClick={verificarConexion} disabled={verificando}>
+              {verificando ? 'Verificando…' : 'Verificar conexión con el backend'}
+            </button>
+            {verifMsg && <p className="ok">{verifMsg}</p>}
+            {verifError && <p className="error">{verifError}</p>}
+          </div>
+        )}
       </section>
 
       {/* Secciones "Empresa a representar" y "Punto de venta y comprobante"
