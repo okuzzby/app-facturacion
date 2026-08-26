@@ -831,6 +831,12 @@ export default function Configuracion() {
     )
   }
 
+  // Los botones de desarrollo se ocultan para clientes. Se muestran solo en
+  // local (vite dev) o si agregás ?dev a la URL (puerta trasera para vos).
+  const mostrarDev =
+    import.meta.env.DEV ||
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dev'))
+
   return (
     <div className="card card-wide">
       <div className="topbar">
@@ -1093,7 +1099,8 @@ export default function Configuracion() {
         {prodError && <p className="error">{prodError}</p>}
       </section>
 
-      {/* ---------------- Prueba login ARCA (3C, desarrollo) ---------------- */}
+      {/* Sección de desarrollo: oculta para clientes (visible en local o con ?dev). */}
+      {mostrarDev && (
       <section className="seccion">
         <h2>Prueba de conexión ARCA (desarrollo)</h2>
         <p className="sub">
@@ -1210,6 +1217,7 @@ export default function Configuracion() {
           <pre className="campos-dump">{JSON.stringify(arcaCampos, null, 1)}</pre>
         )}
       </section>
+      )}
     </div>
   )
 }
