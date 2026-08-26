@@ -20,6 +20,7 @@ import {
   inspeccionarRelaciones,
   configurarWsfe,
   inspeccionarPuntosVenta,
+  crearPuntoVentaWS,
 } from './arca-setup.js'
 import { cifrar } from './crypto-ws.js'
 
@@ -327,6 +328,23 @@ app.post('/arca/setup-wsfe-async', requireAuth, async (req, res) => {
   // Fire-and-forget: no await, corre en segundo plano.
   correrOnboardingWsfe(req.user.id, cred.cuit, cred.clave)
   res.json({ ok: true, iniciado: true })
+})
+
+// TEMPORAL — crear punto de venta WS. Por defecto DRY-RUN (no guarda); con
+// ?real=1 completa y aprieta Aceptar (crea el punto de venta de verdad).
+app.post('/arca/setup-crear-pv', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const dryRun = req.query.real !== '1'
+    const out = await crearPuntoVentaWS(cred.cuit, cred.clave, { dryRun })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
 })
 
 // TEMPORAL — inspección del ABM de Puntos de Venta (para el alta automática).

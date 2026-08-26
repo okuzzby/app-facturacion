@@ -1042,3 +1042,246 @@ export async function inspeccionarPuntosVenta(cuit, clave, termino) {
     if (browser) await browser.close()
   }
 }
+
+// ============================================================================
+// CREACIÓN de un punto de venta de Web Service (sistema MAW = "Factura
+// Electronica - Monotributo - Web Services") en el ABM de PVE.
+// Por defecto dryRun=true: abre el diálogo de alta, elige el sistema + domicilio
+// y NO guarda (cancela) — sirve para verificar el formulario. Con dryRun=false
+// completa y aprieta Aceptar (crea el punto de venta de verdad).
+// Devuelve { ok, dryRun, creado, numero, pasos, diag, screenshot }.
+// ============================================================================
+export async function crearPuntoVentaWS(cuit, clave, opts = {}) {
+  const dryRun = opts.dryRun !== false // por defecto NO guarda
+  const pasos = []
+  const diag = {}
+  let browser
+  let page
+  let destino
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const context = page.context()
+    if (!page.url().includes('portalcf')) {
+      await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    }
+    await page.waitForTimeout(1500)
+
+    const buscador = page
+      .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+      .first()
+    await buscador.fill('Administración de puntos de venta', { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(2000)
+    const link = page
+      .getByText(/puntos de venta/i)
+      .and(page.locator(':visible'))
+      .first()
+    await link.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+    const [popup] = await Promise.all([
+      context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+      link.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    destino = popup || page
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Abierto servicio de puntos de venta')
+
+    // Seleccionar empresa (botón con el nombre del contribuyente).
+    const cands = destino.locator('input[type=button], input[type=submit], button, a')
+    const nCand = await cands.count().catch(() => 0)
+    for (let i = 0; i < nCand; i++) {
+      const el = cands.nth(i)
+      const txt = (
+        (await el.getAttribute('value').catch(() => null)) ||
+        (await el.innerText().catch(() => '')) ||
+        ''
+      ).trim()
+      if (!txt || /salir|cerrar|volver|ayuda|inicio/i.test(txt)) continue
+      if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]{4,}/.test(txt)) continue
+      await Promise.all([
+        destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+        el.click({ timeout: 15000 }).catch(() => {}),
+      ])
+      await destino.waitForTimeout(2500)
+      pasos.push('Empresa seleccionada: ' + txt)
+      break
+    }
+
+    // Ir al A/B/M de puntos de venta.
+    const abm = destino.locator('#btn_abm_pto_vta, a[href="abmPuntosVenta.do"]').first()
+    if (await abm.count().catch(() => 0)) {
+      await Promise.all([
+        destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+        abm.click({ timeout: 15000 }).catch(() => {}),
+      ])
+    } else {
+      const u = new URL('abmPuntosVenta.do', destino.url()).href
+      await destino.goto(u, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    }
+    await destino.waitForTimeout(2500)
+    pasos.push('En A/B/M de puntos de venta')
+
+    // Leer la grilla de PV existentes (número + descripción del sistema).
+    const filas = await destino
+      .evaluate(() =>
+        [...document.querySelectorAll('table tr')]
+          .map((r) => [...r.querySelectorAll('td')].map((td) => (td.textContent || '').replace(/\s+/g, ' ').trim()))
+          .filter((c) => c.length >= 2 && /^\d+$/.test(c[0]))
+          .slice(0, 40)
+      )
+      .catch(() => [])
+    diag.filas = filas
+    const numerosUsados = filas.map((f) => parseInt(f[0], 10)).filter((n) => !isNaN(n))
+    diag.numerosUsados = numerosUsados
+    diag.yaTieneWS = filas.some((f) => /web service/i.test(f.join(' ')) && /monotributo/i.test(f.join(' ')))
+
+    // Abrir el diálogo "Agregar.." (id exacto para no agarrar el del filtro).
+    const btnAgregar = destino.locator('#tblmiGrilla_btn_0').first()
+    if (!(await btnAgregar.count().catch(() => 0))) {
+      throw new Error('No se encontró el botón Agregar (#tblmiGrilla_btn_0)')
+    }
+    await btnAgregar.click({ timeout: 15000 }).catch(() => {})
+    await destino.waitForTimeout(1500)
+    await destino
+      .waitForFunction(
+        () => {
+          const s = document.querySelector('#frmAlta_sisCodigo')
+          return s && s.options && s.options.length > 0
+        },
+        { timeout: 15000 }
+      )
+      .catch(() => {})
+    await destino.waitForTimeout(500)
+    pasos.push('Diálogo de alta abierto')
+
+    // Snapshot del formulario de alta.
+    const dumpSelect = async (sid) =>
+      destino
+        .evaluate((id) => {
+          const s = document.querySelector(id)
+          if (!s) return null
+          return {
+            value: s.value,
+            opciones: [...s.options].map((o) => ({
+              value: o.value,
+              text: (o.textContent || '').replace(/\s+/g, ' ').trim(),
+            })),
+          }
+        }, sid)
+        .catch(() => null)
+    diag.sistema = await dumpSelect('#frmAlta_sisCodigo')
+    diag.domicilio = await dumpSelect('#frmAlta_codTipoDomicilio')
+    diag.actividad = await dumpSelect('#frmAlta_idActividad')
+    diag.pveNro = await destino
+      .evaluate(() => {
+        const i = document.querySelector('#frmAlta_pveNro')
+        return i
+          ? { value: i.value, readOnly: i.readOnly, disabled: i.disabled, placeholder: i.getAttribute('placeholder') }
+          : null
+      })
+      .catch(() => null)
+    diag.nombreFantasia = await destino
+      .evaluate(() => {
+        const i = document.querySelector('#frmAlta_pveNombreFantasia')
+        return i ? { value: i.value, readOnly: i.readOnly } : null
+      })
+      .catch(() => null)
+
+    // Elegir el sistema MAW (Web Services Monotributo).
+    const sisMAW =
+      (diag.sistema?.opciones || []).find((o) => o.value === 'MAW') ||
+      (diag.sistema?.opciones || []).find((o) => /monotributo/i.test(o.text) && /web service/i.test(o.text))
+    if (sisMAW) {
+      await destino.selectOption('#frmAlta_sisCodigo', { value: sisMAW.value }).catch(() => {})
+      await destino.waitForTimeout(800)
+      pasos.push('Sistema elegido: ' + sisMAW.text + ' (' + sisMAW.value + ')')
+    } else {
+      pasos.push('OJO: no se encontró el sistema MAW en el select de alta')
+    }
+
+    // Domicilio: primer valor no vacío.
+    const dom = (diag.domicilio?.opciones || []).find((o) => o.value && o.value.trim())
+    if (dom) {
+      await destino.selectOption('#frmAlta_codTipoDomicilio', { value: dom.value }).catch(() => {})
+      pasos.push('Domicilio: ' + dom.text)
+    }
+    // Actividad: primer valor no vacío (si corresponde).
+    const act = (diag.actividad?.opciones || []).find((o) => o.value && o.value.trim())
+    if (act) {
+      await destino.selectOption('#frmAlta_idActividad', { value: act.value }).catch(() => {})
+      pasos.push('Actividad: ' + act.text)
+    }
+
+    // Número propuesto: si el campo está vacío y editable, el primer libre.
+    let numeroPropuesto = null
+    if (diag.pveNro && !diag.pveNro.value && !diag.pveNro.readOnly && !diag.pveNro.disabled) {
+      const usados = new Set(numerosUsados)
+      let n = 1
+      while (usados.has(n)) n++
+      numeroPropuesto = n
+    } else if (diag.pveNro && diag.pveNro.value) {
+      numeroPropuesto = diag.pveNro.value
+    }
+    diag.numeroPropuesto = numeroPropuesto
+
+    const shotDialogo = await captura(destino)
+
+    if (dryRun) {
+      pasos.push('DRY-RUN: no se guarda. Cancelando…')
+      const cancelar = destino.locator('#dlgAltaPtoVta_btn_Cancelar').first()
+      if (await cancelar.count().catch(() => 0)) await cancelar.click({ timeout: 8000 }).catch(() => {})
+      return { ok: true, dryRun: true, creado: false, numeroPropuesto, pasos, diag, screenshot: shotDialogo }
+    }
+
+    // MODO REAL: completar número + nombre y guardar.
+    const nombre = opts.nombre || 'APP Facturacion'
+    if (numeroPropuesto != null && diag.pveNro && !diag.pveNro.readOnly && !diag.pveNro.disabled) {
+      await destino.fill('#frmAlta_pveNro', String(numeroPropuesto)).catch(() => {})
+    }
+    await destino.fill('#frmAlta_pveNombreFantasia', nombre).catch(() => {})
+    pasos.push('Formulario completado (número ' + numeroPropuesto + ', nombre ' + nombre + ')')
+
+    const aceptar = destino.locator('#btnAltaEdicAceptar').first()
+    await aceptar.click({ timeout: 15000 }).catch(() => {})
+    await destino.waitForTimeout(3000)
+    // Posible cartel de advertencia/confirmación tras Aceptar.
+    const cerrarAdv = destino.locator('#dlgAdvertencias_btn_Cerrar, #dlgBajaInfo_btn_Aceptar').first()
+    if (await cerrarAdv.count().catch(() => 0)) {
+      await cerrarAdv.click({ timeout: 8000 }).catch(() => {})
+      await destino.waitForTimeout(1500)
+    }
+    const textoFinal = await destino
+      .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600))
+      .catch(() => '')
+    diag.textoFinal = textoFinal
+    // Verificar: releer la grilla y ver si el número quedó con sistema Web Services.
+    const filasPost = await destino
+      .evaluate(() =>
+        [...document.querySelectorAll('table tr')]
+          .map((r) => [...r.querySelectorAll('td')].map((td) => (td.textContent || '').replace(/\s+/g, ' ').trim()))
+          .filter((c) => c.length >= 2 && /^\d+$/.test(c[0]))
+          .slice(0, 40)
+      )
+      .catch(() => [])
+    diag.filasPost = filasPost
+    const creado =
+      filasPost.some(
+        (f) =>
+          String(f[0]) === String(numeroPropuesto) &&
+          /web service/i.test(f.join(' ')) &&
+          /monotributo/i.test(f.join(' '))
+      ) || /correctamente|se agreg|alta.*exit|generado/i.test(textoFinal)
+
+    return { ok: true, dryRun: false, creado, numero: numeroPropuesto, pasos, diag, screenshot: await captura(destino) }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      pasos,
+      diag,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}

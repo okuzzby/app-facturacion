@@ -535,6 +535,45 @@ export default function Configuracion() {
     }
   }
 
+  async function crearPvDryRun() {
+    setArcaMsg(null)
+    setArcaError(null)
+    setArcaShot(null)
+    setArcaPasos([])
+    setArcaCampos(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/setup-crear-pv`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaPasos(j.pasos || [])
+      setArcaShot(j.screenshot || null)
+      setArcaCampos({
+        ok: j.ok,
+        dryRun: j.dryRun,
+        numeroPropuesto: j.numeroPropuesto,
+        diag: j.diag,
+      })
+      setArcaMsg(`${j.ok ? 'Dry-run OK' : 'Aviso'} — nº propuesto: ${j.numeroPropuesto ?? '-'}`)
+      if (!j.ok && j.error) setArcaError(j.error)
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function emitirWsPrueba() {
     // Emite una Factura C REAL en producción con el cert propio. Confirmamos
     // primero porque genera un comprobante fiscal verdadero (se anula con NC).
@@ -1085,6 +1124,14 @@ export default function Configuracion() {
             disabled={arcaCargando}
           >
             {arcaCargando ? 'Inspeccionando…' : 'Inspeccionar ABM Puntos de Venta'}
+          </button>
+          <button
+            type="button"
+            className="secundario"
+            onClick={crearPvDryRun}
+            disabled={arcaCargando}
+          >
+            {arcaCargando ? 'Probando…' : 'Crear PV WS (dry-run)'}
           </button>
           <button
             type="button"
