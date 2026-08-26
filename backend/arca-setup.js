@@ -397,26 +397,91 @@ export async function inspeccionarRelaciones(cuit, clave) {
           }))
         )
         .catch(() => [])
+      // Dump COMPLETO de botones (sin filtro) para ver el BUSCAR del computador.
       const controles2 = await dr
         .evaluate(() =>
-          [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button, a')]
+          [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button')]
             .map((el) => ({
               tipo: el.type || el.tagName.toLowerCase(),
               id: el.id || null,
               name: el.getAttribute('name') || null,
-              valor: (el.value || el.alt || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70),
-              href: ((el.getAttribute && el.getAttribute('href')) || '').slice(0, 100) || null,
+              alt: el.getAttribute('alt') || null,
+              src: ((el.getAttribute && el.getAttribute('src')) || '').split('/').pop() || null,
+              valor: (el.value || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
             }))
-            .filter((c) => c.valor || c.href)
-            .slice(0, 60)
+            .slice(0, 40)
         )
         .catch(() => [])
+
+      // DRY-RUN: seleccionar el computador (primer alias real) y clic en su BUSCAR.
+      // NO se confirma la relación: solo mapeamos la pantalla de confirmación.
+      let computadorSeleccionado = null
+      let confirmScreen = null
+      const cboComp = dr
+        .locator('#cboComputadoresAdministrados, select[name="cboComputadoresAdministrados"]')
+        .first()
+      if (await cboComp.count().catch(() => 0)) {
+        const opts = await cboComp
+          .locator('option')
+          .evaluateAll((os) =>
+            os.map((o) => ({ value: o.value, text: (o.textContent || '').replace(/\s+/g, ' ').trim() }))
+          )
+        const target = opts.find((o) => o.value && o.value.trim())
+        if (target) {
+          await cboComp.selectOption({ value: target.value }).catch(() => {})
+          await dr.waitForTimeout(800)
+          computadorSeleccionado = target.text
+          pasos.push('Computador seleccionado (dry-run): ' + target.text)
+          // El BUSCAR del computador: primer input[type=image] de la página.
+          const btnBuscarComp = dr.locator('input[type=image]').first()
+          if (await btnBuscarComp.count().catch(() => 0)) {
+            const ctx3 = dr.context()
+            const [pop3] = await Promise.all([
+              ctx3.waitForEvent('page', { timeout: 12000 }).catch(() => null),
+              btnBuscarComp.click({ timeout: 15000 }).catch(() => {}),
+            ])
+            const dc = pop3 || dr
+            await dc.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+            await dc.waitForTimeout(2500)
+            pasos.push('Clic en BUSCAR computador (dry-run)')
+            const confBtns = await dc
+              .evaluate(() =>
+                [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button')]
+                  .map((el) => ({
+                    tipo: el.type || el.tagName.toLowerCase(),
+                    id: el.id || null,
+                    name: el.getAttribute('name') || null,
+                    alt: el.getAttribute('alt') || null,
+                    src: ((el.getAttribute && el.getAttribute('src')) || '').split('/').pop() || null,
+                    valor: (el.value || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+                  }))
+                  .slice(0, 40)
+              )
+              .catch(() => [])
+            const confTexto = await dc
+              .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600))
+              .catch(() => null)
+            confirmScreen = {
+              url: dc.url(),
+              title: await dc.title().catch(() => null),
+              botones: confBtns,
+              texto: confTexto,
+              screenshot: await captura(dc),
+            }
+          } else {
+            pasos.push('No se encontró el BUSCAR del computador (input[type=image])')
+          }
+        }
+      }
+
       repBuscar = {
         url: dr.url(),
         title: await dr.title().catch(() => null),
         inputs,
         selects: selects2,
         controles: controles2,
+        computadorSeleccionado,
+        confirmScreen,
         screenshot: await captura(dr),
       }
     } else {
