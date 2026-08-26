@@ -19,29 +19,38 @@ const _sb =
       })
     : null
 
-let _cacheRestaurada = false
-async function restaurarCache(cacheKey) {
-  if (_cacheRestaurada || !_sb) return
+// Caché WSAA multi-tenant: cada certificado/CUIT tiene su propio token (ARCA
+// permite UN token válido por CUIT+servicio a la vez, 12 h). La clave de caché
+// (cacheId) identifica al inquilino; el archivo en disco y la fila en Supabase
+// van por cacheId para no pisarse entre usuarios.
+function cachePathDe(cacheId) {
+  return `${CACHE_PATH}-${cacheId}`
+}
+const _restauradas = new Set()
+async function restaurarCache(cacheId) {
+  if (_restauradas.has(cacheId) || !_sb) return
+  const cachePath = cachePathDe(cacheId)
   try {
-    const { data } = await _sb.from('wsaa_cache').select('contenido').eq('id', cacheKey).maybeSingle()
-    if (data?.contenido) fs.writeFileSync(CACHE_PATH, data.contenido)
+    const { data } = await _sb.from('wsaa_cache').select('contenido').eq('id', cacheId).maybeSingle()
+    if (data?.contenido) fs.writeFileSync(cachePath, data.contenido)
   } catch (e) {
     console.log('[WSAA] no se pudo restaurar el caché:', String((e && e.message) || e))
   }
-  _cacheRestaurada = true
+  _restauradas.add(cacheId)
 }
-async function guardarCache(cacheKey) {
+async function guardarCache(cacheId) {
   if (!_sb) return
+  const cachePath = cachePathDe(cacheId)
   try {
-    if (!fs.existsSync(CACHE_PATH)) return
-    const contenido = fs.readFileSync(CACHE_PATH, 'utf8')
-    await _sb.from('wsaa_cache').upsert({ id: cacheKey, contenido, updated_at: new Date().toISOString() })
+    if (!fs.existsSync(cachePath)) return
+    const contenido = fs.readFileSync(cachePath, 'utf8')
+    await _sb.from('wsaa_cache').upsert({ id: cacheId, contenido, updated_at: new Date().toISOString() })
   } catch (e) {
     console.log('[WSAA] no se pudo guardar el caché:', String((e && e.message) || e))
   }
 }
 
-// --- Certificado / clave desde el entorno (base64 o PEM directo) ---
+// --- Certificado / clave desde el entorno (base64 o PEM directo) — fallback ---
 function leerCredencial() {
   const dec = (b64) => (b64 ? Buffer.from(b64, 'base64').toString('utf8') : null)
   const certContents = dec(process.env.WS_CERT_B64) || process.env.WS_CERT_PEM
@@ -52,22 +61,46 @@ function leerCredencial() {
   return { certContents, privateKeyContents }
 }
 
-// Homologación por defecto; en producción se pone WS_HOMO=false.
+// Homologación por defecto para el cert del ENTORNO; en producción WS_HOMO=false.
 const ES_HOMO = String(process.env.WS_HOMO ?? 'true').toLowerCase() !== 'false'
-const CACHE_KEY = ES_HOMO ? 'homo' : 'prod'
 
-let _afip = null
-function afip() {
-  if (_afip) return _afip
+// Arma el contexto de credencial para una emisión:
+//  - Si vienen certPem + keyPem (cert propio del usuario) → PRODUCCIÓN (el cert
+//    se crea/autoriza en el portal real). cacheId por CUIT.
+//  - Si no, usa el certificado del entorno (homologación salvo WS_HOMO=false).
+// opts.homo=true fuerza homologación aun con cert propio (para pruebas).
+function contextoDe(opts) {
+  const cuitDigits = String(opts.cuit).replace(/\D/g, '')
+  if (opts.certPem && opts.keyPem) {
+    const homo = opts.homo === true
+    return {
+      certContents: opts.certPem,
+      privateKeyContents: opts.keyPem,
+      homo,
+      cacheId: (homo ? 'homo-' : 'prod-') + cuitDigits,
+    }
+  }
   const { certContents, privateKeyContents } = leerCredencial()
-  _afip = new AfipServices({
+  return {
     certContents,
     privateKeyContents,
-    cacheTokensPath: CACHE_PATH, // caché del token WSAA (persistido en Supabase)
     homo: ES_HOMO,
+    cacheId: ES_HOMO ? 'homo' : 'prod',
+  }
+}
+
+const _afips = new Map()
+function afipDe(ctx) {
+  if (_afips.has(ctx.cacheId)) return _afips.get(ctx.cacheId)
+  const inst = new AfipServices({
+    certContents: ctx.certContents,
+    privateKeyContents: ctx.privateKeyContents,
+    cacheTokensPath: cachePathDe(ctx.cacheId), // caché WSAA (persistido en Supabase)
+    homo: ctx.homo,
     tokensExpireInHours: 12,
   })
-  return _afip
+  _afips.set(ctx.cacheId, inst)
+  return inst
 }
 
 // Factura C = 11 · Nota de Crédito C = 13
@@ -90,16 +123,21 @@ function hoyYYYYMMDD() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`
 }
 
-// Devuelve el próximo número disponible para (cuit, pv, tipo).
-export async function proximoNumero({ cuit, pv, tipo }) {
-  await restaurarCache(CACHE_KEY)
+// Próximo número para (cuit, pv, tipo) usando un contexto de credencial dado.
+async function _proximo(ctx, { cuit, pv, tipo }) {
+  await restaurarCache(ctx.cacheId)
   const CbteTipo = codigoTipo(tipo)
-  const last = await afip().getLastBillNumber({
+  const last = await afipDe(ctx).getLastBillNumber({
     Auth: { Cuit: Number(cuit) },
     params: { CbteTipo, PtoVta: Number(pv) },
   })
-  await guardarCache(CACHE_KEY)
+  await guardarCache(ctx.cacheId)
   return { CbteTipo, ultimo: Number(last.CbteNro), proximo: Number(last.CbteNro) + 1 }
+}
+
+// Devuelve el próximo número disponible. opts = { cuit, pv, tipo, certPem?, keyPem?, homo? }
+export async function proximoNumero(opts) {
+  return _proximo(contextoDe(opts), opts)
 }
 
 // Emite un comprobante C (Factura o Nota de Crédito) por web service.
@@ -110,10 +148,11 @@ export async function proximoNumero({ cuit, pv, tipo }) {
 //   comprobanteAsociado: { tipo=11, ptoVta, nro } — solo Nota de Crédito,
 // }
 export async function emitirWS(opts) {
+  const ctx = contextoDe(opts)
   const cuit = Number(opts.cuit)
   const PtoVta = Number(opts.pv)
   const importe = Number(opts.importe)
-  const { CbteTipo, proximo } = await proximoNumero({ cuit, pv: PtoVta, tipo: opts.tipo })
+  const { CbteTipo, proximo } = await _proximo(ctx, { cuit, pv: PtoVta, tipo: opts.tipo })
   const Concepto = codigoConcepto(opts.concepto)
   const fecha = hoyYYYYMMDD()
 
@@ -156,7 +195,7 @@ export async function emitirWS(opts) {
     }
   }
 
-  const res = await afip().createBill({
+  const res = await afipDe(ctx).createBill({
     Auth: { Cuit: cuit },
     params: {
       FeCAEReq: {
@@ -165,7 +204,7 @@ export async function emitirWS(opts) {
       },
     },
   })
-  await guardarCache(CACHE_KEY)
+  await guardarCache(ctx.cacheId)
 
   const cab = res.FeCabResp || {}
   const detArr = (res.FeDetResp && res.FeDetResp.FECAEDetResponse) || {}

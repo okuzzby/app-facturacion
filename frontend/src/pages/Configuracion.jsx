@@ -408,6 +408,60 @@ export default function Configuracion() {
     }
   }
 
+  async function emitirWsPrueba() {
+    // Emite una Factura C REAL en producción con el cert propio. Confirmamos
+    // primero porque genera un comprobante fiscal verdadero (se anula con NC).
+    const ok = window.confirm(
+      'Esto emite una Factura C REAL en producción ($100, Consumidor Final) usando tu certificado. ¿Continuar?'
+    )
+    if (!ok) return
+    setArcaMsg(null)
+    setArcaError(null)
+    setArcaShot(null)
+    setArcaPasos([])
+    setArcaCampos(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/ws/factura-generar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          producto: 'Prueba WS (desarrollo)',
+          precio: 100,
+          cantidad: 1,
+          concepto: 'Productos',
+          condicionIva: 'Consumidor Final',
+          condicionesVenta: ['Contado'],
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaCampos(j)
+      if (j.ok) {
+        setArcaMsg(
+          `Factura ${j.numero} emitida ✓ — CAE ${j.cae} (vto ${j.caeVto})${
+            j.guardado ? ' · guardada' : ''
+          }`
+        )
+      } else {
+        setArcaMsg(`Rechazada (${j.resultado || '-'})`)
+        setArcaError(JSON.stringify(j.observaciones || j.error || j))
+      }
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function detectarEmpresas() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -839,6 +893,13 @@ export default function Configuracion() {
             disabled={arcaCargando}
           >
             {arcaCargando ? 'Configurando…' : 'Configurar wsfe (crear cert + autorizar)'}
+          </button>
+          <button
+            type="button"
+            onClick={emitirWsPrueba}
+            disabled={arcaCargando}
+          >
+            {arcaCargando ? 'Emitiendo…' : 'Emitir Factura C real (WS producción)'}
           </button>
         </div>
         {arcaMsg && <p className="ok">{arcaMsg}</p>}

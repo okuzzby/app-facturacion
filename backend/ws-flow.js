@@ -3,6 +3,16 @@
 
 import { emitirWS } from './arca-ws.js'
 import { generarPdfComprobante } from './pdf-factura.js'
+import { descifrar } from './crypto-ws.js'
+
+// Cert propio del usuario (producción). Devuelve { certPem, keyPem } listos para
+// emitirWS. La clave privada se descifra en memoria; nunca sale del backend.
+function certDeCred(cred) {
+  if (!cred.ws_cert_pem || !cred.ws_cert_key_enc) {
+    throw new Error('Tu certificado wsfe no está configurado. Corré "Configurar wsfe" primero.')
+  }
+  return { certPem: cred.ws_cert_pem, keyPem: descifrar(cred.ws_cert_key_enc) }
+}
 
 function emisorDeCred(cred) {
   return {
@@ -66,6 +76,7 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
     docTipo: 99,
     docNro: 0,
     condIvaReceptorId: 5, // Consumidor Final
+    ...certDeCred(cred), // cert propio del usuario → producción
   })
   if (!res.ok) return { ...res, guardado: false }
 
@@ -149,6 +160,7 @@ export async function anularFlow({ supabaseAdmin, userId, facturaId }) {
     docNro: 0,
     condIvaReceptorId: 5,
     comprobanteAsociado: { tipo: 11, ptoVta: ncPv, nro: ncNro },
+    ...certDeCred(cred), // cert propio del usuario → producción
   })
   if (!res.ok) return { ...res, guardado: false }
 
