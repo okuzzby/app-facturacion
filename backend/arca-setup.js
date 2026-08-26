@@ -1263,13 +1263,47 @@ export async function crearPuntoVentaWS(cuit, clave, opts = {}) {
 
     const aceptar = destino.locator('#btnAltaEdicAceptar').first()
     await aceptar.click({ timeout: 15000 }).catch(() => {})
-    await destino.waitForTimeout(3000)
-    // Posible cartel de advertencia/confirmación tras Aceptar.
-    const cerrarAdv = destino.locator('#dlgAdvertencias_btn_Cerrar, #dlgBajaInfo_btn_Aceptar').first()
-    if (await cerrarAdv.count().catch(() => 0)) {
-      await cerrarAdv.click({ timeout: 8000 }).catch(() => {})
-      await destino.waitForTimeout(1500)
+    await destino.waitForTimeout(2000)
+
+    // Confirmación de ARCA: "¿Ha ingresado los datos correctamente?" -> Sí.
+    let clicSi = false
+    const siLoc = destino
+      .getByText(/^\s*s[ií]\s*$/i)
+      .and(destino.locator(':visible'))
+      .first()
+    if (await siLoc.count().catch(() => 0)) {
+      await siLoc.click({ timeout: 8000 }).catch(() => {})
+      clicSi = true
     }
+    if (!clicSi) {
+      // Fallback: clic vía DOM sobre el elemento cuyo texto/valor es exactamente "Sí".
+      clicSi = await destino
+        .evaluate(() => {
+          const cands = [...document.querySelectorAll('button, input[type=button], input[type=submit], a')]
+          const el = cands.find((e) => {
+            const t = (e.value || e.textContent || '').trim()
+            return /^s[ií]$/i.test(t) && (e.offsetParent || e.offsetWidth || e.offsetHeight)
+          })
+          if (el) {
+            el.click()
+            return true
+          }
+          return false
+        })
+        .catch(() => false)
+    }
+    if (clicSi) pasos.push('Confirmado (Sí) el alta')
+    await destino.waitForTimeout(3000)
+
+    // Cerrar posibles carteles de éxito/advertencia tras confirmar.
+    for (const sel of ['#dlgAdvertencias_btn_Cerrar', '#dlgBajaInfo_btn_Aceptar', '#btnTutClose']) {
+      const b = destino.locator(sel).first()
+      if (await b.isVisible().catch(() => false)) {
+        await b.click({ timeout: 6000 }).catch(() => {})
+        await destino.waitForTimeout(1000)
+      }
+    }
+
     const textoFinal = await destino
       .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600))
       .catch(() => '')
@@ -1279,7 +1313,7 @@ export async function crearPuntoVentaWS(cuit, clave, opts = {}) {
       .evaluate(() =>
         [...document.querySelectorAll('table tr')]
           .map((r) => [...r.querySelectorAll('td')].map((td) => (td.textContent || '').replace(/\s+/g, ' ').trim()))
-          .filter((c) => c.length >= 2 && /^\d+$/.test(c[0]))
+          .filter((c) => c.length >= 2 && c.length <= 15 && /^\d+$/.test(c[0]))
           .slice(0, 40)
       )
       .catch(() => [])
