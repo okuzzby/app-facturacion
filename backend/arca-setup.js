@@ -429,12 +429,74 @@ export async function inspeccionarRelaciones(cuit, clave) {
       )
       .catch(() => [])
 
+    // Clic en "Buscar" del Representante -> abre la búsqueda del computador/certificado.
+    let repBuscar = null
+    const ctx2 = destino.context()
+    const btnBuscarRep = destino.locator('#cmdBuscarUsuario, input[name="cmdBuscarUsuario"]').first()
+    if (await btnBuscarRep.count().catch(() => 0)) {
+      const [pop2] = await Promise.all([
+        ctx2.waitForEvent('page', { timeout: 12000 }).catch(() => null),
+        btnBuscarRep.click({ timeout: 15000 }).catch(() => {}),
+      ])
+      const dr = pop2 || destino
+      await dr.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+      await dr.waitForTimeout(2500)
+      pasos.push('Clic en Buscar Representante')
+      const inputs = await dr
+        .evaluate(() =>
+          [...document.querySelectorAll('input[type=text], input[type=search], input:not([type])')]
+            .map((i) => ({
+              id: i.id || null,
+              name: i.getAttribute('name') || null,
+              placeholder: i.getAttribute('placeholder') || null,
+            }))
+            .slice(0, 20)
+        )
+        .catch(() => [])
+      const selects2 = await dr
+        .evaluate(() =>
+          [...document.querySelectorAll('select')].map((s) => ({
+            id: s.id || null,
+            name: s.getAttribute('name') || null,
+            opciones: [...s.options].slice(0, 40).map((o) => ({
+              value: o.value,
+              text: (o.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+            })),
+          }))
+        )
+        .catch(() => [])
+      const controles2 = await dr
+        .evaluate(() =>
+          [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button, a')]
+            .map((el) => ({
+              tipo: el.type || el.tagName.toLowerCase(),
+              id: el.id || null,
+              name: el.getAttribute('name') || null,
+              valor: (el.value || el.alt || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70),
+              href: ((el.getAttribute && el.getAttribute('href')) || '').slice(0, 100) || null,
+            }))
+            .filter((c) => c.valor || c.href)
+            .slice(0, 60)
+        )
+        .catch(() => [])
+      repBuscar = {
+        url: dr.url(),
+        title: await dr.title().catch(() => null),
+        inputs,
+        selects: selects2,
+        controles: controles2,
+        screenshot: await captura(dr),
+      }
+    } else {
+      pasos.push('No se encontró el botón Buscar Representante')
+    }
+
     return {
       ok: true,
       url: destino.url(),
       title: await destino.title().catch(() => null),
       pasos,
-      diag: { totalServicios, serviciosTree, wsfeInvocado, selects, controles },
+      diag: { totalServicios, serviciosTree, wsfeInvocado, selects, controles, repBuscar },
       screenshot: await captura(destino),
     }
   } catch (e) {
