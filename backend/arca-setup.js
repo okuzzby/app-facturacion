@@ -440,6 +440,11 @@ export async function configurarWsfe(cuit, clave, aliasForzado) {
 
     // Defensivo: puede aparecer una pantalla de resumen con un CONFIRMAR final.
     for (let i = 0; i < 2; i++) {
+      const urlAhora = dr.url()
+      if (/aceptada=true/i.test(urlAhora) && /wsfe/i.test(urlAhora)) {
+        autorizado = true
+        break
+      }
       const yaOk = await dr
         .evaluate(() =>
           /se ha creado|fue creada|creada con [eé]xito|exitosamente|relaci[oó]n.*(creada|agregada|guardada)/i.test(
@@ -470,16 +475,21 @@ export async function configurarWsfe(cuit, clave, aliasForzado) {
       }
     }
 
-    // Verificación final: texto de éxito o que el servicio wsfe quede listado.
+    // Verificación final. ARCA no muestra texto de éxito: cae en goMain.aspx con
+    // la confirmación en la URL, p.ej. ...?relation=R2|<b64>|<cuit>|ws://wsfe|<cuit>|aceptada=True
+    // Ese "aceptada=True" (+ wsfe) es la señal definitiva de que la relación quedó.
+    const urlFinal = dr.url()
+    diag.urlFinal = urlFinal
     const textoFinal = await dr
       .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600))
       .catch(() => '')
     diag.textoFinal = textoFinal
     if (!autorizado) {
       autorizado =
+        (/aceptada=true/i.test(urlFinal) && /wsfe/i.test(urlFinal)) ||
         /se ha creado|fue creada|creada con [eé]xito|exitosamente|relaci[oó]n.*(creada|agregada|guardada)/i.test(
           textoFinal
-        ) || /wsfe/i.test(textoFinal)
+        )
     }
     pasos.push('Autorización wsfe: ' + (autorizado ? 'CONFIRMADA ✓' : 'sin confirmación textual (revisar captura)'))
 
