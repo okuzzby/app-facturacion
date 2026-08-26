@@ -864,3 +864,175 @@ export async function inspeccionarWSASS(cuit, clave, termino = 'Certificados') {
     if (browser) await browser.close()
   }
 }
+
+// ============================================================================
+// INSPECCIÓN del "Administración de puntos de venta y domicilios" de ARCA.
+// Objetivo: mapear las pantallas para el ALTA de un punto de venta de Web
+// Service (para quien no tiene ninguno). NO crea ni cambia nada: solo navega y
+// vuelca selects/inputs/botones + capturas en cada etapa.
+// ============================================================================
+export async function inspeccionarPuntosVenta(cuit, clave, termino) {
+  const pasos = []
+  const etapas = []
+  let browser
+  let page
+  let destino
+  const buscar = termino || 'Administración de puntos de venta'
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const context = page.context()
+    if (!page.url().includes('portalcf')) {
+      await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    }
+    await page.waitForTimeout(1500)
+
+    const buscador = page
+      .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+      .first()
+    await buscador.fill(buscar, { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(2000)
+    pasos.push('Buscado: ' + buscar)
+
+    const link = page
+      .getByText(/puntos de venta/i)
+      .and(page.locator(':visible'))
+      .first()
+    await link.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+    const [popup] = await Promise.all([
+      context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+      link.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    destino = popup || page
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Abierto servicio: ' + destino.url())
+
+    // Volcado de una pantalla (selects con opciones, inputs, botones/links, captura).
+    const snap = async (nombre) => {
+      const selects = await destino
+        .evaluate(() =>
+          [...document.querySelectorAll('select')].map((s) => ({
+            id: s.id || null,
+            name: s.getAttribute('name') || null,
+            opciones: [...s.options].slice(0, 40).map((o) => ({
+              value: o.value,
+              text: (o.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 90),
+            })),
+          }))
+        )
+        .catch(() => [])
+      const inputs = await destino
+        .evaluate(() =>
+          [...document.querySelectorAll('input, textarea')]
+            .filter((e) => e.type !== 'hidden')
+            .map((e) => ({
+              tag: e.tagName.toLowerCase(),
+              type: e.type || '',
+              id: e.id || null,
+              name: e.getAttribute('name') || null,
+              placeholder: e.getAttribute('placeholder') || null,
+              value: (e.value || '').slice(0, 40) || null,
+            }))
+            .slice(0, 50)
+        )
+        .catch(() => [])
+      const botones = await destino
+        .evaluate(() =>
+          [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button, a')]
+            .map((el) => ({
+              tipo: el.type || el.tagName.toLowerCase(),
+              id: el.id || null,
+              name: el.getAttribute('name') || null,
+              alt: el.getAttribute('alt') || null,
+              src: ((el.getAttribute && el.getAttribute('src')) || '').split('/').pop() || null,
+              href: ((el.getAttribute && el.getAttribute('href')) || '').slice(0, 90) || null,
+              valor: (el.value || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+            }))
+            .filter((b) => b.valor || b.alt || b.href)
+            .slice(0, 60)
+        )
+        .catch(() => [])
+      const texto = await destino
+        .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 500))
+        .catch(() => null)
+      return {
+        etapa: nombre,
+        url: destino.url(),
+        title: await destino.title().catch(() => null),
+        selects,
+        inputs,
+        botones,
+        texto,
+        screenshot: await captura(destino),
+      }
+    }
+
+    // Elegir contribuyente si hay dropdown (igual que en Relaciones).
+    const sel = destino
+      .locator('#tblAutoridadAplicacion_cmbCont, select[name="tblAutoridadAplicacion:cmbCont"], select')
+      .first()
+    if (await sel.count().catch(() => 0)) {
+      const opts = await sel
+        .locator('option')
+        .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+      const cuitDigits = String(cuit).replace(/\D/g, '')
+      const target = opts.find((o) => o.text.replace(/\D/g, '').includes(cuitDigits))
+      if (target) {
+        await Promise.all([
+          destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+          sel.selectOption({ value: target.value }).catch(() => {}),
+        ])
+        await destino.waitForTimeout(2000)
+        pasos.push('Contribuyente seleccionado: ' + target.text)
+      }
+    }
+
+    etapas.push(await snap('inicial'))
+
+    // Intentar entrar a ABM / Puntos de venta / Administrar.
+    const irA = destino
+      .getByText(/A\s*\/?\s*B\s*\/?\s*M|Puntos de Venta|Administrar puntos|Gestionar/i)
+      .and(destino.locator(':visible'))
+      .first()
+    if (await irA.count().catch(() => 0)) {
+      await irA.click({ timeout: 15000 }).catch(() => {})
+      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+      await destino.waitForTimeout(2500)
+      pasos.push('Clic en ABM/Puntos de venta')
+      etapas.push(await snap('abm'))
+    }
+
+    // Intentar abrir el formulario de alta (Agregar / Nuevo / Alta).
+    const agregar = destino
+      .getByText(/Agregar|Nuevo|Alta|Crear/i)
+      .and(destino.locator(':visible'))
+      .first()
+    if (await agregar.count().catch(() => 0)) {
+      await agregar.click({ timeout: 15000 }).catch(() => {})
+      await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+      await destino.waitForTimeout(2500)
+      pasos.push('Clic en Agregar/Nuevo/Alta')
+      etapas.push(await snap('alta'))
+    }
+
+    return {
+      ok: true,
+      url: destino.url(),
+      pasos,
+      etapas,
+      screenshot: etapas.length ? etapas[etapas.length - 1].screenshot : await captura(destino),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: String((e && e.message) || e),
+      url: (destino || page) ? (destino || page).url() : null,
+      pasos,
+      etapas,
+      screenshot: await captura(destino || page),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}

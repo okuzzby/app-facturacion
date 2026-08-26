@@ -19,6 +19,7 @@ import {
   crearCertificado,
   inspeccionarRelaciones,
   configurarWsfe,
+  inspeccionarPuntosVenta,
 } from './arca-setup.js'
 import { cifrar } from './crypto-ws.js'
 
@@ -326,6 +327,21 @@ app.post('/arca/setup-wsfe-async', requireAuth, async (req, res) => {
   // Fire-and-forget: no await, corre en segundo plano.
   correrOnboardingWsfe(req.user.id, cred.cuit, cred.clave)
   res.json({ ok: true, iniciado: true })
+})
+
+// TEMPORAL — inspección del ABM de Puntos de Venta (para el alta automática).
+app.post('/arca/setup-puntos-venta-inspect', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const out = await inspeccionarPuntosVenta(cred.cuit, cred.clave, req.query.t || undefined)
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
 })
 
 // Diagnóstico WS: lista los puntos de venta habilitados para Web Service.
