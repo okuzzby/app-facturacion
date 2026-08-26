@@ -13,7 +13,13 @@ import {
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
 import { emitirFacturaFlow, anularFlow } from './ws-flow.js'
-import { inspeccionarWSASS, crearCertificado, inspeccionarRelaciones } from './arca-setup.js'
+import {
+  inspeccionarWSASS,
+  crearCertificado,
+  inspeccionarRelaciones,
+  configurarWsfe,
+} from './arca-setup.js'
+import { cifrar } from './crypto-ws.js'
 
 const app = express()
 app.use(cors())
@@ -128,6 +134,48 @@ app.post('/arca/setup-crear-cert', requireAuth, async (req, res) => {
     const aliasAuto = 'app' + String(Date.now()).slice(-8)
     const out = await crearCertificado(cred.cuit, cred.clave, req.query.alias || aliasAuto)
     const { privateKeyPem, ...safe } = out // no exponemos la clave privada al frontend
+    res.json(safe)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Onboarding wsfe (REAL): crea un certificado nuevo para el CUIT del usuario, lo
+// autoriza al web service wsfe y guarda cert + clave privada CIFRADA + alias en
+// su fila de credenciales_arca. Nunca devuelve la clave privada al frontend.
+app.post('/arca/setup-wsfe', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const out = await configurarWsfe(cred.cuit, cred.clave, req.query.alias || null)
+
+    // Si se creó y capturó el certificado, lo guardamos (clave privada cifrada).
+    if (out.certPem && out.privateKeyPem) {
+      try {
+        const keyEnc = cifrar(out.privateKeyPem)
+        const { error: upErr } = await supabaseAdmin
+          .from('credenciales_arca')
+          .update({
+            ws_cert_pem: out.certPem,
+            ws_cert_key_enc: keyEnc,
+            ws_cert_alias: out.alias,
+          })
+          .eq('user_id', req.user.id)
+        out.guardado = !upErr
+        if (upErr) out.guardadoError = upErr.message
+      } catch (e) {
+        out.guardado = false
+        out.guardadoError = String((e && e.message) || e)
+      }
+    } else {
+      out.guardado = false
+    }
+
+    // Nunca exponemos la clave privada (ni el blob cifrado) al frontend.
+    const { privateKeyPem, ...safe } = out
     res.json(safe)
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
