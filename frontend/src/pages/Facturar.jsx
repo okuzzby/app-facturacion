@@ -12,6 +12,16 @@ const IVA_OPCIONES = [
 ]
 const COND_VENTA = ['Contado', 'Transferencia Bancaria', 'Otra']
 
+// Estados intermedios del onboarding automático de facturación electrónica.
+const SETUP_EN_PROGRESO = [
+  'iniciando',
+  'creando_cert',
+  'autorizando',
+  'guardando',
+  'detectando_pv',
+  'creando_pv',
+]
+
 function hoyDDMMYYYY() {
   const d = new Date()
   const dd = String(d.getDate()).padStart(2, '0')
@@ -44,7 +54,7 @@ export default function Facturar() {
     ;(async () => {
       const { data: c } = await supabase
         .from('credenciales_arca')
-        .select('cuit, empresa_representada, punto_venta, tipo_comprobante')
+        .select('cuit, punto_venta_ws, ws_cert_alias, ws_setup_estado')
         .maybeSingle()
       setCred(c ?? null)
       const { data: p } = await supabase
@@ -132,17 +142,29 @@ export default function Facturar() {
     )
   }
 
-  // Falta configurar ARCA
-  if (!cred?.empresa_representada || !cred?.punto_venta) {
+  // Facturación electrónica lista = tiene certificado + punto de venta WS.
+  const setupListo =
+    !!((cred?.ws_cert_alias && cred?.punto_venta_ws) || cred?.ws_setup_estado === 'listo')
+  const setupEnProgreso = SETUP_EN_PROGRESO.includes(cred?.ws_setup_estado)
+
+  if (!setupListo) {
     return (
       <div className="card">
         <div className="topbar">
           <Link to="/" className="volver">← Volver</Link>
           <h1>Facturar</h1>
         </div>
-        <p className="error">
-          Primero configurá tu conexión con ARCA (credencial, empresa y punto de venta).
-        </p>
+        {setupEnProgreso ? (
+          <p>
+            Estamos configurando tu facturación electrónica… Andá a Configuración para ver el
+            avance; en unos minutos vas a poder facturar.
+          </p>
+        ) : (
+          <p className="error">
+            Primero configurá tu facturación electrónica: cargá tu CUIT y Clave Fiscal en
+            Configuración y el sistema deja todo listo solo.
+          </p>
+        )}
         <Link to="/configuracion" className="boton-link">Ir a Configuración</Link>
       </div>
     )
@@ -186,9 +208,9 @@ export default function Facturar() {
           <h1>Revisá la factura</h1>
         </div>
         <div className="cred-cargada">
-          <p>Empresa: <strong>{cred.empresa_representada}</strong></p>
-          <p>Punto de venta: <strong>{cred.punto_venta}</strong></p>
-          <p>Comprobante: <strong>{cred.tipo_comprobante || 'Factura C'}</strong></p>
+          <p>Emisor: <strong>CUIT {cred.cuit}</strong></p>
+          <p>Punto de venta: <strong>{cred.punto_venta_ws}</strong></p>
+          <p>Comprobante: <strong>Factura C</strong></p>
           <p>Fecha: <strong>Hoy ({hoyDDMMYYYY()})</strong></p>
           <p>Concepto: <strong>{concepto}</strong></p>
           {esServicio && (
