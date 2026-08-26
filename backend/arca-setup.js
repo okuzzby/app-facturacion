@@ -968,42 +968,48 @@ export async function inspeccionarPuntosVenta(cuit, clave, termino) {
       }
     }
 
-    // Elegir contribuyente si hay dropdown (igual que en Relaciones).
-    const sel = destino
-      .locator('#tblAutoridadAplicacion_cmbCont, select[name="tblAutoridadAplicacion:cmbCont"], select')
-      .first()
-    if (await sel.count().catch(() => 0)) {
-      const opts = await sel
-        .locator('option')
-        .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
-      const cuitDigits = String(cuit).replace(/\D/g, '')
-      const target = opts.find((o) => o.text.replace(/\D/g, '').includes(cuitDigits))
-      if (target) {
-        await Promise.all([
-          destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
-          sel.selectOption({ value: target.value }).catch(() => {}),
-        ])
-        await destino.waitForTimeout(2000)
-        pasos.push('Contribuyente seleccionado: ' + target.text)
-      }
+    // Mapear la pantalla de selección de empresa antes de entrar.
+    etapas.push(await snap('empresa'))
+
+    // Seleccionar empresa: en PVE es un BOTÓN con el nombre del contribuyente
+    // (no un <select>). Clic al primer botón/enlace "con nombre" que no sea Salir.
+    const cands = destino.locator('input[type=button], input[type=submit], button, a')
+    const nCand = await cands.count().catch(() => 0)
+    for (let i = 0; i < nCand; i++) {
+      const el = cands.nth(i)
+      const txt = (
+        (await el.getAttribute('value').catch(() => null)) ||
+        (await el.innerText().catch(() => '')) ||
+        ''
+      ).trim()
+      if (!txt || /salir|cerrar|volver|ayuda|inicio/i.test(txt)) continue
+      if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]{4,}/.test(txt)) continue
+      await Promise.all([
+        destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+        el.click({ timeout: 15000 }).catch(() => {}),
+      ])
+      await destino.waitForTimeout(2500)
+      pasos.push('Empresa seleccionada: ' + txt)
+      break
     }
 
-    etapas.push(await snap('inicial'))
+    etapas.push(await snap('menu'))
 
-    // Intentar entrar a ABM / Puntos de venta / Administrar.
+    // Entrar a "A/B/M de puntos de venta".
     const irA = destino
-      .getByText(/A\s*\/?\s*B\s*\/?\s*M|Puntos de Venta|Administrar puntos|Gestionar/i)
+      .getByText(/A\s*\/?\s*B\s*\/?\s*M|Puntos de Venta|Administrar|Gestionar/i)
       .and(destino.locator(':visible'))
       .first()
     if (await irA.count().catch(() => 0)) {
       await irA.click({ timeout: 15000 }).catch(() => {})
       await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
       await destino.waitForTimeout(2500)
-      pasos.push('Clic en ABM/Puntos de venta')
+      pasos.push('Clic en A/B/M de puntos de venta')
       etapas.push(await snap('abm'))
     }
 
-    // Intentar abrir el formulario de alta (Agregar / Nuevo / Alta).
+    // Abrir el formulario de alta (Agregar / Nuevo / Alta). NO se envía nada:
+    // solo mapeamos los campos (incluido el select de "Sistema").
     const agregar = destino
       .getByText(/Agregar|Nuevo|Alta|Crear/i)
       .and(destino.locator(':visible'))
