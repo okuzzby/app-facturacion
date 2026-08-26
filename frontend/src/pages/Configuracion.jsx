@@ -974,85 +974,9 @@ export default function Configuracion() {
         </div>
       </section>
 
-      {/* ---------------- Empresa a representar (ARCA) ---------------- */}
-      <section className="seccion">
-        <h2>Empresa a representar</h2>
-        <p className="sub">
-          Es la empresa con la que vas a emitir en ARCA. El sistema detecta las
-          disponibles en tu cuenta y guardás la que quieras operar.
-        </p>
-
-        <button type="button" onClick={detectarEmpresas} disabled={detectando}>
-          {detectando ? 'Detectando (puede tardar)…' : 'Detectar empresas de ARCA'}
-        </button>
-
-        {empresas.length > 0 && (
-          <div className="empresas">
-            {empresas.map((e) => (
-              <label key={e} className="empresa-opt">
-                <input
-                  type="radio"
-                  name="empresa"
-                  value={e}
-                  checked={empresaSel === e}
-                  onChange={() => setEmpresaSel(e)}
-                />
-                <span>{e}</span>
-              </label>
-            ))}
-            <button type="button" onClick={guardarEmpresa}>
-              Guardar empresa
-            </button>
-          </div>
-        )}
-
-        {empresaMsg && <p className="ok">{empresaMsg}</p>}
-        {empresaError && <p className="error">{empresaError}</p>}
-      </section>
-
-      {/* ---------------- Punto de venta y tipo de comprobante ---------------- */}
-      <section className="seccion">
-        <h2>Punto de venta y comprobante</h2>
-        <p className="sub">
-          El punto de venta y el tipo de comprobante con los que vas a emitir.
-          Se detectan de tu empresa y se guardan (normalmente Factura C).
-        </p>
-
-        <button type="button" onClick={detectarOpciones} disabled={detectandoOpc}>
-          {detectandoOpc ? 'Detectando (puede tardar)…' : 'Detectar punto de venta y tipo'}
-        </button>
-
-        {pvOpciones.length > 0 && (
-          <div className="opciones">
-            <label className="campo">
-              <span>Punto de venta</span>
-              <select value={pvSel} onChange={(e) => setPvSel(e.target.value)}>
-                {pvOpciones.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="campo">
-              <span>Tipo de comprobante</span>
-              <select value={tipoSel} onChange={(e) => setTipoSel(e.target.value)}>
-                {tipoOpciones.map((o) => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="button" onClick={guardarOpciones}>
-              Guardar punto de venta y tipo
-            </button>
-          </div>
-        )}
-
-        {opcMsg && <p className="ok">{opcMsg}</p>}
-        {opcError && <p className="error">{opcError}</p>}
-      </section>
+      {/* Secciones "Empresa a representar" y "Punto de venta y comprobante"
+          removidas: eran del flujo viejo por RPA. Ahora, al guardar la
+          credencial, el onboarding detecta o crea el punto de venta WS solo. */}
 
       {/* ---------------- Productos ---------------- */}
       <section className="seccion">
