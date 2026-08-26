@@ -1121,12 +1121,30 @@ export async function crearPuntoVentaWS(cuit, clave, opts = {}) {
     await destino.waitForTimeout(2500)
     pasos.push('En A/B/M de puntos de venta')
 
+    // Al entrar salta un cartel "ATENCION"/advertencias que tapa la pantalla:
+    // hay que cerrarlo antes de poder tocar "Agregar..".
+    const cerrarModales = async () => {
+      for (const sel of [
+        '#dlgAdvertencias_btn_Cerrar',
+        '#btnTutClose',
+        '.ui-dialog[aria-describedby] .ui-dialog-titlebar-close',
+      ]) {
+        const b = destino.locator(sel).first()
+        if (await b.isVisible().catch(() => false)) {
+          await b.click({ timeout: 5000 }).catch(() => {})
+          await destino.waitForTimeout(800)
+          pasos.push('Cerrado cartel: ' + sel)
+        }
+      }
+    }
+    await cerrarModales()
+
     // Leer la grilla de PV existentes (número + descripción del sistema).
     const filas = await destino
       .evaluate(() =>
         [...document.querySelectorAll('table tr')]
           .map((r) => [...r.querySelectorAll('td')].map((td) => (td.textContent || '').replace(/\s+/g, ' ').trim()))
-          .filter((c) => c.length >= 2 && /^\d+$/.test(c[0]))
+          .filter((c) => c.length >= 2 && c.length <= 15 && /^\d+$/.test(c[0]))
           .slice(0, 40)
       )
       .catch(() => [])
@@ -1142,6 +1160,8 @@ export async function crearPuntoVentaWS(cuit, clave, opts = {}) {
     }
     await btnAgregar.click({ timeout: 15000 }).catch(() => {})
     await destino.waitForTimeout(1500)
+    // Por si el cartel ATENCION reaparece sobre el diálogo de alta.
+    await cerrarModales()
     await destino
       .waitForFunction(
         () => {
