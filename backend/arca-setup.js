@@ -413,8 +413,9 @@ export async function inspeccionarRelaciones(cuit, clave) {
         )
         .catch(() => [])
 
-      // DRY-RUN: seleccionar el computador (primer alias real) y clic en su BUSCAR.
-      // NO se confirma la relación: solo mapeamos la pantalla de confirmación.
+      // DRY-RUN: seleccionar el computador (primer alias real). El select tiene
+      // autopostback: al elegir el alias, ARCA recarga la página y aparece el
+      // botón CONFIRMAR. NO se confirma la relación: solo mapeamos esa pantalla.
       let computadorSeleccionado = null
       let confirmScreen = null
       const cboComp = dr
@@ -428,48 +429,55 @@ export async function inspeccionarRelaciones(cuit, clave) {
           )
         const target = opts.find((o) => o.value && o.value.trim())
         if (target) {
-          await cboComp.selectOption({ value: target.value }).catch(() => {})
-          await dr.waitForTimeout(800)
+          // selectOption dispara el postback -> esperamos la navegación/recarga.
+          await Promise.all([
+            dr.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+            cboComp.selectOption({ value: target.value }).catch(() => {}),
+          ])
+          await dr.waitForTimeout(3000)
           computadorSeleccionado = target.text
           pasos.push('Computador seleccionado (dry-run): ' + target.text)
-          // El BUSCAR del computador: primer input[type=image] de la página.
-          const btnBuscarComp = dr.locator('input[type=image]').first()
-          if (await btnBuscarComp.count().catch(() => 0)) {
-            const ctx3 = dr.context()
-            const [pop3] = await Promise.all([
-              ctx3.waitForEvent('page', { timeout: 12000 }).catch(() => null),
-              btnBuscarComp.click({ timeout: 15000 }).catch(() => {}),
-            ])
-            const dc = pop3 || dr
-            await dc.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-            await dc.waitForTimeout(2500)
-            pasos.push('Clic en BUSCAR computador (dry-run)')
-            const confBtns = await dc
-              .evaluate(() =>
-                [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button')]
-                  .map((el) => ({
-                    tipo: el.type || el.tagName.toLowerCase(),
-                    id: el.id || null,
-                    name: el.getAttribute('name') || null,
-                    alt: el.getAttribute('alt') || null,
-                    src: ((el.getAttribute && el.getAttribute('src')) || '').split('/').pop() || null,
-                    valor: (el.value || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
-                  }))
-                  .slice(0, 40)
-              )
-              .catch(() => [])
-            const confTexto = await dc
-              .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600))
-              .catch(() => null)
-            confirmScreen = {
-              url: dc.url(),
-              title: await dc.title().catch(() => null),
-              botones: confBtns,
-              texto: confTexto,
-              screenshot: await captura(dc),
-            }
-          } else {
-            pasos.push('No se encontró el BUSCAR del computador (input[type=image])')
+          // Mapear TODOS los botones de la pantalla resultante (busco el CONFIRMAR).
+          const confBtns = await dr
+            .evaluate(() =>
+              [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button, a')]
+                .map((el) => ({
+                  tipo: el.type || el.tagName.toLowerCase(),
+                  id: el.id || null,
+                  name: el.getAttribute('name') || null,
+                  alt: el.getAttribute('alt') || null,
+                  src: ((el.getAttribute && el.getAttribute('src')) || '').split('/').pop() || null,
+                  href: ((el.getAttribute && el.getAttribute('href')) || '').slice(0, 80) || null,
+                  valor: (el.value || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+                }))
+                .filter((c) => /confirm|grabar|aceptar|guardar/i.test((c.valor || '') + (c.alt || '') + (c.src || '') + (c.id || '') + (c.name || '')))
+                .slice(0, 20)
+            )
+            .catch(() => [])
+          const todosBtns = await dr
+            .evaluate(() =>
+              [...document.querySelectorAll('input[type=submit], input[type=image], input[type=button], button')]
+                .map((el) => ({
+                  tipo: el.type || el.tagName.toLowerCase(),
+                  id: el.id || null,
+                  name: el.getAttribute('name') || null,
+                  alt: el.getAttribute('alt') || null,
+                  src: ((el.getAttribute && el.getAttribute('src')) || '').split('/').pop() || null,
+                  valor: (el.value || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+                }))
+                .slice(0, 40)
+            )
+            .catch(() => [])
+          const confTexto = await dr
+            .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600))
+            .catch(() => null)
+          confirmScreen = {
+            url: dr.url(),
+            title: await dr.title().catch(() => null),
+            botonConfirmar: confBtns,
+            todosBotones: todosBtns,
+            texto: confTexto,
+            screenshot: await captura(dr),
           }
         }
       }
