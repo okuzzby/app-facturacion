@@ -1,7 +1,7 @@
 // Flujo completo de emisión por Web Service: emite (WSFEv1) → genera el PDF
 // propio → lo sube a Storage → guarda en facturas_emitidas.
 
-import { emitirWS } from './arca-ws.js'
+import { emitirWS, puntosVentaWS } from './arca-ws.js'
 import { generarPdfComprobante } from './pdf-factura.js'
 import { descifrar } from './crypto-ws.js'
 
@@ -57,6 +57,19 @@ async function guardarPdfYFila(supabaseAdmin, userId, fila, pdfBuffer) {
     }
   }
   return { id: ins.id, pdf_path }
+}
+
+// --- Diagnóstico: puntos de venta habilitados para WS ---
+export async function puntosVentaFlow({ supabaseAdmin, userId }) {
+  const { data: cred, error } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!cred) throw new Error('No tenés configuración ARCA cargada')
+  const out = await puntosVentaWS({ cuit: cred.cuit, ...certDeCred(cred) })
+  return { ...out, cuit: cred.cuit, punto_venta_ws_actual: cred.punto_venta_ws || null }
 }
 
 // --- Emitir Factura C por WS ---

@@ -140,6 +140,24 @@ export async function proximoNumero(opts) {
   return _proximo(contextoDe(opts), opts)
 }
 
+// Lista los puntos de venta HABILITADOS para Web Service (FEParamGetPtosVenta).
+// Los puntos de "Comprobantes en línea" (RCEL/portal) NO aparecen acá: para
+// emitir por WS hace falta un punto de venta de tipo Web Service.
+// opts = { cuit, certPem?, keyPem?, homo? }
+export async function puntosVentaWS(opts) {
+  const ctx = contextoDe(opts)
+  await restaurarCache(ctx.cacheId)
+  const res = await afipDe(ctx).execRemote('wsfev1', 'FEParamGetPtosVenta', {
+    Auth: { Cuit: Number(String(opts.cuit).replace(/\D/g, '')) },
+    params: {},
+  })
+  await guardarCache(ctx.cacheId)
+  const rg = (res && res.ResultGet) || {}
+  const raw = rg.PtoVenta || []
+  const puntos = Array.isArray(raw) ? raw : [raw].filter(Boolean)
+  return { ok: true, puntos, eventos: (res && res.Events) || null }
+}
+
 // Emite un comprobante C (Factura o Nota de Crédito) por web service.
 // opts = {
 //   cuit, pv, tipo, importe, concepto,

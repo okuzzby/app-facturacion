@@ -12,7 +12,7 @@ import {
   inspeccionarNotaCredito,
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
-import { emitirFacturaFlow, anularFlow } from './ws-flow.js'
+import { emitirFacturaFlow, anularFlow, puntosVentaFlow } from './ws-flow.js'
 import {
   inspeccionarWSASS,
   crearCertificado,
@@ -177,6 +177,17 @@ app.post('/arca/setup-wsfe', requireAuth, async (req, res) => {
     // Nunca exponemos la clave privada (ni el blob cifrado) al frontend.
     const { privateKeyPem, ...safe } = out
     res.json(safe)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Diagnóstico WS: lista los puntos de venta habilitados para Web Service.
+app.post('/arca/ws/puntos-venta', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const out = await puntosVentaFlow({ supabaseAdmin, userId: req.user.id })
+    res.json(out)
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
   }
