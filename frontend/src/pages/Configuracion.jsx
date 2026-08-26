@@ -3,6 +3,16 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 
+// Estados intermedios del onboarding automático de facturación electrónica.
+const SETUP_EN_PROGRESO = [
+  'iniciando',
+  'creando_cert',
+  'autorizando',
+  'guardando',
+  'detectando_pv',
+  'creando_pv',
+]
+
 export default function Configuracion() {
   const { user } = useAuth()
 
@@ -52,10 +62,34 @@ export default function Configuracion() {
   async function cargarCredencial() {
     const { data } = await supabase
       .from('credenciales_arca')
-      .select('cuit, updated_at, empresa_representada, punto_venta, tipo_comprobante')
+      .select(
+        'cuit, updated_at, empresa_representada, punto_venta, tipo_comprobante, punto_venta_ws, ws_cert_alias, ws_setup_estado, ws_setup_paso, ws_setup_error, ws_setup_updated'
+      )
       .maybeSingle()
     setCredencial(data ?? null)
     setEditandoCred(!data)
+  }
+
+  // Dispara el onboarding automático (cert + autorizar + punto de venta) en el
+  // backend, que corre en segundo plano. force=true reintenta uno que falló.
+  async function iniciarSetupWsfe(force = false) {
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) return
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      await fetch(`${backend}/arca/setup-wsfe-async${force ? '?force=1' : ''}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {
+      // silencioso: el estado se refleja igual leyendo la fila
+    } finally {
+      await cargarCredencial()
+    }
   }
 
   async function cargarProductos() {
@@ -72,6 +106,17 @@ export default function Configuracion() {
     cargarProductos()
   }, [])
 
+  // Mientras el onboarding automático está en curso, refrescamos la fila cada
+  // 3s para mostrar el avance en vivo. Se corta solo al llegar a un estado final.
+  useEffect(() => {
+    if (!credencial) return
+    if (!SETUP_EN_PROGRESO.includes(credencial.ws_setup_estado)) return
+    const t = setTimeout(() => {
+      cargarCredencial()
+    }, 3000)
+    return () => clearTimeout(t)
+  }, [credencial])
+
   async function guardarCredencial(e) {
     e.preventDefault()
     setCredError(null)
@@ -84,9 +129,11 @@ export default function Configuracion() {
       })
       if (error) throw error
       setClave('')
-      setCredMsg('Credencial guardada de forma segura.')
+      setCredMsg('Credencial guardada. Configurando tu facturación electrónica…')
       setEditandoCred(false)
       await cargarCredencial()
+      // Arranca todo el proceso automático (cert + autorizar + punto de venta).
+      await iniciarSetupWsfe(false)
     } catch (err) {
       setCredError(err.message ?? 'No se pudo guardar')
     } finally {
@@ -682,15 +729,64 @@ export default function Configuracion() {
           <div className="cred-cargada">
             <p className="ok">Credencial cargada ✓</p>
             <p>CUIT: <strong>{credencial.cuit}</strong></p>
-            <p>
-              Empresa: <strong>{credencial.empresa_representada || 'sin elegir'}</strong>
-            </p>
-            <p>
-              Punto de venta: <strong>{credencial.punto_venta || 'sin elegir'}</strong>
-            </p>
-            <p>
-              Comprobante: <strong>{credencial.tipo_comprobante || 'sin elegir'}</strong>
-            </p>
+
+            {(() => {
+              const estado = credencial.ws_setup_estado
+              const yaListo =
+                estado === 'listo' ||
+                (credencial.ws_cert_alias && credencial.punto_venta_ws)
+              const enProgreso = SETUP_EN_PROGRESO.includes(estado)
+
+              if (yaListo) {
+                return (
+                  <div className="setup-box setup-ok">
+                    <p className="ok">Facturación electrónica lista ✓</p>
+                    <p>Punto de venta: <strong>{credencial.punto_venta_ws}</strong></p>
+                    <Link to="/facturar" className="boton-link">Ir a Facturar</Link>
+                  </div>
+                )
+              }
+              if (enProgreso) {
+                return (
+                  <div className="setup-box setup-progreso">
+                    <p><span className="spinner-inline" /> {credencial.ws_setup_paso || 'Configurando tu facturación electrónica…'}</p>
+                    <p className="sub">Esto puede tardar unos minutos. Podés dejar esta pantalla abierta.</p>
+                  </div>
+                )
+              }
+              if (estado === 'falta_pv') {
+                return (
+                  <div className="setup-box setup-aviso">
+                    <p>Ya casi: falta habilitar un punto de venta para facturación electrónica.</p>
+                    <p className="sub">Próximamente la app lo crea automáticamente. Por ahora avisanos.</p>
+                    <button type="button" className="secundario" onClick={() => iniciarSetupWsfe(true)}>
+                      Reintentar
+                    </button>
+                  </div>
+                )
+              }
+              if (estado === 'error') {
+                return (
+                  <div className="setup-box setup-error">
+                    <p className="error">No pudimos completar la configuración automática.</p>
+                    {credencial.ws_setup_error && <p className="sub">{credencial.ws_setup_error}</p>}
+                    <button type="button" onClick={() => iniciarSetupWsfe(true)}>
+                      Reintentar configuración
+                    </button>
+                  </div>
+                )
+              }
+              // Sin estado (credencial cargada antes de esta función): ofrecer configurar.
+              return (
+                <div className="setup-box">
+                  <p className="sub">Todavía no configuraste la facturación electrónica.</p>
+                  <button type="button" onClick={() => iniciarSetupWsfe(false)}>
+                    Configurar facturación electrónica
+                  </button>
+                </div>
+              )
+            })()}
+
             <p className="sub">
               Actualizada: {new Date(credencial.updated_at).toLocaleString('es-AR')}
             </p>

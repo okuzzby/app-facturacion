@@ -217,6 +217,117 @@ app.post('/arca/setup-wsfe', requireAuth, async (req, res) => {
   }
 })
 
+// --- Onboarding automático wsfe en SEGUNDO PLANO ---
+// El usuario solo guarda su credencial; esto crea el cert, lo autoriza al wsfe,
+// lo guarda cifrado y detecta/usa el punto de venta — todo por detrás. El avance
+// se escribe en credenciales_arca (ws_setup_*) y el frontend lo lee en vivo.
+const ESTADOS_EN_PROGRESO = [
+  'iniciando',
+  'creando_cert',
+  'autorizando',
+  'guardando',
+  'detectando_pv',
+  'creando_pv',
+]
+
+async function marcarSetup(userId, estado, paso, error) {
+  try {
+    await supabaseAdmin
+      .from('credenciales_arca')
+      .update({
+        ws_setup_estado: estado,
+        ws_setup_paso: paso || null,
+        ws_setup_error: error || null,
+        ws_setup_updated: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+  } catch (e) {
+    console.log('[SETUP] no se pudo marcar estado:', String((e && e.message) || e))
+  }
+}
+
+async function correrOnboardingWsfe(userId, cuit, clave) {
+  try {
+    const out = await configurarWsfe(cuit, clave, null, (estado, paso) =>
+      marcarSetup(userId, estado, paso)
+    )
+    if (!out || !out.certPem || !out.privateKeyPem) {
+      await marcarSetup(userId, 'error', null, (out && out.error) || 'No se pudo crear el certificado')
+      return
+    }
+
+    // Guardar el certificado (clave privada cifrada).
+    await marcarSetup(userId, 'guardando', 'Guardando tu certificado de forma segura…')
+    const keyEnc = cifrar(out.privateKeyPem)
+    await supabaseAdmin
+      .from('credenciales_arca')
+      .update({ ws_cert_pem: out.certPem, ws_cert_key_enc: keyEnc, ws_cert_alias: out.alias })
+      .eq('user_id', userId)
+
+    if (!out.autorizado) {
+      await marcarSetup(userId, 'error', null, 'No se pudo confirmar la autorización del certificado en ARCA')
+      return
+    }
+
+    // Detectar el punto de venta de Web Service (mejor esfuerzo).
+    await marcarSetup(userId, 'detectando_pv', 'Buscando tu punto de venta…')
+    let pvSeteado = null
+    try {
+      const pv = await puntosVentaWS({ cuit, certPem: out.certPem, keyPem: out.privateKeyPem })
+      const habil = (pv.puntos || []).filter(
+        (p) =>
+          String(p.Bloqueado).toUpperCase() !== 'S' &&
+          (p.FchBaja == null || String(p.FchBaja).toUpperCase() === 'NULL')
+      )
+      if (habil.length > 0) {
+        pvSeteado = String(habil[0].Nro)
+        await supabaseAdmin
+          .from('credenciales_arca')
+          .update({ punto_venta_ws: pvSeteado })
+          .eq('user_id', userId)
+      }
+    } catch (e) {
+      // Un cert recién autorizado puede tardar en propagar; no rompemos el setup.
+      console.log('[SETUP] detectar PV falló:', String((e && e.message) || e))
+    }
+
+    if (pvSeteado) {
+      await marcarSetup(userId, 'listo', 'Todo listo para facturar ✓')
+    } else {
+      // Etapa siguiente: crear el punto de venta automáticamente por RPA.
+      await marcarSetup(userId, 'falta_pv', 'Falta habilitar un punto de venta para facturación electrónica')
+    }
+  } catch (e) {
+    await marcarSetup(userId, 'error', null, String((e && e.message) || e))
+  }
+}
+
+app.post('/arca/setup-wsfe-async', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  // Evitar dispararlo dos veces si ya está corriendo (salvo ?force=1).
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('ws_setup_estado, ws_setup_updated')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  const enProgreso = row && ESTADOS_EN_PROGRESO.includes(row.ws_setup_estado)
+  const reciente =
+    row?.ws_setup_updated && Date.now() - new Date(row.ws_setup_updated).getTime() < 6 * 60 * 1000
+  if (enProgreso && reciente && req.query.force !== '1') {
+    return res.json({ ok: true, yaEnProgreso: true })
+  }
+
+  await marcarSetup(req.user.id, 'iniciando', 'Iniciando configuración…')
+  // Fire-and-forget: no await, corre en segundo plano.
+  correrOnboardingWsfe(req.user.id, cred.cuit, cred.clave)
+  res.json({ ok: true, iniciado: true })
+})
+
 // Diagnóstico WS: lista los puntos de venta habilitados para Web Service.
 app.post('/arca/ws/puntos-venta', requireAuth, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })

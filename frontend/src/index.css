@@ -413,6 +413,34 @@ select {
   padding: 1rem;
 }
 
+.setup-box {
+  margin: 0.75rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #2a2e37;
+  background: #12151b;
+}
+.setup-ok { border-color: #1f7a44; background: #0f1a12; }
+.setup-progreso { border-color: #2f5db0; background: #0f1420; }
+.setup-aviso { border-color: #8a6d1f; background: #1a160e; }
+.setup-error { border-color: #8a2f2f; background: #1a0f0f; }
+.setup-box .boton-link { display: inline-block; margin-top: 0.5rem; }
+
+.spinner-inline {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.4em;
+  vertical-align: -0.1em;
+  border: 2px solid #4b5563;
+  border-top-color: #7aa2f7;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .lista-productos {
   list-style: none;
   padding: 0;

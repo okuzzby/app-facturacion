@@ -279,11 +279,18 @@ export async function crearCertificado(cuit, clave, alias) {
 //   -> click CONFIRMAR (#cmdSeleccionarServicio, confirmar.gif) -> crea relación
 //   -> (defensivo) segundo CONFIRMAR si aparece pantalla de resumen
 // ============================================================================
-export async function configurarWsfe(cuit, clave, aliasForzado) {
+export async function configurarWsfe(cuit, clave, aliasForzado, onProgreso) {
   const pasos = []
   const alias = aliasForzado || 'app' + String(Date.now()).slice(-8)
+  // onProgreso(estado, textoAmigable) — opcional, para reportar avance en vivo.
+  const prog = async (estado, texto) => {
+    try {
+      if (typeof onProgreso === 'function') await onProgreso(estado, texto)
+    } catch {}
+  }
 
   // --- Paso 1: crear el certificado (abre/cierra su propio browser) ---
+  await prog('creando_cert', 'Creando tu certificado digital…')
   const cert = await crearCertificado(cuit, clave, alias)
   for (const p of cert.pasos || []) pasos.push('cert: ' + p)
   if (!cert.ok || !cert.certPem || !cert.privateKeyPem) {
@@ -298,6 +305,7 @@ export async function configurarWsfe(cuit, clave, aliasForzado) {
     }
   }
   pasos.push('Certificado "' + alias + '" creado y capturado ✓')
+  await prog('autorizando', 'Autorizando el certificado en ARCA…')
 
   // --- Paso 2: autorizar el certificado al servicio wsfe ---
   let browser
