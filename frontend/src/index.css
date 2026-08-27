@@ -479,6 +479,56 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .pasos li { margin: 3px 0; }
 
 /* ============================================================
+   Integraciones — Mercado Pago
+   ============================================================ */
+.int-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.int-ic {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px;
+  background: #E7F0FF; color: #2C6DF2; display: grid; place-items: center;
+}
+.int-ic svg { width: 24px; height: 24px; }
+.int-titulo { flex: 1; min-width: 0; }
+.int-titulo h2 { font-size: 17px; font-weight: 800; margin: 0; }
+.int-titulo .sub { margin: 2px 0 0; }
+
+.int-opcion {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 0 4px; margin-top: 8px; border-top: 1px solid var(--line);
+}
+.int-op-t { font-family: "Manrope"; font-weight: 700; font-size: 14.5px; }
+
+/* Interruptor (switch) */
+.switch {
+  flex: 0 0 auto; width: 46px; height: 28px; border-radius: 999px; padding: 0;
+  background: #D3D7DE; border: none; box-shadow: none; position: relative;
+  transition: background .16s ease; cursor: pointer;
+}
+.switch:hover { background: #C7CCD4; }
+.switch.on, .switch.on:hover { background: var(--green); }
+.switch-dot {
+  position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(20,24,31,.28); transition: transform .16s ease;
+}
+.switch.on .switch-dot { transform: translateX(18px); }
+
+/* Barra: elegir producto + facturar seleccionados */
+.mp-facturar-bar { display: flex; gap: 10px; margin: 4px 0 12px; }
+.mp-facturar-bar select { flex: 1; }
+.mp-facturar-bar button { white-space: nowrap; }
+
+/* Checkbox de cobro */
+.chk {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px; padding: 0;
+  background: var(--surface); border: 2px solid #CDD1D8; box-shadow: none;
+  display: grid; place-items: center;
+}
+.chk:hover { border-color: var(--orange); }
+.chk.on, .chk.on:hover { background: var(--orange); border-color: var(--orange); }
+.chk svg { width: 16px; height: 16px; }
+
+.hrow-fact { color: var(--green); font-weight: 700; }
+
+/* ============================================================
    Productos
    ============================================================ */
 .lista-productos { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 10px; }

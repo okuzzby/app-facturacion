@@ -23,6 +23,18 @@ import {
   crearPuntoVentaWS,
 } from './arca-setup.js'
 import { cifrar } from './crypto-ws.js'
+import {
+  mpConfigurado,
+  firmarState,
+  verificarState,
+  urlAutorizacion,
+  intercambiarCodigo,
+  guardarConexion,
+  accessTokenValido,
+  buscarPagos,
+  obtenerPago,
+  guardarCobrosNuevos,
+} from './mp.js'
 
 const app = express()
 app.use(cors())
@@ -812,6 +824,213 @@ app.post('/arca/factura-generar', requireAuth, async (req, res) => {
   // No devolvemos el PDF crudo al frontend (se descarga desde Storage).
   delete resultado.pdf
   res.json(resultado)
+})
+
+// ============================================================
+//  Mercado Pago — conexión (OAuth), lectura de cobros y facturación
+// ============================================================
+
+// Estado de la conexión (para la pantalla de Integraciones). No expone tokens.
+app.get('/mp/estado', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin
+    .from('mp_cuentas')
+    .select('mp_user_id, auto_facturar, producto_default_id, conectada_at, access_token_enc')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({
+    configurado: mpConfigurado(),
+    conectada: Boolean(data && data.access_token_enc),
+    auto_facturar: data?.auto_facturar || false,
+    producto_default_id: data?.producto_default_id || null,
+    conectada_at: data?.conectada_at || null,
+  })
+})
+
+// Genera la URL de autorización de Mercado Pago. El frontend redirige ahí.
+app.get('/mp/oauth/url', requireAuth, async (req, res) => {
+  if (!mpConfigurado()) return res.status(500).json({ error: 'Falta configurar MP_CLIENT_ID / MP_CLIENT_SECRET' })
+  const origin = String(req.query.origin || '')
+  if (!/^https?:\/\//.test(origin)) return res.status(400).json({ error: 'origin inválido' })
+  const state = firmarState({ u: req.user.id, o: origin })
+  res.json({ url: urlAutorizacion(state) })
+})
+
+// Callback de OAuth: Mercado Pago devuelve el code acá (sin sesión → usamos state).
+app.get('/mp/oauth/callback', async (req, res) => {
+  const volver = (origin, q) => res.redirect(`${origin}/integraciones?${q}`)
+  const st = verificarState(req.query.state)
+  const origin = st?.o
+  if (!st || !origin) return res.status(400).send('State inválido')
+  if (req.query.error) return volver(origin, `mp=error&msg=${encodeURIComponent(String(req.query.error))}`)
+  const code = req.query.code
+  if (!code) return volver(origin, 'mp=error&msg=sin_codigo')
+  if (!supabaseAdmin) return volver(origin, 'mp=error&msg=backend')
+  try {
+    const tok = await intercambiarCodigo(String(code))
+    await guardarConexion(supabaseAdmin, st.u, tok)
+    volver(origin, 'mp=ok')
+  } catch (e) {
+    volver(origin, `mp=error&msg=${encodeURIComponent(String((e && e.message) || e))}`)
+  }
+})
+
+// Cambiar ajustes: facturación automática y/o producto por defecto.
+app.post('/mp/config', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const patch = { updated_at: new Date().toISOString() }
+  if (typeof req.body?.auto_facturar === 'boolean') patch.auto_facturar = req.body.auto_facturar
+  if ('producto_default_id' in (req.body || {})) patch.producto_default_id = req.body.producto_default_id || null
+  const { error } = await supabaseAdmin.from('mp_cuentas').update(patch).eq('user_id', req.user.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ ok: true })
+})
+
+// Desconectar la cuenta de Mercado Pago (borra los tokens de nuestra base).
+app.post('/mp/desconectar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { error } = await supabaseAdmin.from('mp_cuentas').delete().eq('user_id', req.user.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ ok: true })
+})
+
+// Traer los últimos cobros de Mercado Pago y guardarlos (sin facturar).
+app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const tk = await accessTokenValido(supabaseAdmin, req.user.id)
+    if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
+    const pagos = await buscarPagos(tk.accessToken, { limit: 50 })
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos)
+    res.json({ ok: true, nuevos: nuevos.length })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Resuelve el nombre del producto elegido (o el por defecto de la cuenta).
+async function resolverProducto(userId, productoId) {
+  let id = productoId
+  if (!id) {
+    const { data: cta } = await supabaseAdmin
+      .from('mp_cuentas')
+      .select('producto_default_id')
+      .eq('user_id', userId)
+      .maybeSingle()
+    id = cta?.producto_default_id || null
+  }
+  if (!id) return null
+  const { data: prod } = await supabaseAdmin
+    .from('productos_configurados')
+    .select('nombre')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return prod?.nombre || null
+}
+
+// Emite una Factura C a partir de un cobro y lo marca como facturado.
+async function facturarUnCobro(userId, cobro, productoNombre) {
+  const body = {
+    producto: productoNombre,
+    precio: cobro.monto,
+    cantidad: 1,
+    concepto: 'Productos',
+    condicionIva: 'Consumidor Final',
+    condicionesVenta: ['Contado'],
+  }
+  const out = await emitirFacturaFlow({ supabaseAdmin, userId, body })
+  if (out && out.ok && out.guardado && out.facturaId) {
+    await supabaseAdmin
+      .from('mp_cobros')
+      .update({ facturado: true, factura_id: out.facturaId })
+      .eq('id', cobro.id)
+      .eq('user_id', userId)
+  }
+  return out
+}
+
+// Facturar los cobros seleccionados (manual). Cada cobro = una Factura C.
+app.post('/mp/facturar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const ids = Array.isArray(req.body?.cobroIds) ? req.body.cobroIds : []
+  if (ids.length === 0) return res.status(400).json({ error: 'No elegiste ningún cobro' })
+  const productoNombre = await resolverProducto(req.user.id, req.body?.productoId)
+  if (!productoNombre) return res.status(400).json({ error: 'Elegí un producto para facturar' })
+
+  const { data: cobros, error } = await supabaseAdmin
+    .from('mp_cobros')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .in('id', ids)
+  if (error) return res.status(500).json({ error: error.message })
+
+  const resultados = []
+  for (const c of cobros || []) {
+    if (c.facturado) {
+      resultados.push({ id: c.id, ok: true, yaFacturado: true })
+      continue
+    }
+    try {
+      const out = await facturarUnCobro(req.user.id, c, productoNombre)
+      resultados.push({
+        id: c.id,
+        ok: Boolean(out && out.ok && out.guardado),
+        numero: out?.numero || null,
+        error: out && out.ok ? null : out?.error || 'No se pudo emitir',
+      })
+    } catch (e) {
+      resultados.push({ id: c.id, ok: false, error: String((e && e.message) || e) })
+    }
+  }
+  const emitidas = resultados.filter((r) => r.ok && !r.yaFacturado).length
+  res.json({ ok: true, emitidas, resultados })
+})
+
+// Webhook de Mercado Pago: avisa cuando entra/actualiza un pago. Si el usuario
+// tiene la facturación automática activada, emite la Factura C en el momento.
+app.post('/mp/webhook', async (req, res) => {
+  // Respondemos 200 rápido (MP reintenta si no); procesamos aparte.
+  res.status(200).json({ ok: true })
+  if (!supabaseAdmin) return
+  try {
+    const tipo = req.body?.type || req.query?.topic || req.query?.type
+    if (tipo && !/payment/i.test(String(tipo))) return
+    const paymentId = req.body?.data?.id || req.query?.id || req.query?.['data.id']
+    const mpUserId = req.body?.user_id != null ? String(req.body.user_id) : null
+    if (!paymentId) return
+
+    // ¿De qué usuario nuestro es esta cuenta de MP?
+    let q = supabaseAdmin.from('mp_cuentas').select('user_id, mp_user_id, auto_facturar, producto_default_id')
+    q = mpUserId ? q.eq('mp_user_id', mpUserId) : q
+    const { data: ctas } = await q
+    const cta = (ctas || [])[0]
+    if (!cta) return
+
+    const tk = await accessTokenValido(supabaseAdmin, cta.user_id)
+    if (!tk) return
+    const pago = await obtenerPago(tk.accessToken, paymentId)
+    if (!pago || pago.status !== 'approved') return
+
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, cta.user_id, [pago])
+
+    // Facturación automática (si está activada y hay producto por defecto).
+    if (cta.auto_facturar && cta.producto_default_id && nuevos.length > 0) {
+      const productoNombre = await resolverProducto(cta.user_id, cta.producto_default_id)
+      if (productoNombre) {
+        for (const c of nuevos) {
+          try {
+            await facturarUnCobro(cta.user_id, c, productoNombre)
+          } catch (e) {
+            console.log('[MP-AUTO] error facturando cobro:', String((e && e.message) || e))
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[MP-WEBHOOK] error:', String((e && e.message) || e))
+  }
 })
 
 app.get('/', (req, res) => {
