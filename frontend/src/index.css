@@ -247,7 +247,10 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 /* ============================================================
    Estado del onboarding (setup-box)
    ============================================================ */
-.cred-cargada { display: flex; flex-direction: column; gap: 10px; }
+.cred-cargada { display: flex; flex-direction: column; gap: 7px; }
+.cred-cargada p { margin: 0; }
+.cred-cargada .setup-box { margin: 4px 0; }
+.cred-cargada .fila-botones { margin-top: 10px; }
 .email-actual { color: var(--muted); font-size: 14px; }
 
 .setup-box { margin: 4px 0; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); }
