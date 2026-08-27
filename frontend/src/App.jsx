@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import Configuracion from './pages/Configuracion'
 import Facturar from './pages/Facturar'
 import Historial from './pages/Historial'
+import Integraciones from './pages/Integraciones'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/facturar" element={<Facturar />} />
         <Route path="/historial" element={<Historial />} />
         <Route path="/configuracion" element={<Configuracion />} />
+        <Route path="/integraciones" element={<Integraciones />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

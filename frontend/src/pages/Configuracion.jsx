@@ -14,7 +14,13 @@ const SETUP_EN_PROGRESO = [
 ]
 
 export default function Configuracion() {
-  const { user } = useAuth()
+  const { user, perfilNombre, refrescarPerfil } = useAuth()
+
+  // ---- perfil (nombre para el saludo) ----
+  const [nombrePerfil, setNombrePerfil] = useState('')
+  const [nombreMsg, setNombreMsg] = useState(null)
+  const [nombreError, setNombreError] = useState(null)
+  const [guardandoNombre, setGuardandoNombre] = useState(false)
 
   // ---- credencial ARCA ----
   const [credencial, setCredencial] = useState(null) // {cuit, updated_at} o null
@@ -105,6 +111,32 @@ export default function Configuracion() {
     cargarCredencial()
     cargarProductos()
   }, [])
+
+  // Precarga el campo Nombre con el que ya tenga el perfil.
+  useEffect(() => {
+    setNombrePerfil(perfilNombre || '')
+  }, [perfilNombre])
+
+  async function guardarNombre(e) {
+    e.preventDefault()
+    setNombreError(null)
+    setNombreMsg(null)
+    setGuardandoNombre(true)
+    try {
+      const limpio = nombrePerfil.trim()
+      const { error } = await supabase
+        .from('perfiles')
+        .update({ nombre: limpio })
+        .eq('id', user.id)
+      if (error) throw error
+      setNombreMsg('Nombre guardado ✓')
+      await refrescarPerfil()
+    } catch (err) {
+      setNombreError(err.message ?? 'No se pudo guardar')
+    } finally {
+      setGuardandoNombre(false)
+    }
+  }
 
   // Mientras el onboarding automático está en curso, refrescamos la fila cada
   // 3s para mostrar el avance en vivo. Se corta solo al llegar a un estado final.
@@ -849,6 +881,28 @@ export default function Configuracion() {
       <div className="page-head">
         <div><h1>Configuración</h1><div className="sub">Tu conexión con ARCA y tus productos</div></div>
       </div>
+
+      {/* ---------------- Mi perfil ---------------- */}
+      <section className="seccion">
+        <h2>Mi perfil</h2>
+        <p className="sub">Tu nombre aparece en el saludo de la app (“Hola, {'{'}Nombre{'}'}”).</p>
+        <form onSubmit={guardarNombre} className="form">
+          <input
+            type="text"
+            placeholder="Tu nombre"
+            value={nombrePerfil}
+            onChange={(e) => setNombrePerfil(e.target.value)}
+            autoComplete="given-name"
+          />
+          <div className="fila-botones">
+            <button type="submit" disabled={guardandoNombre || nombrePerfil.trim() === (perfilNombre || '')}>
+              {guardandoNombre ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+        {nombreMsg && <p className="ok">{nombreMsg}</p>}
+        {nombreError && <p className="error">{nombreError}</p>}
+      </section>
 
       {/* ---------------- Credencial ARCA ---------------- */}
       <section className="seccion">

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 export default function Login() {
   const navigate = useNavigate()
   const [modo, setModo] = useState('login') // 'login' | 'registro'
+  const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mensaje, setMensaje] = useState(null)
@@ -35,7 +36,11 @@ export default function Login() {
         if (error) throw error
         navigate('/')
       } else {
-        const { error } = await supabase.auth.signUp({ email, password })
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { nombre: nombre.trim() } },
+        })
         if (error) throw error
         setMensaje(
           'Cuenta creada. Si tu proyecto pide confirmar el email, revisá tu casilla; si no, ya podés iniciar sesión.'
@@ -68,6 +73,16 @@ export default function Login() {
         </div>
 
         <form onSubmit={manejarSubmit} className="form">
+          {modo === 'registro' && (
+            <input
+              type="text"
+              placeholder="Nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              required
+              autoComplete="given-name"
+            />
+          )}
           <input
             type="email"
             placeholder="Email"

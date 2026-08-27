@@ -145,7 +145,7 @@ a:hover { text-decoration: underline; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-head h1 { font-size: 24px; font-weight: 800; }
 .page-head .sub { color: var(--muted); font-size: 14px; margin-top: 3px; }
-.page-head-back { justify-content: flex-start; gap: 12px; }
+.page-head-back { justify-content: flex-start; align-items: center; gap: 12px; }
 .icon-btn {
   flex: 0 0 auto; width: 40px; height: 40px; padding: 0; border-radius: 10px;
   background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: none;
@@ -217,6 +217,20 @@ button.peligro:hover { background: var(--red-soft); color: var(--red); }
 .stat .k { color: var(--muted); font-size: 13px; font-weight: 600; }
 .stat .v { font-family: "Manrope"; font-weight: 800; font-size: 26px; margin-top: 6px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .stats { grid-template-columns: 1fr; } }
+
+/* Card principal del Inicio: "Facturado este mes con la App" */
+.mes-card {
+  background: linear-gradient(120deg, #20242C, #171A20);
+  color: #fff; border-radius: var(--r); padding: 30px 24px; text-align: center;
+  box-shadow: var(--shadow);
+}
+.mes-card .mes-k { color: #B7BCC5; font-family: "Manrope"; font-weight: 600; font-size: 14px; }
+.mes-card .mes-v {
+  font-family: "Manrope"; font-weight: 800; font-size: 46px; margin-top: 8px;
+  letter-spacing: -.03em; line-height: 1.05; font-variant-numeric: tabular-nums; color: #fff;
+}
+.mes-card .mes-sub { color: #9AA0AB; font-size: 13.5px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .mes-card .mes-v { font-size: 40px; } }
 
 /* ============================================================
    Tarjetas y secciones
@@ -517,11 +531,18 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
     position: sticky; top: 0; z-index: 20;
   }
   .mtop .brand { padding: 0; font-size: 18px; color: #fff; }
+  .mtop-saludo {
+    font-family: "Manrope"; font-weight: 800; font-size: 18px; color: #fff;
+    letter-spacing: -.01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .mtop-logout {
     background: transparent; border: none; box-shadow: none; color: #B7BCC5;
-    padding: 6px; border-radius: 9px;
+    padding: 6px; border-radius: 9px; flex: 0 0 auto;
   }
   .mtop-logout:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+  /* El saludo ya está en la barra superior: no lo repetimos en el Inicio. */
+  .saludo-page { display: none; }
 
   /* Barra de navegación inferior con Facturar como botón central */
   .bottomnav {

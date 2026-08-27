@@ -17,17 +17,28 @@ const IconConfig = () => (
 const IconMenu = () => (
   <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
 )
+const IconIntegraciones = () => (
+  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M17.5 14v3.5M14 17.5h7" /></svg>
+)
 
 const NAV = [
   { to: '/', end: true, label: 'Inicio', Icon: IconInicio },
   { to: '/facturar', label: 'Facturar', Icon: IconFacturar },
   { to: '/historial', label: 'Historial', Icon: IconHistorial },
   { to: '/configuracion', label: 'Configuración', Icon: IconConfig },
+  { to: '/integraciones', label: 'Integraciones', Icon: IconIntegraciones },
 ]
 
+const primerNombre = (n) => {
+  if (!n) return ''
+  const w = String(n).trim().split(/\s+/)[0]
+  return w ? w.charAt(0).toUpperCase() + w.slice(1) : ''
+}
+
 export default function Layout() {
-  const { user, signOut } = useAuth()
-  const inicial = (user?.email || '?').trim().charAt(0).toUpperCase()
+  const { user, perfilNombre, signOut } = useAuth()
+  const inicial = (perfilNombre || user?.email || '?').trim().charAt(0).toUpperCase()
+  const nombre = primerNombre(perfilNombre)
   const [menuAbierto, setMenuAbierto] = useState(false)
 
   // Cerrar el menú con Escape y bloquear el scroll de fondo mientras está abierto.
@@ -71,7 +82,7 @@ export default function Layout() {
 
       {/* Barra superior (celular) */}
       <header className="mtop">
-        <div className="brand"><span className="glyph">◆</span> App</div>
+        <div className="mtop-saludo">Hola{nombre ? `, ${nombre}` : ''}</div>
         <button type="button" className="mtop-logout" onClick={signOut} aria-label="Cerrar sesión">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9">
             <path d="M16 17l5-5-5-5M21 12H9M12 19H5V5h7" />

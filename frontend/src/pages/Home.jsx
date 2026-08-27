@@ -17,14 +17,14 @@ const IconDoc = () => (
   </svg>
 )
 
-const nombreCorto = (email) => {
-  if (!email) return ''
-  const base = email.split('@')[0].replace(/[._-]+/g, ' ').trim()
-  return base ? base.charAt(0).toUpperCase() + base.slice(1) : ''
+const primerNombre = (n) => {
+  if (!n) return ''
+  const w = String(n).trim().split(/\s+/)[0]
+  return w ? w.charAt(0).toUpperCase() + w.slice(1) : ''
 }
 
 export default function Home() {
-  const { user } = useAuth()
+  const { perfilNombre } = useAuth()
   const [facturas, setFacturas] = useState([])
   const [cargando, setCargando] = useState(true)
 
@@ -52,29 +52,18 @@ export default function Home() {
 
   return (
     <div className="page">
-      <div className="page-head">
+      <div className="page-head saludo-page">
         <div>
-          <h1>Hola{nombreCorto(user?.email) ? `, ${nombreCorto(user?.email)}` : ''}</h1>
+          <h1>Hola{primerNombre(perfilNombre) ? `, ${primerNombre(perfilNombre)}` : ''}</h1>
           <div className="sub">Emití una factura en pocos toques.</div>
         </div>
       </div>
 
-      <Link to="/facturar" className="hero-facturar">
-        <div>
-          <div className="t">Emitir una Factura C</div>
-          <div className="d">CAE automático · tu factura lista en segundos</div>
-        </div>
-        <span className="hero-cta">Nueva factura →</span>
-      </Link>
-
-      <div className="stats">
-        <div className="card stat">
-          <div className="k">Facturado este mes</div>
-          <div className="v">{money(totalMes)}</div>
-        </div>
-        <div className="card stat">
-          <div className="k">Comprobantes emitidos</div>
-          <div className="v">{emitidasMes.length}</div>
+      <div className="mes-card">
+        <div className="mes-k">Facturado este mes con la App</div>
+        <div className="mes-v">{money(totalMes)}</div>
+        <div className="mes-sub">
+          {emitidasMes.length} {emitidasMes.length === 1 ? 'comprobante emitido' : 'comprobantes emitidos'}
         </div>
       </div>
 
