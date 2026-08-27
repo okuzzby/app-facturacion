@@ -360,21 +360,17 @@ export default function Facturar() {
           </select>
         </label>
 
-        <div className="campo">
+        <label className="campo">
           <span>Condición de venta</span>
-          <div className="cv-seg">
+          <select
+            value={condicionesVenta[0] || 'Contado'}
+            onChange={(e) => setCondicionesVenta([e.target.value])}
+          >
             {COND_VENTA.map((c) => (
-              <button
-                type="button"
-                key={c.v}
-                className={'cv-chip' + (condicionesVenta.includes(c.v) ? ' on' : '')}
-                onClick={() => toggleCondVenta(c.v)}
-              >
-                {c.l}
-              </button>
+              <option key={c.v} value={c.v}>{c.l}</option>
             ))}
-          </div>
-        </div>
+          </select>
+        </label>
 
         <label className="campo">
           <span>Producto / Servicio</span>
