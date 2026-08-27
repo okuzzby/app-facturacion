@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Historial() {
@@ -10,6 +10,8 @@ export default function Historial() {
   const [anulando, setAnulando] = useState(null)
   const [msg, setMsg] = useState(null)
   const [errorShot, setErrorShot] = useState(null)
+  const [params] = useSearchParams()
+  const modoAnular = params.get('nc') === '1'
 
   async function cargar() {
     setCargando(true)
@@ -88,8 +90,21 @@ export default function Historial() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Historial</h1><div className="sub">Todos tus comprobantes emitidos</div></div>
+        <div>
+          <h1>Historial</h1>
+          <div className="sub">
+            {modoAnular ? 'Elegí la factura a anular con una Nota de Crédito' : 'Todos tus comprobantes emitidos'}
+          </div>
+        </div>
       </div>
+      {modoAnular && (
+        <div className="setup-box setup-aviso">
+          <p style={{ margin: 0 }}>
+            Tocá <strong>N Crédito C</strong> en la factura que quieras anular. Se emite una Nota de
+            Crédito C asociada.
+          </p>
+        </div>
+      )}
       <div className="card">
       {cargando && <p className="sub">Cargando…</p>}
       {!cargando && facturas.length === 0 && (
@@ -124,7 +139,7 @@ export default function Historial() {
                 Imprimir
               </button>
 
-              {esFactura(f) && f.estado === 'emitida' && (
+              {modoAnular && esFactura(f) && f.estado === 'emitida' && (
                 confirmando === f.id ? (
                   <span className="confirmar-anular">
                     ¿Anular?
@@ -142,7 +157,7 @@ export default function Historial() {
                     onClick={() => setConfirmando(f.id)}
                     disabled={anulando != null}
                   >
-                    Anular
+                    N Crédito C
                   </button>
                 )
               )}

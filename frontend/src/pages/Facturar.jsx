@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
 const CONCEPTOS = ['Productos', 'Servicios', 'Productos y Servicios']
@@ -44,10 +44,12 @@ export default function Facturar() {
   const [productoCustom, setProductoCustom] = useState('')
   const [precio, setPrecio] = useState('')
 
+  const [vista, setVista] = useState('elegir') // 'elegir' | 'form'
   const [paso, setPaso] = useState('form') // 'form' | 'preview'
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)
   const [error, setError] = useState(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!supabase) return
@@ -171,6 +173,51 @@ export default function Facturar() {
     )
   }
 
+  // Elegir tipo de comprobante (Factura C / Nota de crédito C)
+  if (vista === 'elegir' && !resultado) {
+    return (
+      <div className="page">
+        <div className="page-head">
+          <div><h1>Facturar</h1><div className="sub">Elegí qué querés hacer</div></div>
+        </div>
+
+        <div className="opciones-fact">
+          <div className="opcion-wrap">
+            <button type="button" className="opcion" onClick={() => setVista('form')}>
+              <span className="opcion-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                  <path d="M6 2h8l4 4v16H6z" /><path d="M14 2v4h4" /><path d="M9 12h6M9 16h4" />
+                </svg>
+              </span>
+              <span className="opcion-body">
+                <span className="opcion-t">Factura C</span>
+                <span className="opcion-d">Registrá una venta o servicio</span>
+              </span>
+              <span className="opcion-cta">Emitir Factura C</span>
+            </button>
+            <p className="opcion-msg">Registro automático en ARCA</p>
+          </div>
+
+          <div className="opcion-wrap">
+            <button type="button" className="opcion" onClick={() => navigate('/historial?nc=1')}>
+              <span className="opcion-ic opcion-ic-dark">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                  <path d="M6 2h8l4 4v16H6z" /><path d="M14 2v4h4" /><path d="M9 14h6" />
+                </svg>
+              </span>
+              <span className="opcion-body">
+                <span className="opcion-t">Nota de crédito C</span>
+                <span className="opcion-d">Anular una factura ya emitida</span>
+              </span>
+              <span className="opcion-cta opcion-cta-dark">Emitir Nota de crédito C</span>
+            </button>
+            <p className="opcion-msg">Anular una Factura C</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Resultado (factura emitida)
   if (resultado) {
     return (
@@ -247,6 +294,7 @@ export default function Facturar() {
           <h1>Nueva factura</h1>
           <div className="sub">Factura C · Punto de venta {cred.punto_venta_ws} · Fecha hoy</div>
         </div>
+        <button type="button" className="secundario" onClick={() => setVista('elegir')}>← Volver</button>
       </div>
       <div className="card">
       <form onSubmit={irAPreview} className="form">

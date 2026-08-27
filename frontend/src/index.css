@@ -274,6 +274,38 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .cv-opt input { width: auto; }
 
 /* ============================================================
+   Elegir comprobante (Factura C / Nota de crédito C)
+   ============================================================ */
+.opciones-fact { display: flex; flex-direction: column; gap: 20px; }
+.opcion-wrap { display: flex; flex-direction: column; gap: 8px; }
+.opcion {
+  width: 100%; text-align: left; cursor: pointer;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 18px; box-shadow: var(--shadow-sm);
+  display: grid; grid-template-columns: auto 1fr; grid-template-areas: "ic body" "cta cta"; gap: 12px 14px;
+  font-family: "Public Sans";
+}
+.opcion:hover { background: var(--surface); border-color: #CDD1D8; }
+.opcion-ic {
+  grid-area: ic; width: 48px; height: 48px; border-radius: 12px;
+  background: var(--orange-soft); color: var(--orange); display: grid; place-items: center;
+}
+.opcion-ic svg { width: 26px; height: 26px; }
+.opcion-ic-dark { background: #E7E9ED; color: var(--ink); }
+.opcion-body { grid-area: body; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.opcion-t { font-family: "Manrope"; font-weight: 800; font-size: 18px; }
+.opcion-d { color: var(--muted); font-size: 13.5px; }
+.opcion-cta {
+  grid-area: cta; margin-top: 4px; text-align: center;
+  background: var(--orange); color: #fff; font-family: "Manrope"; font-weight: 700;
+  border-radius: 11px; padding: 12px; box-shadow: 0 6px 16px rgba(242,106,27,.26);
+}
+.opcion:hover .opcion-cta { background: var(--orange-2); }
+.opcion-cta-dark { background: var(--ink); box-shadow: none; }
+.opcion:hover .opcion-cta-dark { background: #2C313A; }
+.opcion-msg { text-align: center; color: var(--muted); font-size: 13px; margin: 0; }
+
+/* ============================================================
    Estado del onboarding (setup-box)
    ============================================================ */
 .cred-cargada { display: flex; flex-direction: column; gap: 7px; }
