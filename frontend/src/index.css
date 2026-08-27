@@ -273,6 +273,63 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   color: var(--ink-2); cursor: pointer; width: auto; }
 .cv-opt input { width: auto; }
 
+/* Condición de venta en una línea (segmentos) */
+.cv-seg { display: flex; gap: 6px; }
+.cv-chip {
+  flex: 1; background: var(--surface); color: var(--ink-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 6px; box-shadow: none;
+  font-family: "Manrope"; font-weight: 700; font-size: 13px;
+}
+.cv-chip.on { background: var(--orange-soft); border-color: #F6C4A3; color: var(--orange-2); }
+.cv-chip:hover { background: var(--surface); border-color: #CDD1D8; }
+.cv-chip.on:hover { border-color: #F6C4A3; }
+
+/* Período: caja clickable que abre el calendario */
+.periodo-box {
+  width: 100%; background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 10px; padding: 11px 12px; box-shadow: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-family: "Public Sans"; font-weight: 600; font-size: 14.5px; cursor: pointer;
+}
+.periodo-box:hover { background: #F7F8FA; border-color: #CDD1D8; }
+.periodo-box .cal-ic { width: 18px; height: 18px; color: var(--muted); flex: 0 0 auto; }
+
+/* Cantidad (stepper) + Precio unitario */
+.cant-precio { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: end; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.stepper button {
+  background: var(--surface); color: var(--ink); border: none; box-shadow: none;
+  width: 42px; height: 44px; font-size: 20px; font-family: "Manrope"; border-radius: 0;
+}
+.stepper button:hover { background: #F1F2F4; }
+.stepper-val { min-width: 44px; text-align: center; font-family: "Manrope"; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+.precio-field { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.precio-field:focus-within { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(242,106,27,.14); }
+.precio-sig { padding: 0 4px 0 12px; color: var(--muted); font-weight: 700; }
+.precio-field input { border: none; padding-left: 4px; }
+.precio-field input:focus { box-shadow: none; }
+
+/* Calendario de rango */
+.cal-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(20,24,31,.5); display: grid; place-items: center; padding: 18px; }
+.cal-card { width: 100%; max-width: 344px; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-title { font-family: "Manrope"; font-weight: 800; font-size: 16px; }
+.cal-nav { background: var(--panel); color: var(--ink); border: none; box-shadow: none; width: 34px; height: 34px; border-radius: 9px; font-size: 18px; padding: 0; }
+.cal-nav:hover { background: #E9EBEE; }
+.cal-dow { display: grid; grid-template-columns: repeat(7,1fr); text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px 0; }
+.cal-dia { background: transparent; color: var(--ink); border: none; box-shadow: none; height: 38px; border-radius: 9px; font-family: "Public Sans"; font-weight: 600; font-size: 14px; }
+.cal-dia:hover { background: var(--panel); }
+.cal-dia.rango { background: var(--orange-soft); border-radius: 0; color: var(--orange-2); }
+.cal-dia.ini, .cal-dia.fin { background: var(--orange); color: #fff; }
+.cal-dia.ini { border-radius: 9px 0 0 9px; }
+.cal-dia.fin { border-radius: 0 9px 9px 0; }
+.cal-dia.ini.fin { border-radius: 9px; }
+.cal-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.cal-sel { font-family: "Manrope"; font-weight: 700; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cal-btns { display: flex; gap: 8px; }
+.cal-btns button { padding: 9px 14px; font-size: 13.5px; }
+
 /* ============================================================
    Elegir comprobante (Factura C / Nota de crédito C)
    ============================================================ */

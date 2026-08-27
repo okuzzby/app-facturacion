@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import CalendarioRango from '../components/CalendarioRango'
 
 const CONCEPTOS = ['Productos', 'Servicios', 'Productos y Servicios']
 const IVA_OPCIONES = [
@@ -10,7 +11,22 @@ const IVA_OPCIONES = [
   'IVA Sujeto Exento',
   'IVA No Alcanzado',
 ]
-const COND_VENTA = ['Contado', 'Transferencia Bancaria', 'Otra']
+// value = lo que se guarda/envía; label = lo que se muestra (corto).
+const COND_VENTA = [
+  { v: 'Contado', l: 'Contado' },
+  { v: 'Transferencia Bancaria', l: 'Transferencia' },
+  { v: 'Otra', l: 'Otra' },
+]
+
+// Convierte "10.000,20" o "10000.20" a número.
+function parsePrecio(s) {
+  let t = String(s ?? '').trim()
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')
+  const n = Number(t.replace(/[^\d.]/g, ''))
+  return isNaN(n) ? 0 : n
+}
+const money = (n) =>
+  new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)
 
 // Estados intermedios del onboarding automático de facturación electrónica.
 const SETUP_EN_PROGRESO = [
@@ -43,6 +59,8 @@ export default function Facturar() {
   const [productoSel, setProductoSel] = useState('')
   const [productoCustom, setProductoCustom] = useState('')
   const [precio, setPrecio] = useState('')
+  const [cantidad, setCantidad] = useState(1)
+  const [calAbierto, setCalAbierto] = useState(false)
 
   const [vista, setVista] = useState('elegir') // 'elegir' | 'form'
   const [paso, setPaso] = useState('form') // 'form' | 'preview'
@@ -72,6 +90,8 @@ export default function Facturar() {
 
   const esServicio = /servicio/i.test(concepto)
   const productoFinal = productoSel === 'otro' ? productoCustom.trim() : productoSel
+  const precioNum = parsePrecio(precio)
+  const total = precioNum * cantidad
 
   function toggleCondVenta(c) {
     setCondicionesVenta((prev) =>
@@ -83,7 +103,7 @@ export default function Facturar() {
     e.preventDefault()
     setError(null)
     if (!productoFinal) return setError('Elegí o escribí un producto/servicio')
-    if (!precio || Number(precio) <= 0) return setError('Ingresá un precio válido')
+    if (precioNum <= 0) return setError('Ingresá un precio válido')
     if (condicionesVenta.length === 0) return setError('Elegí al menos una condición de venta')
     setPaso('preview')
   }
@@ -102,8 +122,8 @@ export default function Facturar() {
 
       const body = {
         producto: productoFinal,
-        precio: String(precio),
-        cantidad: 1,
+        precio: precioNum,
+        cantidad,
         concepto,
         condicionIva,
         condicionesVenta,
@@ -133,6 +153,7 @@ export default function Facturar() {
     setError(null)
     setPaso('form')
     setPrecio('')
+    setCantidad(1)
     setProductoCustom('')
   }
 
@@ -262,7 +283,9 @@ export default function Facturar() {
             <div><dt>Condición IVA</dt><dd>{condicionIva}</dd></div>
             <div><dt>Condición de venta</dt><dd>{condicionesVenta.join(', ')}</dd></div>
             <div><dt>Producto</dt><dd>{productoFinal}</dd></div>
-            <div><dt>Precio</dt><dd>Cantidad 1 · ${precio}</dd></div>
+            <div><dt>Precio unitario</dt><dd>$ {money(precioNum)}</dd></div>
+            <div><dt>Cantidad</dt><dd>{cantidad}</dd></div>
+            <div><dt>Total</dt><dd>$ {money(total)}</dd></div>
           </dl>
 
           <div className="setup-box setup-aviso" style={{ marginTop: 4 }}>
@@ -313,20 +336,21 @@ export default function Facturar() {
         </label>
 
         {esServicio && (
-          <div className="periodo">
-            <label className="campo">
-              <span>Período desde</span>
-              <input type="text" value={periodoDesde} onChange={(e) => setPeriodoDesde(e.target.value)} />
-            </label>
-            <label className="campo">
-              <span>Período hasta</span>
-              <input type="text" value={periodoHasta} onChange={(e) => setPeriodoHasta(e.target.value)} />
-            </label>
+          <>
+            <div className="campo">
+              <span>Período</span>
+              <button type="button" className="periodo-box" onClick={() => setCalAbierto(true)}>
+                <span>{periodoDesde} – {periodoHasta}</span>
+                <svg className="cal-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" />
+                </svg>
+              </button>
+            </div>
             <label className="campo">
               <span>Vto. para el pago</span>
               <input type="text" value={vtoPago} onChange={(e) => setVtoPago(e.target.value)} />
             </label>
-          </div>
+          </>
         )}
 
         <label className="campo">
@@ -340,16 +364,16 @@ export default function Facturar() {
 
         <div className="campo">
           <span>Condición de venta</span>
-          <div className="cv-opciones">
+          <div className="cv-seg">
             {COND_VENTA.map((c) => (
-              <label key={c} className="cv-opt">
-                <input
-                  type="checkbox"
-                  checked={condicionesVenta.includes(c)}
-                  onChange={() => toggleCondVenta(c)}
-                />
-                <span>{c}</span>
-              </label>
+              <button
+                type="button"
+                key={c.v}
+                className={'cv-chip' + (condicionesVenta.includes(c.v) ? ' on' : '')}
+                onClick={() => toggleCondVenta(c.v)}
+              >
+                {c.l}
+              </button>
             ))}
           </div>
         </div>
@@ -376,33 +400,43 @@ export default function Facturar() {
           </label>
         )}
 
-        <div className="fila-fija">
-          <label className="campo">
+        <div className="cant-precio">
+          <div className="campo">
             <span>Cantidad</span>
-            <input type="text" value="1" disabled />
-          </label>
-          <label className="campo">
-            <span>Medida</span>
-            <input type="text" value="Unidades" disabled />
-          </label>
+            <div className="stepper">
+              <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))} aria-label="Menos">−</button>
+              <span className="stepper-val">{cantidad}</span>
+              <button type="button" onClick={() => setCantidad((c) => c + 1)} aria-label="Más">+</button>
+            </div>
+          </div>
+          <div className="campo">
+            <span>Precio unitario</span>
+            <div className="precio-field">
+              <span className="precio-sig">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={precio}
+                onChange={(e) => setPrecio(e.target.value)}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
         </div>
-
-        <label className="campo">
-          <span>Precio unitario</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={precio}
-            onChange={(e) => setPrecio(e.target.value)}
-            placeholder="0.00"
-          />
-        </label>
 
         <button type="submit">Continuar →</button>
       </form>
       {error && <p className="error" style={{ marginTop: 10 }}>{error}</p>}
       </div>
+
+      {calAbierto && (
+        <CalendarioRango
+          desde={periodoDesde}
+          hasta={periodoHasta}
+          onAplicar={(d, h) => { setPeriodoDesde(d); setPeriodoHasta(h); setCalAbierto(false) }}
+          onCerrar={() => setCalAbierto(false)}
+        />
+      )}
     </div>
   )
 }
