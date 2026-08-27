@@ -311,14 +311,14 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 
 /* Calendario de rango */
 .cal-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(20,24,31,.5); display: grid; place-items: center; padding: 18px; }
-.cal-card { width: 100%; max-width: 344px; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; }
+.cal-card { width: 100%; max-width: 344px; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; overflow: hidden; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .cal-title { font-family: "Manrope"; font-weight: 800; font-size: 16px; }
 .cal-nav { background: var(--panel); color: var(--ink); border: none; box-shadow: none; width: 34px; height: 34px; border-radius: 9px; font-size: 18px; padding: 0; }
 .cal-nav:hover { background: #E9EBEE; }
 .cal-dow { display: grid; grid-template-columns: repeat(7,1fr); text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; margin-bottom: 4px; }
-.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px 0; }
-.cal-dia { background: transparent; color: var(--ink); border: none; box-shadow: none; height: 38px; border-radius: 9px; font-family: "Public Sans"; font-weight: 600; font-size: 14px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px 0; min-width: 0; }
+.cal-dia { background: transparent; color: var(--ink); border: none; box-shadow: none; width: 100%; min-width: 0; padding: 0; height: 38px; border-radius: 9px; font-family: "Public Sans"; font-weight: 600; font-size: 14px; }
 .cal-dia:hover { background: var(--panel); }
 .cal-dia.rango { background: var(--orange-soft); border-radius: 0; color: var(--orange-2); }
 .cal-dia.ini, .cal-dia.fin { background: var(--orange); color: #fff; }

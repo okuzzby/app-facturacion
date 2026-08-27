@@ -212,11 +212,10 @@ export default function Facturar() {
               </span>
               <span className="opcion-body">
                 <span className="opcion-t">Factura C</span>
-                <span className="opcion-d">Registrá una venta o servicio</span>
+                <span className="opcion-d">Producto o Servicio</span>
               </span>
               <span className="opcion-cta">Emitir Factura C</span>
             </button>
-            <p className="opcion-msg">Registro automático en ARCA</p>
           </div>
 
           <div className="opcion-wrap">
@@ -232,7 +231,6 @@ export default function Facturar() {
               </span>
               <span className="opcion-cta opcion-cta-dark">Emitir Nota de crédito C</span>
             </button>
-            <p className="opcion-msg">Anular una Factura C</p>
           </div>
         </div>
       </div>
