@@ -275,22 +275,22 @@ export default function Facturar() {
             <div><dt>Comprobante</dt><dd>Factura C</dd></div>
             <div><dt>Fecha</dt><dd>Hoy ({hoyDDMMYYYY()})</dd></div>
             <div><dt>Concepto</dt><dd>{concepto}</dd></div>
-            {esServicio && (
-              <div><dt>Período</dt><dd>{periodoDesde} a {periodoHasta} · Vto {vtoPago}</dd></div>
-            )}
+            {esServicio && <div><dt>Período</dt><dd>{periodoDesde} – {periodoHasta}</dd></div>}
+            {esServicio && <div><dt>Vto. para el pago</dt><dd>{vtoPago}</dd></div>}
             <div><dt>Condición IVA</dt><dd>{condicionIva}</dd></div>
             <div><dt>Condición de venta</dt><dd>{condicionesVenta.join(', ')}</dd></div>
             <div><dt>Producto</dt><dd>{productoFinal}</dd></div>
             <div><dt>Precio unitario</dt><dd>$ {money(precioNum)}</dd></div>
-            <div><dt>Cantidad</dt><dd>{cantidad}</dd></div>
-            <div><dt>Total</dt><dd>$ {money(total)}</dd></div>
           </dl>
 
-          <div className="setup-box setup-aviso" style={{ marginTop: 4 }}>
-            <p style={{ margin: 0 }}>
-              Al confirmar se emite una factura <strong>real</strong> en ARCA. No se puede deshacer
-              automáticamente (se anula con Nota de Crédito).
-            </p>
+          <div className="total-card">
+            <div className="total-top">Total a facturar</div>
+            <div className="total-cant">Cantidad {cantidad}</div>
+            <div className="total-monto">
+              <span className="tm-sig">$</span>
+              <span className="tm-ent">{money(total).split(',')[0]}</span>
+              <span className="tm-dec">,{money(total).split(',')[1]}</span>
+            </div>
           </div>
 
           <div className="fila-botones" style={{ marginTop: 16 }}>

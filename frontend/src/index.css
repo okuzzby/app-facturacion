@@ -271,8 +271,23 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .resumen { margin: 0; display: flex; flex-direction: column; }
 .resumen > div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .resumen > div:last-child { border-bottom: none; }
-.resumen dt { color: var(--muted); font-size: 13.5px; font-weight: 600; }
+.resumen dt { color: var(--muted); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
 .resumen dd { margin: 0; font-weight: 600; font-size: 14px; text-align: right; }
+
+/* Tarjeta "Total a facturar" */
+.total-card {
+  margin: 14px 0 2px; padding: 18px; text-align: center;
+  background: var(--orange-soft); border: 1px solid #F6C4A3; border-radius: 14px;
+}
+.total-top { font-family: "Manrope"; font-weight: 700; font-size: 13px; color: var(--orange-2); letter-spacing: .02em; }
+.total-cant { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+.total-monto {
+  margin-top: 8px; font-family: "Manrope"; font-weight: 800; color: var(--ink);
+  line-height: 1; font-variant-numeric: tabular-nums; display: inline-flex; align-items: baseline;
+}
+.tm-sig { font-size: 22px; margin-right: 4px; }
+.tm-ent { font-size: 36px; letter-spacing: -.02em; }
+.tm-dec { font-size: 20px; color: var(--ink-2); }
 
 /* Chips / opciones de condición de venta */
 .cv-opciones { display: flex; gap: 8px; flex-wrap: wrap; }
