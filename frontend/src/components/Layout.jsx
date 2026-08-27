@@ -18,7 +18,7 @@ const NAV = [
   { to: '/', end: true, label: 'Inicio', short: 'Inicio', Icon: IconInicio },
   { to: '/facturar', label: 'Facturar', short: 'Facturar', Icon: IconFacturar },
   { to: '/historial', label: 'Historial', short: 'Historial', Icon: IconHistorial },
-  { to: '/configuracion', label: 'Configuración', short: 'Ajustes', Icon: IconConfig },
+  { to: '/configuracion', label: 'Configuración', short: 'Config', Icon: IconConfig },
 ]
 
 export default function Layout() {
@@ -64,14 +64,21 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Barra de navegación inferior (celular) */}
+      {/* Barra de navegación inferior (celular) — Facturar como botón central */}
       <nav className="bottomnav">
-        {NAV.map(({ to, end, short, Icon }) => (
-          <NavLink key={to} to={to} end={end}>
-            <Icon />
-            <span>{short}</span>
-          </NavLink>
-        ))}
+        <div className="bn-group">
+          <NavLink to="/" end><IconInicio /><span>Inicio</span></NavLink>
+          <NavLink to="/historial"><IconHistorial /><span>Historial</span></NavLink>
+        </div>
+
+        <NavLink to="/facturar" className="bn-fab">
+          <span className="bn-fab-circle"><IconFacturar /></span>
+          <span className="bn-fab-label">Facturar</span>
+        </NavLink>
+
+        <div className="bn-group">
+          <NavLink to="/configuracion"><IconConfig /><span>Config</span></NavLink>
+        </div>
       </nav>
     </div>
   )

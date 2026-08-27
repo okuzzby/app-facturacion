@@ -48,7 +48,6 @@ export default function Home() {
           <h1>Hola{nombreCorto(user?.email) ? `, ${nombreCorto(user?.email)}` : ''}</h1>
           <div className="sub">Emití una factura en pocos toques.</div>
         </div>
-        <Link to="/facturar" className="boton-link">Facturar</Link>
       </div>
 
       <Link to="/facturar" className="hero-facturar">
