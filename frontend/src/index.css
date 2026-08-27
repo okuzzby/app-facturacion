@@ -276,13 +276,13 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 
 /* Tarjeta "Total a facturar" */
 .total-card {
-  margin: 14px 0 2px; padding: 18px; text-align: center;
+  margin: 14px 0 2px; padding: 12px 18px; text-align: center;
   background: var(--orange-soft); border: 1px solid #F6C4A3; border-radius: 14px;
 }
-.total-top { font-family: "Manrope"; font-weight: 700; font-size: 13px; color: var(--orange-2); letter-spacing: .02em; }
+.total-top { font-family: "Manrope"; font-weight: 700; font-size: 13px; color: var(--ink); letter-spacing: .02em; }
 .total-cant { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
 .total-monto {
-  margin-top: 8px; font-family: "Manrope"; font-weight: 800; color: var(--ink);
+  margin-top: 5px; font-family: "Manrope"; font-weight: 800; color: var(--ink);
   line-height: 1; font-variant-numeric: tabular-nums; display: inline-flex; align-items: baseline;
 }
 .tm-sig { font-size: 22px; margin-right: 4px; }
