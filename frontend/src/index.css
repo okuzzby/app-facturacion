@@ -145,6 +145,14 @@ a:hover { text-decoration: underline; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-head h1 { font-size: 24px; font-weight: 800; }
 .page-head .sub { color: var(--muted); font-size: 14px; margin-top: 3px; }
+.page-head-back { justify-content: flex-start; gap: 12px; }
+.icon-btn {
+  flex: 0 0 auto; width: 40px; height: 40px; padding: 0; border-radius: 10px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: none;
+  display: grid; place-items: center;
+}
+.icon-btn:hover { background: #F7F8FA; border-color: #CDD1D8; }
+.icon-btn svg { width: 20px; height: 20px; }
 
 /* ============================================================
    Botones

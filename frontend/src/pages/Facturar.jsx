@@ -310,12 +310,14 @@ export default function Facturar() {
   // Formulario
   return (
     <div className="page">
-      <div className="page-head">
+      <div className="page-head page-head-back">
+        <button type="button" className="icon-btn" onClick={() => setVista('elegir')} aria-label="Volver">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+        </button>
         <div>
           <h1>Nueva factura</h1>
           <div className="sub">Factura C · Punto de venta {cred.punto_venta_ws} · Fecha hoy</div>
         </div>
-        <button type="button" className="secundario" onClick={() => setVista('elegir')}>← Volver</button>
       </div>
       <div className="card">
       <form onSubmit={irAPreview} className="form">
