@@ -7,6 +7,15 @@ const money = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(
     Number(n) || 0
   )
+const money2 = (n) =>
+  new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)
+const tipoCorto = (t) => (/nota de cr/i.test(t || '') ? 'NC' : 'FC')
+const fechaCorta = (s) => new Date(s).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })
+const IconDoc = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+    <path d="M6 2h9l3 3v17H6z" /><path d="M9 12h6M9 16h4" />
+  </svg>
+)
 
 const nombreCorto = (email) => {
   if (!email) return ''
@@ -82,23 +91,24 @@ export default function Home() {
 
         {ultimas.length > 0 && (
           <div className="lista-facturas">
-            {ultimas.map((f) => (
-              <div key={f.id} className={`factura-item ${f.estado === 'anulada' ? 'anulada' : ''}`}>
-                <div className="factura-datos">
-                  <div className="factura-linea1">
-                    <strong>{f.producto || f.tipo || 'Factura C'}</strong>
-                    {f.numero && <span className="numero">{f.numero}</span>}
+            {ultimas.map((f) => {
+              const [ent, dec] = money2(f.importe_total).split(',')
+              return (
+                <div key={f.id} className={`hrow ${f.estado === 'anulada' ? 'anulada' : ''}`}>
+                  <span className="hrow-ic"><IconDoc /></span>
+                  <div className="hrow-mid">
+                    <div className="hrow-t">{f.producto || f.tipo || 'Factura C'}</div>
+                    <div className="hrow-meta">
+                      {tipoCorto(f.tipo)} · Nº {f.numero} · {fechaCorta(f.created_at)}
+                      {f.estado === 'anulada' && <span className="hrow-anulada"> · Anulada</span>}
+                    </div>
                   </div>
-                  <div className="factura-linea2">
-                    {new Date(f.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+                  <div className="hrow-right">
+                    <div className="hrow-monto">$ {ent}<small>,{dec}</small></div>
                   </div>
                 </div>
-                <span className="amt" style={{ fontFamily: 'Manrope', fontWeight: 700 }}>
-                  {money(f.importe_total)}
-                </span>
-                <span className={`estado estado-${f.estado}`}>{f.estado}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
