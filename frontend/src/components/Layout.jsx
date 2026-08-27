@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -13,17 +14,35 @@ const IconHistorial = () => (
 const IconConfig = () => (
   <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg>
 )
+const IconMenu = () => (
+  <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+)
 
 const NAV = [
-  { to: '/', end: true, label: 'Inicio', short: 'Inicio', Icon: IconInicio },
-  { to: '/facturar', label: 'Facturar', short: 'Facturar', Icon: IconFacturar },
-  { to: '/historial', label: 'Historial', short: 'Historial', Icon: IconHistorial },
-  { to: '/configuracion', label: 'Configuración', short: 'Config', Icon: IconConfig },
+  { to: '/', end: true, label: 'Inicio', Icon: IconInicio },
+  { to: '/facturar', label: 'Facturar', Icon: IconFacturar },
+  { to: '/historial', label: 'Historial', Icon: IconHistorial },
+  { to: '/configuracion', label: 'Configuración', Icon: IconConfig },
 ]
 
 export default function Layout() {
   const { user, signOut } = useAuth()
   const inicial = (user?.email || '?').trim().charAt(0).toUpperCase()
+  const [menuAbierto, setMenuAbierto] = useState(false)
+
+  // Cerrar el menú con Escape y bloquear el scroll de fondo mientras está abierto.
+  useEffect(() => {
+    if (!menuAbierto) return
+    const onKey = (e) => e.key === 'Escape' && setMenuAbierto(false)
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [menuAbierto])
+
+  const cerrar = () => setMenuAbierto(false)
 
   return (
     <div className="shell">
@@ -78,8 +97,43 @@ export default function Layout() {
 
         <div className="bn-group">
           <NavLink to="/configuracion"><IconConfig /><span>Config</span></NavLink>
+          <button type="button" className="bn-tab" onClick={() => setMenuAbierto(true)}>
+            <IconMenu /><span>Menú</span>
+          </button>
         </div>
       </nav>
+
+      {/* Menú a pantalla completa (celular) */}
+      {menuAbierto && (
+        <div className="menu-overlay">
+          <div className="menu-head">
+            <div className="brand"><span className="glyph">◆</span> App</div>
+            <button type="button" className="menu-close" onClick={cerrar} aria-label="Cerrar menú">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+
+          <nav className="menu-list">
+            {NAV.map(({ to, end, label, Icon }) => (
+              <NavLink key={to} to={to} end={end} onClick={cerrar}>
+                <Icon /> <span>{label}</span>
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="menu-foot">
+            <div className="side-user">
+              <span className="avatar">{inicial}</span>
+              <span className="em">{user?.email}</span>
+            </div>
+            <button type="button" className="side-logout" onClick={signOut}>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
