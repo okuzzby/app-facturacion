@@ -837,6 +837,13 @@ export default function Configuracion() {
     import.meta.env.DEV ||
     (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dev'))
 
+  // Estado del onboarding para el badge y el contenido de "Conexión con ARCA".
+  const cEstado = credencial?.ws_setup_estado
+  const cListo = credencial
+    ? cEstado === 'listo' || !!(credencial.ws_cert_alias && credencial.punto_venta_ws)
+    : false
+  const cProgreso = SETUP_EN_PROGRESO.includes(cEstado)
+
   return (
     <div className="page">
       <div className="page-head">
@@ -845,69 +852,63 @@ export default function Configuracion() {
 
       {/* ---------------- Credencial ARCA ---------------- */}
       <section className="seccion">
-        <h2>Conexión con ARCA</h2>
+        <div className="sec-head">
+          <h2>Conexión con ARCA</h2>
+          {credencial && !editandoCred && (
+            cListo ? (
+              <span className="badge badge-ok">Credencial ✓</span>
+            ) : cProgreso ? (
+              <span className="badge badge-load"><span className="spinner-inline" />Cargando</span>
+            ) : cEstado === 'error' ? (
+              <span className="badge badge-error">Error</span>
+            ) : cEstado === 'falta_pv' ? (
+              <span className="badge badge-warn">Falta punto de venta</span>
+            ) : null
+          )}
+        </div>
 
         {credencial && !editandoCred ? (
           <div className="cred-cargada">
-            <p className="ok">Credencial cargada ✓</p>
             <p>CUIT: <strong>{credencial.cuit}</strong></p>
 
-            {(() => {
-              const estado = credencial.ws_setup_estado
-              const yaListo =
-                estado === 'listo' ||
-                (credencial.ws_cert_alias && credencial.punto_venta_ws)
-              const enProgreso = SETUP_EN_PROGRESO.includes(estado)
+            {cListo && (
+              <p>Punto de venta: <strong>{credencial.punto_venta_ws}</strong></p>
+            )}
 
-              if (yaListo) {
-                return (
-                  <div className="setup-box setup-ok">
-                    <p className="ok">Facturación electrónica lista ✓</p>
-                    <p>Punto de venta: <strong>{credencial.punto_venta_ws}</strong></p>
-                    <Link to="/facturar" className="boton-link">Ir a Facturar</Link>
-                  </div>
-                )
-              }
-              if (enProgreso) {
-                return (
-                  <div className="setup-box setup-progreso">
-                    <p><span className="spinner-inline" /> {credencial.ws_setup_paso || 'Configurando tu facturación electrónica…'}</p>
-                    <p className="sub">Esto puede tardar unos minutos. Podés dejar esta pantalla abierta.</p>
-                  </div>
-                )
-              }
-              if (estado === 'falta_pv') {
-                return (
-                  <div className="setup-box setup-aviso">
-                    <p>Ya casi: falta habilitar un punto de venta para facturación electrónica.</p>
-                    <p className="sub">Próximamente la app lo crea automáticamente. Por ahora avisanos.</p>
-                    <button type="button" className="secundario" onClick={() => iniciarSetupWsfe(true)}>
-                      Reintentar
-                    </button>
-                  </div>
-                )
-              }
-              if (estado === 'error') {
-                return (
-                  <div className="setup-box setup-error">
-                    <p className="error">No pudimos completar la configuración automática.</p>
-                    {credencial.ws_setup_error && <p className="sub">{credencial.ws_setup_error}</p>}
-                    <button type="button" onClick={() => iniciarSetupWsfe(true)}>
-                      Reintentar configuración
-                    </button>
-                  </div>
-                )
-              }
-              // Sin estado (credencial cargada antes de esta función): ofrecer configurar.
-              return (
-                <div className="setup-box">
-                  <p className="sub">Todavía no configuraste la facturación electrónica.</p>
-                  <button type="button" onClick={() => iniciarSetupWsfe(false)}>
-                    Configurar facturación electrónica
-                  </button>
-                </div>
-              )
-            })()}
+            {!cListo && cProgreso && (
+              <p className="sub">
+                <span className="spinner-inline" />
+                {credencial.ws_setup_paso || 'Configurando tu facturación electrónica…'} Puede tardar unos minutos.
+              </p>
+            )}
+
+            {!cListo && cEstado === 'falta_pv' && (
+              <div className="setup-box setup-aviso">
+                <p>Ya casi: falta habilitar un punto de venta para facturación electrónica.</p>
+                <button type="button" className="secundario" onClick={() => iniciarSetupWsfe(true)}>
+                  Reintentar
+                </button>
+              </div>
+            )}
+
+            {!cListo && cEstado === 'error' && (
+              <div className="setup-box setup-error">
+                <p className="error">No pudimos completar la configuración automática.</p>
+                {credencial.ws_setup_error && <p className="sub">{credencial.ws_setup_error}</p>}
+                <button type="button" onClick={() => iniciarSetupWsfe(true)}>
+                  Reintentar configuración
+                </button>
+              </div>
+            )}
+
+            {!cListo && !cProgreso && !cEstado && (
+              <div className="setup-box">
+                <p className="sub">Todavía no configuraste la facturación electrónica.</p>
+                <button type="button" onClick={() => iniciarSetupWsfe(false)}>
+                  Configurar facturación electrónica
+                </button>
+              </div>
+            )}
 
             <p className="sub">
               Actualizada: {new Date(credencial.updated_at).toLocaleString('es-AR')}

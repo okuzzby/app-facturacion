@@ -193,6 +193,18 @@ button.peligro:hover { background: var(--red-soft); color: var(--red); }
   border-radius: var(--r); padding: 20px 22px; box-shadow: var(--shadow-sm);
 }
 .seccion h2 { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.sec-head h2 { margin-bottom: 0; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: "Manrope"; font-weight: 700; font-size: 12.5px;
+  padding: 5px 11px; border-radius: 999px; white-space: nowrap;
+}
+.badge-ok { background: var(--green-soft); color: var(--green); }
+.badge-load { background: var(--orange-soft); color: var(--orange-2); }
+.badge-error { background: var(--red-soft); color: var(--red); }
+.badge-warn { background: #FBF3DA; color: #8A6D1F; }
+.badge .spinner-inline { border-color: rgba(217,85,12,.35); border-top-color: var(--orange-2); margin-right: 0; }
 .seccion > .sub, .sub { color: var(--muted); font-size: 13.5px; }
 .seccion > .sub { margin: 2px 0 14px; }
 
