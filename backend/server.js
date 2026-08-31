@@ -915,24 +915,6 @@ app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
     if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
     const ownerDoc = await docTitular(tk.accessToken)
     const pagos = await buscarPagosTodos(tk.accessToken)
-    // Diagnóstico temporal: documento del pagador de cada entrada (para confirmar
-    // que se distingue "otra persona" del titular).
-    console.log(
-      '[MP-DOC] titular=' + tk.mpUserId + ' doc=' + ownerDoc + ' ' +
-      JSON.stringify(
-        pagos
-          .filter((p) => String(p.collector_id ?? p.collector?.id) === String(tk.mpUserId))
-          .slice(0, 20)
-          .map((p) => ({
-            pay: p.payer?.id ?? p.payer_id,
-            pdoc: p.payer?.identification?.number || '',
-            pn: [p.payer?.first_name, p.payer?.last_name].filter(Boolean).join(' ').slice(0, 18),
-            amt: p.transaction_amount,
-            op: p.operation_type,
-            pt: p.payment_type_id,
-          }))
-      )
-    )
     const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos, tk.mpUserId, ownerDoc)
     res.json({ ok: true, nuevos: nuevos.length })
   } catch (e) {
