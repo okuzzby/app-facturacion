@@ -34,8 +34,19 @@ import {
   buscarPagos,
   buscarPagosTodos,
   obtenerPago,
+  obtenerUsuario,
   guardarCobrosNuevos,
 } from './mp.js'
+
+// Documento (CUIT/DNI) del titular de la cuenta de MP conectada, solo dígitos.
+async function docTitular(accessToken) {
+  try {
+    const me = await obtenerUsuario(accessToken)
+    return String(me?.identification?.number || '').replace(/\D/g, '')
+  } catch {
+    return ''
+  }
+}
 
 const app = express()
 app.use(cors())
@@ -902,8 +913,27 @@ app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
   try {
     const tk = await accessTokenValido(supabaseAdmin, req.user.id)
     if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
+    const ownerDoc = await docTitular(tk.accessToken)
     const pagos = await buscarPagosTodos(tk.accessToken)
-    const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos, tk.mpUserId)
+    // Diagnóstico temporal: documento del pagador de cada entrada (para confirmar
+    // que se distingue "otra persona" del titular).
+    console.log(
+      '[MP-DOC] titular=' + tk.mpUserId + ' doc=' + ownerDoc + ' ' +
+      JSON.stringify(
+        pagos
+          .filter((p) => String(p.collector_id ?? p.collector?.id) === String(tk.mpUserId))
+          .slice(0, 20)
+          .map((p) => ({
+            pay: p.payer?.id ?? p.payer_id,
+            pdoc: p.payer?.identification?.number || '',
+            pn: [p.payer?.first_name, p.payer?.last_name].filter(Boolean).join(' ').slice(0, 18),
+            amt: p.transaction_amount,
+            op: p.operation_type,
+            pt: p.payment_type_id,
+          }))
+      )
+    )
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos, tk.mpUserId, ownerDoc)
     res.json({ ok: true, nuevos: nuevos.length })
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
@@ -1014,7 +1044,8 @@ app.post('/mp/webhook', async (req, res) => {
     const pago = await obtenerPago(tk.accessToken, paymentId)
     if (!pago || pago.status !== 'approved') return
 
-    const nuevos = await guardarCobrosNuevos(supabaseAdmin, cta.user_id, [pago], tk.mpUserId || cta.mp_user_id)
+    const ownerDoc = await docTitular(tk.accessToken)
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, cta.user_id, [pago], tk.mpUserId || cta.mp_user_id, ownerDoc)
 
     // Facturación automática (si está activada y hay producto por defecto).
     if (cta.auto_facturar && cta.producto_default_id && nuevos.length > 0) {

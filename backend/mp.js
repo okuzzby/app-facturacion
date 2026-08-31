@@ -187,24 +187,37 @@ export function pagoAFila(userId, pago) {
   }
 }
 
+// Documento (CUIT/DNI) del pagador, solo dígitos.
+function docPagador(p) {
+  const n = p?.payer?.identification?.number
+  return n ? String(n).replace(/\D/g, '') : ''
+}
+
 // ¿Es una VENTA (cobro a facturar)? Plata que ENTRÓ a la cuenta pagada por OTRA
-// persona: el usuario es el que cobra (collector) y pagó alguien distinto (payer).
-// Deja pasar pagos de clientes (tarjeta, QR, checkout) y transferencias recibidas
-// desde otra cuenta. Excluye: lo que el usuario pagó (collector = otro), sus
-// cargas propias desde su banco y las transferencias que él envía (ahí payer = él).
-function esEntrada(p, mpUserId) {
+// PERSONA: el usuario cobra (collector) y pagó alguien distinto. Para blindarlo,
+// si tenemos el documento del titular, exigimos que el documento del pagador sea
+// DISTINTO — así una transferencia que el titular se hace desde otra cuenta suya
+// (mismo CUIT/DNI) queda afuera aunque el id de MP sea otro. Excluye además lo que
+// el usuario pagó (collector = otro) y sus cargas/transferencias propias.
+function esEntrada(p, mpUserId, ownerDoc) {
   if (!p || p.status !== 'approved') return false
   if (!(Number(p.transaction_amount) > 0)) return false
   if (!mpUserId) return true
   const col = p.collector_id ?? p.collector?.id
   const pay = p.payer?.id ?? p.payer_id
-  return String(col) === String(mpUserId) && String(pay) !== String(mpUserId)
+  if (String(col) !== String(mpUserId)) return false // no entró a su cuenta
+  if (String(pay) === String(mpUserId)) return false // mismo id de MP → él mismo
+  if (ownerDoc) {
+    const pd = docPagador(p)
+    if (pd && pd === String(ownerDoc)) return false // mismo documento → él mismo (otra cuenta suya)
+  }
+  return true
 }
 
 // Inserta cobros nuevos (ignora los que ya existen para no pisar 'facturado').
 // Devuelve las filas efectivamente insertadas (nuevas). Solo entradas (cobros).
-export async function guardarCobrosNuevos(supabaseAdmin, userId, pagos, mpUserId) {
-  const filas = pagos.filter((p) => esEntrada(p, mpUserId)).map((p) => pagoAFila(userId, p))
+export async function guardarCobrosNuevos(supabaseAdmin, userId, pagos, mpUserId, ownerDoc) {
+  const filas = pagos.filter((p) => esEntrada(p, mpUserId, ownerDoc)).map((p) => pagoAFila(userId, p))
   if (filas.length === 0) return []
   const { data, error } = await supabaseAdmin
     .from('mp_cobros')
