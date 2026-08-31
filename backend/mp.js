@@ -187,18 +187,17 @@ export function pagoAFila(userId, pago) {
   }
 }
 
-// ¿Es un movimiento de ENTRADA (cobro)? Dejamos pagos aprobados de monto
-// positivo, y EXCLUIMOS solo lo que el usuario PAGÓ él mismo (es el payer →
-// egreso, ej: ARCA, deudas). Todo lo demás —cobros, ingresos de dinero,
-// transferencias recibidas, DEBIN— es entrada.
+// ¿Es un COBRO real (venta a facturar)? Plata que el usuario RECIBIÓ de un
+// cliente: el usuario es el que cobra (collector) y pagó OTRA persona (payer).
+// Esto deja fuera lo que el usuario pagó (ARCA, servicios, compras) y también
+// las cargas de dinero a su propia cuenta (donde él es a la vez payer y collector).
 function esEntrada(p, mpUserId) {
   if (!p || p.status !== 'approved') return false
   if (!(Number(p.transaction_amount) > 0)) return false
-  if (mpUserId) {
-    const payer = p.payer?.id ?? p.payer_id
-    if (payer != null && String(payer) === String(mpUserId)) return false // el usuario pagó → egreso
-  }
-  return true
+  if (!mpUserId) return true
+  const col = p.collector_id ?? p.collector?.id
+  const pay = p.payer?.id ?? p.payer_id
+  return String(col) === String(mpUserId) && String(pay) !== String(mpUserId)
 }
 
 // Inserta cobros nuevos (ignora los que ya existen para no pisar 'facturado').
