@@ -157,6 +157,14 @@ export async function buscarPagosTodos(accessToken, { pagina = 50, maxPaginas = 
   return todos
 }
 
+// Diagnóstico: ¿qué cuenta de Mercado Pago quedó conectada?
+export async function obtenerUsuario(accessToken) {
+  const r = await fetch(`${API}/users/me`, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  })
+  return r.json().catch(() => ({}))
+}
+
 export async function obtenerPago(accessToken, id) {
   const r = await fetch(`${API}/v1/payments/${id}`, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },

@@ -34,6 +34,7 @@ import {
   buscarPagos,
   buscarPagosTodos,
   obtenerPago,
+  obtenerUsuario,
   guardarCobrosNuevos,
 } from './mp.js'
 
@@ -902,6 +903,24 @@ app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
   try {
     const tk = await accessTokenValido(supabaseAdmin, req.user.id)
     if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
+    // Diagnóstico temporal: qué cuenta de MP quedó conectada.
+    try {
+      const me = await obtenerUsuario(tk.accessToken)
+      console.log(
+        '[MP-ME] ' +
+          JSON.stringify({
+            id: me.id,
+            nick: me.nickname,
+            email: me.email,
+            site: me.site_id,
+            tipo: me.user_type,
+            registro: me.registration_date,
+          })
+      )
+    } catch (e) {
+      console.log('[MP-ME] error', String((e && e.message) || e))
+    }
+
     const pagos = await buscarPagosTodos(tk.accessToken)
     // Diagnóstico temporal: cómo viene cada pago (para afinar el filtro de entradas).
     console.log(
