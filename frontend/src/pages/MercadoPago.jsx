@@ -52,13 +52,21 @@ export default function MercadoPago() {
   const [sincronizando, setSincronizando] = useState(false)
   const [facturando, setFacturando] = useState(false)
 
-  const cargarCobros = useCallback(async () => {
-    const { data } = await supabase
+  // Paginación
+  const [pageSize, setPageSize] = useState(10)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const totalPaginas = Math.max(1, Math.ceil(total / pageSize))
+
+  const cargarCobros = useCallback(async (pg, ps) => {
+    const desde = pg * ps
+    const { data, count } = await supabase
       .from('mp_cobros')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('fecha', { ascending: false })
-      .limit(500)
+      .range(desde, desde + ps - 1)
     setCobros(data ?? [])
+    setTotal(count ?? 0)
   }, [])
 
   const cargarTodo = useCallback(async () => {
@@ -76,17 +84,21 @@ export default function MercadoPago() {
       }
       setEstado(est)
       setProductos(prods.data ?? [])
-      await cargarCobros()
     } catch (e) {
       setError(e.message ?? String(e))
     } finally {
       setCargando(false)
     }
-  }, [cargarCobros, navigate])
+  }, [navigate])
 
   useEffect(() => {
     if (supabase) cargarTodo()
   }, [cargarTodo])
+
+  // Carga la página de cobros cuando hay cuenta conectada y al cambiar página/tamaño.
+  useEffect(() => {
+    if (estado?.conectada) cargarCobros(page, pageSize)
+  }, [estado?.conectada, page, pageSize, cargarCobros])
 
   async function guardarConfig(patch) {
     setError(null)
@@ -105,7 +117,8 @@ export default function MercadoPago() {
     setSincronizando(true)
     try {
       const r = await apiMP('/mp/cobros/sync', { method: 'POST' })
-      await cargarCobros()
+      setPage(0)
+      await cargarCobros(0, pageSize)
       setMsg(r.nuevos > 0 ? `Se trajeron ${r.nuevos} cobro(s) nuevo(s).` : 'No hay cobros nuevos.')
     } catch (e) {
       setError(e.message ?? String(e))
@@ -137,7 +150,7 @@ export default function MercadoPago() {
       const fallidas = (r.resultados || []).filter((x) => !x.ok)
       setMsg(`${r.emitidas} factura(s) emitida(s).` + (fallidas.length ? ` ${fallidas.length} con error.` : ''))
       setSeleccion(new Set())
-      await cargarCobros()
+      await cargarCobros(page, pageSize)
     } catch (e) {
       setError(e.message ?? String(e))
     } finally {
@@ -269,6 +282,26 @@ export default function MercadoPago() {
                 )
               })}
             </div>
+
+            {total > 0 && (
+              <div className="paginador">
+                <label className="pag-size">
+                  Mostrar
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0) }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                  </select>
+                </label>
+                <div className="pag-nav">
+                  <button type="button" className="secundario" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>‹ Anterior</button>
+                  <span className="pag-info">Página {page + 1} de {totalPaginas}</span>
+                  <button type="button" className="secundario" disabled={page + 1 >= totalPaginas} onClick={() => setPage((p) => p + 1)}>Siguiente ›</button>
+                </div>
+              </div>
+            )}
           </section>
         </>
       )}

@@ -36,20 +36,30 @@ export default function Historial() {
   const [params] = useSearchParams()
   const modoAnular = params.get('nc') === '1'
 
-  async function cargar() {
+  // Paginación
+  const [pageSize, setPageSize] = useState(10)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const totalPaginas = Math.max(1, Math.ceil(total / pageSize))
+
+  async function cargar(pg = page, ps = pageSize) {
     setCargando(true)
-    const { data, error } = await supabase
+    const desde = pg * ps
+    const { data, error, count } = await supabase
       .from('facturas_emitidas')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
+      .range(desde, desde + ps - 1)
     if (error) setError(error.message)
     setFacturas(data ?? [])
+    setTotal(count ?? 0)
     setCargando(false)
   }
 
   useEffect(() => {
-    if (supabase) cargar()
-  }, [])
+    if (supabase) cargar(page, pageSize)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize])
 
   async function urlFirmada(f) {
     const { data, error } = await supabase.storage.from('facturas').createSignedUrl(f.pdf_path, 120)
@@ -230,6 +240,26 @@ export default function Historial() {
             )
           })}
         </div>
+
+        {total > 0 && (
+          <div className="paginador">
+            <label className="pag-size">
+              Mostrar
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0) }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+              </select>
+            </label>
+            <div className="pag-nav">
+              <button type="button" className="secundario" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>‹ Anterior</button>
+              <span className="pag-info">Página {page + 1} de {totalPaginas}</span>
+              <button type="button" className="secundario" disabled={page + 1 >= totalPaginas} onClick={() => setPage((p) => p + 1)}>Siguiente ›</button>
+            </div>
+          </div>
+        )}
 
         {anulando && <p className="sub">Emitiendo la Nota de Crédito en ARCA (puede tardar)…</p>}
         {msg && <p className="ok">{msg}</p>}
