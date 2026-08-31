@@ -187,30 +187,18 @@ export function pagoAFila(userId, pago) {
   }
 }
 
-// ¿El pago está financiado con una TARJETA (crédito/débito)?
-function esConTarjeta(p) {
-  const t = String(p.payment_type_id || '').toLowerCase()
-  if (t) return /card/.test(t) // credit_card, debit_card, prepaid_card
-  const m = String(p.payment_method_id || '').toLowerCase()
-  return /^(visa|master|amex|cabal|naranja|tarshop|argencard|diners|maestro|debvisa|debmaster|cmr|nativa|cencosud)/.test(m)
-}
-
-// ¿Es un movimiento de ENTRADA (plata que entró a la cuenta para facturar)?
-// - El usuario es el que RECIBE (collector): entra a su cuenta.
-// - EXCLUYE lo que él financió con su PROPIA tarjeta (payer = él y medio = tarjeta):
-//   eso es una transferencia que él MANDÓ, no una venta (ej: el "VAR" con Visa).
-// Deja pasar pagos de clientes (tarjeta/QR) y transferencias entrantes. Las cargas
-// propias por CVU también entran; en modo manual simplemente no se marcan.
+// ¿Es una VENTA (cobro a facturar)? Plata que ENTRÓ a la cuenta pagada por OTRA
+// persona: el usuario es el que cobra (collector) y pagó alguien distinto (payer).
+// Deja pasar pagos de clientes (tarjeta, QR, checkout) y transferencias recibidas
+// desde otra cuenta. Excluye: lo que el usuario pagó (collector = otro), sus
+// cargas propias desde su banco y las transferencias que él envía (ahí payer = él).
 function esEntrada(p, mpUserId) {
   if (!p || p.status !== 'approved') return false
   if (!(Number(p.transaction_amount) > 0)) return false
   if (!mpUserId) return true
   const col = p.collector_id ?? p.collector?.id
-  if (String(col) !== String(mpUserId)) return false // no entró a su cuenta
   const pay = p.payer?.id ?? p.payer_id
-  const propia = pay != null && String(pay) === String(mpUserId)
-  if (propia && esConTarjeta(p)) return false // se fondeó con su tarjeta → transferencia enviada
-  return true
+  return String(col) === String(mpUserId) && String(pay) !== String(mpUserId)
 }
 
 // Inserta cobros nuevos (ignora los que ya existen para no pisar 'facturado').

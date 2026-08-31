@@ -903,23 +903,6 @@ app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
     const tk = await accessTokenValido(supabaseAdmin, req.user.id)
     if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
     const pagos = await buscarPagosTodos(tk.accessToken)
-    // Diagnóstico temporal: quién es el remitente de cada movimiento, para
-    // distinguir cargas propias de transferencias de clientes.
-    console.log(
-      '[MP-DIAG] user=' + tk.mpUserId + ' ' +
-      JSON.stringify(
-        pagos.slice(0, 40).map((p) => ({
-          op: p.operation_type,
-          pt: p.payment_type_id,
-          m: p.payment_method_id,
-          col: p.collector_id ?? p.collector?.id,
-          pay: p.payer?.id ?? p.payer_id,
-          pn: [p.payer?.first_name, p.payer?.last_name].filter(Boolean).join(' ').slice(0, 20),
-          amt: p.transaction_amount,
-          d: (p.description || '').slice(0, 18),
-        }))
-      )
-    )
     const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos, tk.mpUserId)
     res.json({ ok: true, nuevos: nuevos.length })
   } catch (e) {
