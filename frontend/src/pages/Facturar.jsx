@@ -232,6 +232,21 @@ export default function Facturar() {
               <span className="opcion-cta opcion-cta-dark">Emitir Nota de crédito C</span>
             </button>
           </div>
+
+          <div className="opcion-wrap">
+            <button type="button" className="opcion" onClick={() => navigate('/mercadopago')}>
+              <span className="opcion-ic opcion-ic-mp">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+                  <rect x="2" y="5" width="20" height="14" rx="3" /><path d="M2 10h20" />
+                </svg>
+              </span>
+              <span className="opcion-body">
+                <span className="opcion-t">Mercado Pago</span>
+                <span className="opcion-d">Facturá tus cobros recibidos</span>
+              </span>
+              <span className="opcion-cta opcion-cta-mp">Ver cobros</span>
+            </button>
+          </div>
         </div>
       </div>
     )

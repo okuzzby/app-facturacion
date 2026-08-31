@@ -7,6 +7,7 @@ import Configuracion from './pages/Configuracion'
 import Facturar from './pages/Facturar'
 import Historial from './pages/Historial'
 import Integraciones from './pages/Integraciones'
+import MercadoPago from './pages/MercadoPago'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/historial" element={<Historial />} />
         <Route path="/configuracion" element={<Configuracion />} />
         <Route path="/integraciones" element={<Integraciones />} />
+        <Route path="/mercadopago" element={<MercadoPago />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

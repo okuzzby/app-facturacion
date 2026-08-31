@@ -397,6 +397,9 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .opcion:hover .opcion-cta { background: var(--orange-2); }
 .opcion-cta-dark { background: var(--ink); box-shadow: none; }
 .opcion:hover .opcion-cta-dark { background: #2C313A; }
+.opcion-ic-mp { background: #E7F0FF; color: #2C6DF2; }
+.opcion-cta-mp { background: #2C6DF2; box-shadow: 0 6px 16px rgba(44,109,242,.26); }
+.opcion:hover .opcion-cta-mp { background: #1F5AD6; }
 .opcion-msg { text-align: center; color: var(--muted); font-size: 13px; margin: 0; }
 
 /* ============================================================
