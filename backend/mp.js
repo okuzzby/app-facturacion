@@ -187,17 +187,19 @@ export function pagoAFila(userId, pago) {
   }
 }
 
-// ¿Es un COBRO real (venta a facturar)? Plata que el usuario RECIBIÓ de un
-// cliente: el usuario es el que cobra (collector) y pagó OTRA persona (payer).
-// Esto deja fuera lo que el usuario pagó (ARCA, servicios, compras) y también
-// las cargas de dinero a su propia cuenta (donde él es a la vez payer y collector).
+// ¿Es un movimiento de ENTRADA (plata que entró a la cuenta)? El usuario es el
+// que RECIBE (collector). Incluye TODO lo que ingresa: pagos con tarjeta/QR,
+// transferencias de clientes a su CVU, etc. — sin importar quién lo mandó, porque
+// muchas ventas se cobran por transferencia. Deja afuera lo que el usuario pagó
+// (ahí el collector es otro). Las cargas propias desde su banco también entran
+// (no se pueden distinguir de una transferencia de cliente), pero en modo manual
+// simplemente no se marcan.
 function esEntrada(p, mpUserId) {
   if (!p || p.status !== 'approved') return false
   if (!(Number(p.transaction_amount) > 0)) return false
   if (!mpUserId) return true
   const col = p.collector_id ?? p.collector?.id
-  const pay = p.payer?.id ?? p.payer_id
-  return String(col) === String(mpUserId) && String(pay) !== String(mpUserId)
+  return String(col) === String(mpUserId)
 }
 
 // Inserta cobros nuevos (ignora los que ya existen para no pisar 'facturado').
