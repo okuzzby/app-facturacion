@@ -187,19 +187,30 @@ export function pagoAFila(userId, pago) {
   }
 }
 
-// ¿Es un movimiento de ENTRADA (plata que entró a la cuenta)? El usuario es el
-// que RECIBE (collector). Incluye TODO lo que ingresa: pagos con tarjeta/QR,
-// transferencias de clientes a su CVU, etc. — sin importar quién lo mandó, porque
-// muchas ventas se cobran por transferencia. Deja afuera lo que el usuario pagó
-// (ahí el collector es otro). Las cargas propias desde su banco también entran
-// (no se pueden distinguir de una transferencia de cliente), pero en modo manual
-// simplemente no se marcan.
+// ¿El pago está financiado con una TARJETA (crédito/débito)?
+function esConTarjeta(p) {
+  const t = String(p.payment_type_id || '').toLowerCase()
+  if (t) return /card/.test(t) // credit_card, debit_card, prepaid_card
+  const m = String(p.payment_method_id || '').toLowerCase()
+  return /^(visa|master|amex|cabal|naranja|tarshop|argencard|diners|maestro|debvisa|debmaster|cmr|nativa|cencosud)/.test(m)
+}
+
+// ¿Es un movimiento de ENTRADA (plata que entró a la cuenta para facturar)?
+// - El usuario es el que RECIBE (collector): entra a su cuenta.
+// - EXCLUYE lo que él financió con su PROPIA tarjeta (payer = él y medio = tarjeta):
+//   eso es una transferencia que él MANDÓ, no una venta (ej: el "VAR" con Visa).
+// Deja pasar pagos de clientes (tarjeta/QR) y transferencias entrantes. Las cargas
+// propias por CVU también entran; en modo manual simplemente no se marcan.
 function esEntrada(p, mpUserId) {
   if (!p || p.status !== 'approved') return false
   if (!(Number(p.transaction_amount) > 0)) return false
   if (!mpUserId) return true
   const col = p.collector_id ?? p.collector?.id
-  return String(col) === String(mpUserId)
+  if (String(col) !== String(mpUserId)) return false // no entró a su cuenta
+  const pay = p.payer?.id ?? p.payer_id
+  const propia = pay != null && String(pay) === String(mpUserId)
+  if (propia && esConTarjeta(p)) return false // se fondeó con su tarjeta → transferencia enviada
+  return true
 }
 
 // Inserta cobros nuevos (ignora los que ya existen para no pisar 'facturado').
