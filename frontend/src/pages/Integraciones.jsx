@@ -236,10 +236,10 @@ export default function Integraciones() {
                     type="button"
                     role="switch"
                     aria-checked={estado.auto_facturar}
-                    className={`switch ${estado.auto_facturar ? 'on' : ''}`}
+                    className={`mp-sw ${estado.auto_facturar ? 'on' : ''}`}
                     onClick={() => guardarConfig({ auto_facturar: !estado.auto_facturar })}
                   >
-                    <span className="switch-dot" />
+                    <span className="mp-sw-dot" />
                   </button>
                 </div>
 

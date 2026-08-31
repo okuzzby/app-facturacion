@@ -902,7 +902,7 @@ app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
     const tk = await accessTokenValido(supabaseAdmin, req.user.id)
     if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
     const pagos = await buscarPagos(tk.accessToken, { limit: 50 })
-    const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos)
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos, tk.mpUserId)
     res.json({ ok: true, nuevos: nuevos.length })
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
@@ -1013,7 +1013,7 @@ app.post('/mp/webhook', async (req, res) => {
     const pago = await obtenerPago(tk.accessToken, paymentId)
     if (!pago || pago.status !== 'approved') return
 
-    const nuevos = await guardarCobrosNuevos(supabaseAdmin, cta.user_id, [pago])
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, cta.user_id, [pago], tk.mpUserId || cta.mp_user_id)
 
     // Facturación automática (si está activada y hay producto por defecto).
     if (cta.auto_facturar && cta.producto_default_id && nuevos.length > 0) {

@@ -168,12 +168,23 @@ export function pagoAFila(userId, pago) {
   }
 }
 
+// ¿Es un movimiento de ENTRADA (cobro)? Solo dejamos pagos aprobados, de monto
+// positivo y donde el usuario es el que RECIBE la plata (collector). Así nunca
+// entran egresos (pagos que el usuario hizo).
+function esEntrada(p, mpUserId) {
+  if (!p || p.status !== 'approved') return false
+  if (!(Number(p.transaction_amount) > 0)) return false
+  if (mpUserId) {
+    const col = p.collector_id ?? p.collector?.id
+    if (col != null && String(col) !== String(mpUserId)) return false
+  }
+  return true
+}
+
 // Inserta cobros nuevos (ignora los que ya existen para no pisar 'facturado').
-// Devuelve las filas efectivamente insertadas (nuevas).
-export async function guardarCobrosNuevos(supabaseAdmin, userId, pagos) {
-  const filas = pagos
-    .filter((p) => p && p.status === 'approved')
-    .map((p) => pagoAFila(userId, p))
+// Devuelve las filas efectivamente insertadas (nuevas). Solo entradas (cobros).
+export async function guardarCobrosNuevos(supabaseAdmin, userId, pagos, mpUserId) {
+  const filas = pagos.filter((p) => esEntrada(p, mpUserId)).map((p) => pagoAFila(userId, p))
   if (filas.length === 0) return []
   const { data, error } = await supabaseAdmin
     .from('mp_cobros')
