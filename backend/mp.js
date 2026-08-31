@@ -146,6 +146,17 @@ export async function buscarPagos(accessToken, { limit = 50, offset = 0 } = {}) 
   return j.results || []
 }
 
+// Trae varias páginas de pagos aprobados (más historial, no solo los últimos 50).
+export async function buscarPagosTodos(accessToken, { pagina = 50, maxPaginas = 8 } = {}) {
+  let todos = []
+  for (let i = 0; i < maxPaginas; i++) {
+    const page = await buscarPagos(accessToken, { limit: pagina, offset: i * pagina })
+    todos = todos.concat(page)
+    if (page.length < pagina) break
+  }
+  return todos
+}
+
 export async function obtenerPago(accessToken, id) {
   const r = await fetch(`${API}/v1/payments/${id}`, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
@@ -168,15 +179,16 @@ export function pagoAFila(userId, pago) {
   }
 }
 
-// ¿Es un movimiento de ENTRADA (cobro)? Solo dejamos pagos aprobados, de monto
-// positivo y donde el usuario es el que RECIBE la plata (collector). Así nunca
-// entran egresos (pagos que el usuario hizo).
+// ¿Es un movimiento de ENTRADA (cobro)? Dejamos pagos aprobados de monto
+// positivo, y EXCLUIMOS solo lo que el usuario PAGÓ él mismo (es el payer →
+// egreso, ej: ARCA, deudas). Todo lo demás —cobros, ingresos de dinero,
+// transferencias recibidas, DEBIN— es entrada.
 function esEntrada(p, mpUserId) {
   if (!p || p.status !== 'approved') return false
   if (!(Number(p.transaction_amount) > 0)) return false
   if (mpUserId) {
-    const col = p.collector_id ?? p.collector?.id
-    if (col != null && String(col) !== String(mpUserId)) return false
+    const payer = p.payer?.id ?? p.payer_id
+    if (payer != null && String(payer) === String(mpUserId)) return false // el usuario pagó → egreso
   }
   return true
 }

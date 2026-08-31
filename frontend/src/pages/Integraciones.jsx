@@ -59,7 +59,7 @@ export default function Integraciones() {
       .from('mp_cobros')
       .select('*')
       .order('fecha', { ascending: false })
-      .limit(100)
+      .limit(500)
     setCobros(data ?? [])
   }, [])
 

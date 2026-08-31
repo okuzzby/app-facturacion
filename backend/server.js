@@ -32,6 +32,7 @@ import {
   guardarConexion,
   accessTokenValido,
   buscarPagos,
+  buscarPagosTodos,
   obtenerPago,
   guardarCobrosNuevos,
 } from './mp.js'
@@ -901,7 +902,22 @@ app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
   try {
     const tk = await accessTokenValido(supabaseAdmin, req.user.id)
     if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
-    const pagos = await buscarPagos(tk.accessToken, { limit: 50 })
+    const pagos = await buscarPagosTodos(tk.accessToken)
+    // Diagnóstico temporal: cómo viene cada pago (para afinar el filtro de entradas).
+    console.log(
+      '[MP-SYNC] user=' + tk.mpUserId + ' total=' + pagos.length + ' ' +
+      JSON.stringify(
+        pagos.slice(0, 60).map((p) => ({
+          id: p.id,
+          op: p.operation_type,
+          col: p.collector_id ?? p.collector?.id,
+          pay: p.payer?.id ?? p.payer_id,
+          amt: p.transaction_amount,
+          st: p.status,
+          d: (p.description || '').slice(0, 24),
+        }))
+      )
+    )
     const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos, tk.mpUserId)
     res.json({ ok: true, nuevos: nuevos.length })
   } catch (e) {
