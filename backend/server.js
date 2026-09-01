@@ -21,6 +21,7 @@ import {
   configurarWsfe,
   inspeccionarPuntosVenta,
   crearPuntoVentaWS,
+  autorizarServicio,
 } from './arca-setup.js'
 import { cifrar, descifrar } from './crypto-ws.js'
 import { datosPadron } from './arca-padron.js'
@@ -1083,6 +1084,29 @@ app.post('/arca/padron-test', requireAuth, async (req, res) => {
     }
   }
   res.json({ cuit: cred.cuit, resultados })
+})
+
+// DEV — autoriza el certificado del usuario para un servicio de padrón (RPA).
+app.post('/arca/autorizar-padron', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('ws_cert_alias')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.ws_cert_alias) return res.status(400).json({ error: 'No tenés certificado wsfe configurado (falta alias)' })
+  const servicio = String(req.query.svc || 'ws_sr_constancia_inscripcion')
+  try {
+    const out = await autorizarServicio(cred.cuit, cred.clave, row.ws_cert_alias, servicio)
+    console.log('[AUTORIZAR-PADRON]', servicio, out.autorizado ? 'OK' : 'FALLO', JSON.stringify(out.diag || {}))
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
 })
 
 app.get('/', (req, res) => {

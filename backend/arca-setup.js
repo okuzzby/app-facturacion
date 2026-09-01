@@ -532,6 +532,198 @@ export async function configurarWsfe(cuit, clave, aliasForzado, onProgreso) {
   }
 }
 
+// AUTORIZA un certificado YA EXISTENTE (por su alias) para un servicio web
+// cualquiera dentro del "Administrador de Relaciones". Misma navegación que
+// configurarWsfe pero parametrizada por servicio y sin crear el certificado.
+// servicio = nombre del WS (ej: 'ws_sr_constancia_inscripcion', 'ws_sr_padron_a13').
+export async function autorizarServicio(cuit, clave, alias, servicio) {
+  const pasos = []
+  const svcSlug = String(servicio).toLowerCase()
+  let browser
+  let page
+  let destino
+  let dr = null
+  let autorizado = false
+  const diag = { servicio }
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const context = page.context()
+    if (!page.url().includes('portalcf')) {
+      await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    }
+    await page.waitForTimeout(1500)
+    const buscador = page
+      .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+      .first()
+    await buscador.fill('Administrador de Relaciones', { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(2000)
+    const link = page.getByText(/Administrador de Relaciones/i).and(page.locator(':visible')).first()
+    await link.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+    const [popup] = await Promise.all([
+      context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+      link.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    destino = popup || page
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    pasos.push('Abierto Administrador de Relaciones')
+
+    const cuitDigits = String(cuit).replace(/\D/g, '')
+    const sel = destino
+      .locator('#tblAutoridadAplicacion_cmbCont, select[name="tblAutoridadAplicacion:cmbCont"], select')
+      .first()
+    if (await sel.count().catch(() => 0)) {
+      const opts = await sel
+        .locator('option')
+        .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').trim() })))
+      const target = opts.find((o) => o.text.replace(/\D/g, '').includes(cuitDigits))
+      if (target) {
+        await Promise.all([
+          destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+          sel.selectOption({ value: target.value }).catch(() => {}),
+        ])
+        await destino.waitForTimeout(2000)
+        pasos.push('Contribuyente seleccionado: ' + target.text)
+      }
+    }
+
+    let origin = 'https://serviciosweb.afip.gob.ar'
+    try {
+      origin = new URL(destino.url()).origin
+    } catch {}
+    const relUrl = `${origin}/clavefiscal/adminRel/relationAdd.aspx?representado=${cuitDigits}&servicename=ws://${servicio}`
+    await destino.goto(relUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(2500)
+    diag.relUrl = relUrl
+    diag.svcInvocado = /relationadd/i.test(destino.url()) && destino.url().toLowerCase().includes(svcSlug)
+    pasos.push('Navegado a relationAdd.aspx (' + servicio + '): ' + (diag.svcInvocado ? 'ok' : 'revisar'))
+
+    const btnBuscarRep = destino.locator('#cmdBuscarUsuario, input[name="cmdBuscarUsuario"]').first()
+    if (!(await btnBuscarRep.count().catch(() => 0))) {
+      throw new Error('No apareció el botón Buscar (cmdBuscarUsuario) en relationAdd — puede que el servicio no exista con ese nombre')
+    }
+    const [pop2] = await Promise.all([
+      destino.context().waitForEvent('page', { timeout: 12000 }).catch(() => null),
+      btnBuscarRep.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    dr = pop2 || destino
+    await dr.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await dr.waitForTimeout(2500)
+    pasos.push('Abierto buscador de computador')
+
+    const cboComp = dr
+      .locator('#cboComputadoresAdministrados, select[name="cboComputadoresAdministrados"]')
+      .first()
+    if (!(await cboComp.count().catch(() => 0))) {
+      throw new Error('No apareció el dropdown de computadores (cboComputadoresAdministrados)')
+    }
+    const opts = await cboComp
+      .locator('option')
+      .evaluateAll((os) => os.map((o) => ({ value: o.value, text: (o.textContent || '').replace(/\s+/g, ' ').trim() })))
+    diag.opcionesComputador = opts.map((o) => o.text).slice(0, 30)
+    const aliasLc = String(alias).toLowerCase()
+    let aliasB64 = ''
+    try {
+      aliasB64 = Buffer.from(String(alias), 'utf8').toString('base64')
+    } catch {}
+    let target =
+      opts.find((o) => o.text && o.text.toLowerCase().includes(aliasLc)) ||
+      opts.find((o) => o.value && o.value.toLowerCase().includes(aliasLc)) ||
+      (aliasB64 && opts.find((o) => o.value && o.value.includes(aliasB64)))
+    if (!target) {
+      const noVacias = opts.filter((o) => o.value && o.value.trim())
+      if (noVacias.length === 1) target = noVacias[0]
+    }
+    if (!target) {
+      throw new Error('No encontré el alias "' + alias + '" en el dropdown. Opciones: ' + JSON.stringify(diag.opcionesComputador))
+    }
+    await Promise.all([
+      dr.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+      cboComp.selectOption({ value: target.value }).catch(() => {}),
+    ])
+    await dr.waitForTimeout(3000)
+    pasos.push('Alias seleccionado: ' + target.text)
+
+    const confirmar1 = dr
+      .locator('#cmdSeleccionarServicio, input[name="cmdSeleccionarServicio"], input[type=image][src*="confirmar" i], input[type=image][alt*="confirm" i]')
+      .first()
+    if (!(await confirmar1.count().catch(() => 0))) {
+      throw new Error('No apareció el botón CONFIRMAR (cmdSeleccionarServicio)')
+    }
+    await Promise.all([
+      dr.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+      confirmar1.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    await dr.waitForTimeout(3000)
+    pasos.push('CONFIRMAR (seleccionar servicio) clickeado')
+
+    for (let i = 0; i < 2; i++) {
+      const urlAhora = dr.url().toLowerCase()
+      if (/aceptada=true/i.test(urlAhora) && urlAhora.includes(svcSlug)) {
+        autorizado = true
+        break
+      }
+      const yaOk = await dr
+        .evaluate(() =>
+          /se ha creado|fue creada|creada con [eé]xito|exitosamente|relaci[oó]n.*(creada|agregada|guardada)/i.test(
+            document.body.innerText || ''
+          )
+        )
+        .catch(() => false)
+      if (yaOk) {
+        autorizado = true
+        break
+      }
+      const confirmarN = dr
+        .locator(
+          'input[type=image][src*="confirmar" i], input[type=image][alt*="confirm" i], ' +
+            '#cmdConfirmar, input[name="cmdConfirmar"], input[type=submit][value*="onfirm" i], ' +
+            'input[type=button][value*="onfirm" i], button:has-text("Confirmar")'
+        )
+        .first()
+      if (await confirmarN.count().catch(() => 0)) {
+        await Promise.all([
+          dr.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {}),
+          confirmarN.click({ timeout: 15000 }).catch(() => {}),
+        ])
+        await dr.waitForTimeout(3000)
+        pasos.push('CONFIRMAR final clickeado')
+      } else {
+        break
+      }
+    }
+
+    const urlFinal = dr.url()
+    diag.urlFinal = urlFinal
+    const textoFinal = await dr
+      .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 600))
+      .catch(() => '')
+    diag.textoFinal = textoFinal
+    if (!autorizado) {
+      autorizado =
+        (/aceptada=true/i.test(urlFinal) && urlFinal.toLowerCase().includes(svcSlug)) ||
+        /se ha creado|fue creada|creada con [eé]xito|exitosamente|relaci[oó]n.*(creada|agregada|guardada)/i.test(textoFinal)
+    }
+    pasos.push('Autorización ' + servicio + ': ' + (autorizado ? 'CONFIRMADA ✓' : 'sin confirmación textual'))
+
+    return { ok: autorizado, servicio, alias, autorizado, url: dr.url(), diag, pasos, screenshot: await captura(dr) }
+  } catch (e) {
+    return {
+      ok: false,
+      servicio,
+      alias,
+      autorizado: false,
+      error: String((e && e.message) || e),
+      diag,
+      pasos,
+      screenshot: await captura(dr || destino || page).catch(() => null),
+    }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
 // Inspecciona el "Administrador de Relaciones" (donde se autoriza el cert al
 // servicio wsfe). Abre el servicio y devuelve captura + mapa. NO cambia nada.
 export async function inspeccionarRelaciones(cuit, clave) {
