@@ -735,16 +735,18 @@ export default function Configuracion() {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) throw new Error('No hay sesión activa')
-      const r = await fetch(`${backend}/arca/autorizar-padron`, {
+      const r = await fetch(`${backend}/arca/sincronizar-padron`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Error del backend')
-      setArcaPasos(j.pasos || [])
-      setArcaShot(j.screenshot || null)
-      setArcaCampos({ autorizado: j.autorizado, diag: j.diag, error: j.error })
-      setArcaMsg(j.autorizado ? 'Padrón autorizado ✓' : 'No confirmado (revisá la captura)')
+      setArcaCampos(j)
+      setArcaMsg(
+        j.razonSocial
+          ? `Datos guardados ✓ — ${j.razonSocial}`
+          : 'No se pudieron traer los datos (revisá el detalle)'
+      )
     } catch (e) {
       setArcaError(e.message ?? String(e))
     } finally {
@@ -1145,7 +1147,7 @@ export default function Configuracion() {
             {arcaCargando ? 'Consultando…' : 'Probar Padrón (datos del emisor)'}
           </button>
           <button type="button" onClick={autorizarPadron} disabled={arcaCargando}>
-            {arcaCargando ? 'Autorizando…' : 'Autorizar Padrón (cert)'}
+            {arcaCargando ? 'Sincronizando…' : 'Sincronizar datos emisor (Padrón)'}
           </button>
           <button
             type="button"

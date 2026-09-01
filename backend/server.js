@@ -274,6 +274,43 @@ async function marcarSetup(userId, estado, paso, error) {
   }
 }
 
+function parseInicioActividades(s) {
+  if (!s) return null
+  const str = String(s).trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10)
+  if (/^\d{8}$/.test(str)) return `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`
+  if (/^\d{6}$/.test(str)) return `${str.slice(0, 4)}-${str.slice(4, 6)}-01`
+  return null
+}
+
+// Autoriza el certificado para el padrón (si hace falta) y guarda Razón Social /
+// Domicilio / Inicio del emisor en credenciales_arca, para que el PDF salga
+// completo. No bloquea: si algo falla, se registra y se sigue.
+async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem }) {
+  const SVC = 'ws_sr_constancia_inscripcion'
+  try {
+    try {
+      await autorizarServicio(cuit, clave, alias, SVC)
+    } catch (e) {
+      console.log('[PADRON] autorizar falló:', String((e && e.message) || e))
+    }
+    const d = await datosPadron({ cuit, certPem, keyPem, servicio: SVC })
+    console.log('[PADRON] datos:', JSON.stringify({ razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio }))
+    const patch = {}
+    if (d.razonSocial) patch.razon_social = d.razonSocial
+    if (d.domicilio) patch.domicilio = d.domicilio
+    const ini = parseInicioActividades(d.inicio)
+    if (ini) patch.inicio_actividades = ini
+    if (Object.keys(patch).length) {
+      await supabaseAdmin.from('credenciales_arca').update(patch).eq('user_id', userId)
+    }
+    return d
+  } catch (e) {
+    console.log('[PADRON] captura falló:', String((e && e.message) || e))
+    return { ok: false, error: String((e && e.message) || e) }
+  }
+}
+
 async function correrOnboardingWsfe(userId, cuit, clave) {
   try {
     const out = await configurarWsfe(cuit, clave, null, (estado, paso) =>
@@ -342,6 +379,20 @@ async function correrOnboardingWsfe(userId, cuit, clave) {
       await marcarSetup(userId, 'listo', 'Todo listo para facturar ✓')
     } else {
       await marcarSetup(userId, 'falta_pv', 'No pudimos habilitar un punto de venta automáticamente')
+    }
+
+    // Traer los datos del emisor (Razón Social/Domicilio) desde el padrón para
+    // que el PDF de la factura salga completo. No bloquea el onboarding.
+    try {
+      await capturarDatosEmisor(userId, {
+        cuit,
+        clave,
+        alias: out.alias,
+        certPem: out.certPem,
+        keyPem: out.privateKeyPem,
+      })
+    } catch (e) {
+      console.log('[PADRON] captura en onboarding falló:', String((e && e.message) || e))
     }
   } catch (e) {
     await marcarSetup(userId, 'error', null, String((e && e.message) || e))
@@ -1107,6 +1158,38 @@ app.post('/arca/autorizar-padron', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
   }
+})
+
+// Sincroniza los datos del emisor desde el padrón (autoriza + consulta + guarda).
+// Sirve para completar usuarios que ya estaban onboarded sin esos datos.
+app.post('/arca/sincronizar-padron', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('ws_cert_alias, ws_cert_pem, ws_cert_key_enc')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.ws_cert_pem || !row?.ws_cert_key_enc || !row?.ws_cert_alias) {
+    return res.status(400).json({ error: 'No tenés certificado wsfe configurado' })
+  }
+  let keyPem
+  try {
+    keyPem = descifrar(row.ws_cert_key_enc)
+  } catch (e) {
+    return res.status(500).json({ error: 'No se pudo descifrar la clave: ' + String((e && e.message) || e) })
+  }
+  const d = await capturarDatosEmisor(req.user.id, {
+    cuit: cred.cuit,
+    clave: cred.clave,
+    alias: row.ws_cert_alias,
+    certPem: row.ws_cert_pem,
+    keyPem,
+  })
+  res.json({ ok: d.ok !== false, razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio, error: d.error })
 })
 
 app.get('/', (req, res) => {
