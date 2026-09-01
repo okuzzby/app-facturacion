@@ -289,12 +289,26 @@ function parseInicioActividades(s) {
 async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem }) {
   const SVC = 'ws_sr_constancia_inscripcion'
   try {
+    // Intentamos consultar directo; si el certificado no está autorizado para el
+    // padrón, recién ahí lo autorizamos (RPA) y reintentamos. Así, al reconectar
+    // una cuenta ya autorizada, no repetimos la automatización.
+    let d
     try {
-      await autorizarServicio(cuit, clave, alias, SVC)
+      d = await datosPadron({ cuit, certPem, keyPem, servicio: SVC })
     } catch (e) {
-      console.log('[PADRON] autorizar falló:', String((e && e.message) || e))
+      const msg = String((e && e.message) || e)
+      if (/notauthorized|no autorizado/i.test(msg)) {
+        console.log('[PADRON] no autorizado, autorizando…')
+        try {
+          await autorizarServicio(cuit, clave, alias, SVC)
+        } catch (e2) {
+          console.log('[PADRON] autorizar falló:', String((e2 && e2.message) || e2))
+        }
+        d = await datosPadron({ cuit, certPem, keyPem, servicio: SVC })
+      } else {
+        throw e
+      }
     }
-    const d = await datosPadron({ cuit, certPem, keyPem, servicio: SVC })
     console.log('[PADRON] datos:', JSON.stringify({ razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio }))
     const patch = {}
     if (d.razonSocial) patch.razon_social = d.razonSocial
@@ -313,47 +327,76 @@ async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem
 
 async function correrOnboardingWsfe(userId, cuit, clave) {
   try {
-    const out = await configurarWsfe(cuit, clave, null, (estado, paso) =>
-      marcarSetup(userId, estado, paso)
-    )
-    if (!out || !out.certPem || !out.privateKeyPem) {
-      await marcarSetup(userId, 'error', null, (out && out.error) || 'No se pudo crear el certificado')
-      return
-    }
+    const cuitDigits = String(cuit).replace(/\D/g, '')
 
-    // Guardar el certificado (clave privada cifrada).
-    await marcarSetup(userId, 'guardando', 'Guardando tu certificado de forma segura…')
-    const keyEnc = cifrar(out.privateKeyPem)
-    await supabaseAdmin
+    // ¿Ya hay un certificado guardado para ESTE MISMO CUIT? → reconexión:
+    // reutilizamos el certificado (y el punto de venta) en vez de crear otro.
+    const { data: prev } = await supabaseAdmin
       .from('credenciales_arca')
-      .update({ ws_cert_pem: out.certPem, ws_cert_key_enc: keyEnc, ws_cert_alias: out.alias })
+      .select('ws_cert_pem, ws_cert_key_enc, ws_cert_alias, ws_cert_cuit, punto_venta_ws')
       .eq('user_id', userId)
+      .maybeSingle()
+    const reutiliza =
+      prev &&
+      prev.ws_cert_pem &&
+      prev.ws_cert_key_enc &&
+      prev.ws_cert_alias &&
+      String(prev.ws_cert_cuit || '').replace(/\D/g, '') === cuitDigits
 
-    if (!out.autorizado) {
-      await marcarSetup(userId, 'error', null, 'No se pudo confirmar la autorización del certificado en ARCA')
-      return
+    let certPem, keyPem, alias
+
+    if (reutiliza) {
+      await marcarSetup(userId, 'guardando', 'Reconectando tu cuenta (reutilizando tu certificado)…')
+      certPem = prev.ws_cert_pem
+      keyPem = descifrar(prev.ws_cert_key_enc)
+      alias = prev.ws_cert_alias
+    } else {
+      // Primera vez (o CUIT distinto): crear certificado + autorizar wsfe.
+      const out = await configurarWsfe(cuit, clave, null, (estado, paso) =>
+        marcarSetup(userId, estado, paso)
+      )
+      if (!out || !out.certPem || !out.privateKeyPem) {
+        await marcarSetup(userId, 'error', null, (out && out.error) || 'No se pudo crear el certificado')
+        return
+      }
+      await marcarSetup(userId, 'guardando', 'Guardando tu certificado de forma segura…')
+      await supabaseAdmin
+        .from('credenciales_arca')
+        .update({
+          ws_cert_pem: out.certPem,
+          ws_cert_key_enc: cifrar(out.privateKeyPem),
+          ws_cert_alias: out.alias,
+          ws_cert_cuit: cuitDigits,
+        })
+        .eq('user_id', userId)
+      if (!out.autorizado) {
+        await marcarSetup(userId, 'error', null, 'No se pudo confirmar la autorización del certificado en ARCA')
+        return
+      }
+      certPem = out.certPem
+      keyPem = out.privateKeyPem
+      alias = out.alias
     }
 
-    // Detectar el punto de venta de Web Service (mejor esfuerzo).
-    await marcarSetup(userId, 'detectando_pv', 'Buscando tu punto de venta…')
-    let pvSeteado = null
-    try {
-      const pv = await puntosVentaWS({ cuit, certPem: out.certPem, keyPem: out.privateKeyPem })
-      const habil = (pv.puntos || []).filter(
-        (p) =>
-          String(p.Bloqueado).toUpperCase() !== 'S' &&
-          (p.FchBaja == null || String(p.FchBaja).toUpperCase() === 'NULL')
-      )
-      if (habil.length > 0) {
-        pvSeteado = String(habil[0].Nro)
-        await supabaseAdmin
-          .from('credenciales_arca')
-          .update({ punto_venta_ws: pvSeteado })
-          .eq('user_id', userId)
+    // Punto de venta: si reconectamos y ya había uno, lo conservamos.
+    let pvSeteado = reutiliza && prev.punto_venta_ws ? String(prev.punto_venta_ws) : null
+
+    if (!pvSeteado) {
+      await marcarSetup(userId, 'detectando_pv', 'Buscando tu punto de venta…')
+      try {
+        const pv = await puntosVentaWS({ cuit, certPem, keyPem })
+        const habil = (pv.puntos || []).filter(
+          (p) =>
+            String(p.Bloqueado).toUpperCase() !== 'S' &&
+            (p.FchBaja == null || String(p.FchBaja).toUpperCase() === 'NULL')
+        )
+        if (habil.length > 0) {
+          pvSeteado = String(habil[0].Nro)
+          await supabaseAdmin.from('credenciales_arca').update({ punto_venta_ws: pvSeteado }).eq('user_id', userId)
+        }
+      } catch (e) {
+        console.log('[SETUP] detectar PV falló:', String((e && e.message) || e))
       }
-    } catch (e) {
-      // Un cert recién autorizado puede tardar en propagar; no rompemos el setup.
-      console.log('[SETUP] detectar PV falló:', String((e && e.message) || e))
     }
 
     // Si no tiene ningún punto de venta WS, se lo creamos automáticamente.
@@ -363,10 +406,7 @@ async function correrOnboardingWsfe(userId, cuit, clave) {
         const cre = await crearPuntoVentaWS(cuit, clave, { dryRun: false, nombre: 'Ventas' })
         if (cre && cre.creado && cre.numero != null) {
           pvSeteado = String(cre.numero)
-          await supabaseAdmin
-            .from('credenciales_arca')
-            .update({ punto_venta_ws: pvSeteado })
-            .eq('user_id', userId)
+          await supabaseAdmin.from('credenciales_arca').update({ punto_venta_ws: pvSeteado }).eq('user_id', userId)
         } else {
           console.log('[SETUP] crear PV no confirmado:', JSON.stringify(cre?.diag || cre?.error || {}))
         }
@@ -381,16 +421,10 @@ async function correrOnboardingWsfe(userId, cuit, clave) {
       await marcarSetup(userId, 'falta_pv', 'No pudimos habilitar un punto de venta automáticamente')
     }
 
-    // Traer los datos del emisor (Razón Social/Domicilio) desde el padrón para
-    // que el PDF de la factura salga completo. No bloquea el onboarding.
+    // Traer/confirmar los datos del emisor (Razón Social/Domicilio) desde el
+    // padrón para que el PDF salga completo. No bloquea el onboarding.
     try {
-      await capturarDatosEmisor(userId, {
-        cuit,
-        clave,
-        alias: out.alias,
-        certPem: out.certPem,
-        keyPem: out.privateKeyPem,
-      })
+      await capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem })
     } catch (e) {
       console.log('[PADRON] captura en onboarding falló:', String((e && e.message) || e))
     }

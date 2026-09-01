@@ -33,6 +33,7 @@ async function cargarCred(supabaseAdmin, userId) {
     .maybeSingle()
   if (error) throw new Error(error.message)
   if (!cred) throw new Error('No tenés configuración ARCA cargada')
+  if (cred.activa === false) throw new Error('Tu cuenta de ARCA está desconectada. Reconectala en Configuración.')
   if (!cred.punto_venta_ws) throw new Error('Falta el punto de venta web service en la configuración')
   return cred
 }

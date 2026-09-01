@@ -69,11 +69,15 @@ export default function Configuracion() {
     const { data } = await supabase
       .from('credenciales_arca')
       .select(
-        'cuit, updated_at, empresa_representada, punto_venta, tipo_comprobante, punto_venta_ws, ws_cert_alias, ws_setup_estado, ws_setup_paso, ws_setup_error, ws_setup_updated'
+        'cuit, updated_at, empresa_representada, punto_venta, tipo_comprobante, punto_venta_ws, ws_cert_alias, ws_setup_estado, ws_setup_paso, ws_setup_error, ws_setup_updated, activa'
       )
       .maybeSingle()
     setCredencial(data ?? null)
-    setEditandoCred(!data)
+    const desconectada = !data || data.activa === false
+    setEditandoCred(desconectada)
+    // Al reconectar con la misma cuenta, precargamos el CUIT para que el usuario
+    // solo tenga que ingresar la Clave Fiscal.
+    if (data?.activa === false && data?.cuit) setCuit(data.cuit)
   }
 
   // Dispara el onboarding automático (cert + autorizar + punto de venta) en el
@@ -173,18 +177,21 @@ export default function Configuracion() {
     }
   }
 
-  async function borrarCredencial() {
+  async function desconectar() {
     setCredError(null)
     setCredMsg(null)
-    const { error } = await supabase.rpc('borrar_credencial_arca')
+    // Desconexión "blanda": borra la Clave Fiscal guardada pero conserva el
+    // certificado y la configuración. Al reconectar con la misma cuenta no se
+    // vuelven a crear certificados.
+    if (!window.confirm('¿Desconectar ARCA? Se borrará tu Clave Fiscal guardada. El certificado se conserva, así que reconectar con la misma cuenta será inmediato.')) return
+    const { error } = await supabase.rpc('desconectar_arca')
     if (error) {
       setCredError(error.message)
       return
     }
-    setCuit('')
     setClave('')
-    setCredencial(null)
     setEditandoCred(true)
+    await cargarCredencial()
   }
 
   async function verificarConexion() {
@@ -1020,11 +1027,8 @@ export default function Configuracion() {
               Actualizada: {new Date(credencial.updated_at).toLocaleString('es-AR')}
             </p>
             <div className="fila-botones">
-              <button type="button" onClick={() => setEditandoCred(true)}>
-                Actualizar
-              </button>
-              <button type="button" className="peligro" onClick={borrarCredencial}>
-                Borrar
+              <button type="button" className="peligro" onClick={desconectar}>
+                Desconectar
               </button>
             </div>
           </div>
@@ -1048,23 +1052,16 @@ export default function Configuracion() {
             <p className="sub">
               La Clave Fiscal se guarda cifrada. No se vuelve a mostrar.
             </p>
+            {credencial && credencial.activa === false && (
+              <p className="sub">
+                Ya configuraste esta cuenta antes. Al reconectar reutilizamos tu
+                certificado: no se crean certificados nuevos.
+              </p>
+            )}
             <div className="fila-botones">
               <button type="submit" disabled={guardandoCred}>
-                {guardandoCred ? 'Guardando…' : 'Guardar credencial'}
+                {guardandoCred ? 'Conectando…' : 'Conectar'}
               </button>
-              {credencial && (
-                <button
-                  type="button"
-                  className="secundario"
-                  onClick={() => {
-                    setEditandoCred(false)
-                    setClave('')
-                    setCredError(null)
-                  }}
-                >
-                  Cancelar
-                </button>
-              )}
             </div>
           </form>
         )}
