@@ -1,11 +1,19 @@
-// Genera el PDF de un comprobante C (Factura o Nota de Crédito) imitando el
-// formato oficial de ARCA, con el QR oficial. Devuelve un Buffer.
+// Genera el PDF de un comprobante C (Factura o Nota de Crédito) replicando el
+// formato oficial de ARCA al detalle (posiciones, tamaños y tipografía), con el
+// QR oficial. Emite las 3 copias: ORIGINAL, DUPLICADO y TRIPLICADO.
+// Devuelve un Buffer.
+//
+// Coordenadas tomadas de una factura real de ARCA (A4 595x842). El origen es
+// arriba-izquierda; los valores "top" salen medidos del PDF original. Se aplica
+// un pequeño ajuste vertical (VOFF) para alinear la línea base de PDFKit
+// (Helvetica) con el tope de glifo que reporta ARCA (Arial), tipografías
+// métricamente equivalentes.
 
 import PDFDocument from 'pdfkit'
 import QRCode from 'qrcode'
 
-const money = (n) =>
-  Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// ARCA muestra los importes SIN separador de miles: "2500,00".
+const money = (n) => Number(n || 0).toFixed(2).replace('.', ',')
 
 const fechaAR = (iso) => {
   if (!iso) return ''
@@ -33,8 +41,12 @@ function qrUrl(datos) {
   return `https://www.afip.gob.ar/fe/qr/?p=${b64}`
 }
 
+// Ajuste vertical global: PDFKit posiciona el tope de línea; ARCA reporta el
+// tope del glifo. ~1.8pt sube el texto para calzar.
+const VOFF = -1.8
+
 export async function generarPdfComprobante(datos) {
-  const qrDataUrl = await QRCode.toDataURL(qrUrl(datos), { margin: 1, width: 200 })
+  const qrDataUrl = await QRCode.toDataURL(qrUrl(datos), { margin: 1, width: 220 })
   const qrPng = Buffer.from(qrDataUrl.split(',')[1], 'base64')
 
   const esNC = Number(datos.codTipo) === 13
@@ -48,175 +60,189 @@ export async function generarPdfComprobante(datos) {
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    const W = doc.page.width // 595.28
-    const M = 25
-    const L = M
-    const R = W - M
-    const CW = R - L
-    const midX = W / 2
-
-    const box = (x, y, w, h) => doc.rect(x, y, w, h).lineWidth(0.7).stroke('#000')
-    const B = (t, x, y, o = {}) => doc.font('Helvetica-Bold').fontSize(o.fs || 8).fillColor('#000').text(t, x, y, o)
-    const N = (t, x, y, o = {}) => doc.font('Helvetica').fontSize(o.fs || 8).fillColor('#000').text(t, x, y, o)
-    // etiqueta en negrita + valor normal en la misma línea
-    const LV = (label, val, x, y, o = {}) => {
-      doc.font('Helvetica-Bold').fontSize(o.fs || 8).fillColor('#000').text(label + ' ', x, y, { continued: true })
-      doc.font('Helvetica').text(val == null ? '' : String(val))
-    }
-
-    let y = M
-
-    // ---- Barra ORIGINAL ----
-    box(L, y, CW, 20)
-    B('ORIGINAL', L, y + 6, { width: CW, align: 'center', fs: 10 })
-    y += 20
-
-    // ---- Encabezado ----
-    const hTop = y
-    const hH = 124
-    box(L, hTop, CW, hH)
-    doc.moveTo(midX, hTop).lineTo(midX, hTop + hH).lineWidth(0.7).stroke('#000')
-
-    // Caja letra C centrada sobre el divisor (relleno blanco para tapar la línea)
-    const cbw = 54, cbh = 54, cbx = midX - cbw / 2, cby = hTop + 6
-    doc.rect(cbx, cby, cbw, cbh).lineWidth(0.9).fillAndStroke('#ffffff', '#000')
-    doc.fillColor('#000').font('Helvetica-Bold').fontSize(34).text('C', cbx, cby + 5, { width: cbw, align: 'center' })
-    doc.font('Helvetica-Bold').fontSize(7).fillColor('#000').text(codImp, cbx, cby + cbh - 12, { width: cbw, align: 'center' })
-
-    // Izquierda
-    const lx = L + 10
-    const razon = datos.emisor.razonSocial || ''
-    const domicilio = datos.emisor.domicilio || ''
-    B(razon, lx, hTop + 14, { width: midX - lx - 30, align: 'center', fs: 11 })
-    let ly = hTop + 46
-    LV('Razón Social:', razon, lx, ly); ly += 15
-    // Domicilio: puede ocupar más de una línea. Medimos el alto real y avanzamos
-    // con un mínimo fijo, para que NUNCA se encime con la línea siguiente aunque
-    // el domicilio venga vacío (bug de layout que dejaba texto montado).
-    const domY = ly
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#000').text('Domicilio Comercial: ', lx, domY, { continued: true })
-    doc.font('Helvetica').text(domicilio, { width: midX - lx - 12 })
-    ly = Math.max(domY + 15, doc.y + 2)
-    LV('Condición frente al IVA:', datos.emisor.condIva || 'Responsable Monotributo', lx, ly)
-
-    // Derecha (toda la columna arranca a la derecha de la caja C)
-    const rx = midX + 40
-    B(titulo, rx, hTop + 14, { fs: 18 })
-    let ry = hTop + 44
-    doc.font('Helvetica-Bold').fontSize(9).text('Punto de Venta: ', rx, ry, { continued: true })
-    doc.font('Helvetica').text(String(datos.ptoVta).padStart(5, '0'), { continued: true })
-    doc.font('Helvetica-Bold').text('   Comp. Nro: ', { continued: true })
-    doc.font('Helvetica').text(String(datos.numero).padStart(8, '0'))
-    ry += 16
-    LV('Fecha de Emisión:', fechaAR(datos.fecha), rx, ry, { fs: 9 }); ry += 18
-    LV('CUIT:', datos.emisor.cuit, rx, ry); ry += 13
-    LV('Ingresos Brutos:', datos.emisor.iibb || '', rx, ry); ry += 13
-    LV('Fecha de Inicio de Actividades:', fechaAR(datos.emisor.inicioAct), rx, ry)
-
-    y = hTop + hH
-
-    // ---- Período facturado (solo Servicios / Prod. y Servicios) ----
-    if (Number(datos.concepto) !== 1) {
-      box(L, y, CW, 18)
-      doc.font('Helvetica-Bold').fontSize(8).text('Período Facturado Desde: ', L + 8, y + 5, { continued: true })
-      doc.font('Helvetica').text(fechaAR(datos.periodo?.desde || datos.fecha), { continued: true })
-      doc.font('Helvetica-Bold').text('   Hasta: ', { continued: true })
-      doc.font('Helvetica').text(fechaAR(datos.periodo?.hasta || datos.fecha), { continued: true })
-      doc.font('Helvetica-Bold').text('     Fecha de Vto. para el pago: ', { continued: true })
-      doc.font('Helvetica').text(fechaAR(datos.periodo?.vtoPago || datos.fecha))
-      y += 18
-    }
-
-    // ---- Receptor ----
-    const recH = 52
-    box(L, y, CW, recH)
-    LV('Doc.:', datos.receptor.docNro ? String(datos.receptor.docNro) : '-', L + 8, y + 6)
-    B('Apellido y Nombre / Razón Social:', midX - 40, y + 6)
-    LV('Condición frente al IVA:', datos.receptor.condIva || 'Consumidor Final', L + 8, y + 22)
-    B('Domicilio:', midX - 40, y + 22)
-    LV('Condición de venta:', datos.receptor.condVenta || 'Contado', L + 8, y + 38)
-    y += recH + 4
-
-    // ---- Comprobantes asociados (solo NC) ----
-    if (esNC && datos.comprobanteAsociado) {
-      const a = datos.comprobanteAsociado
-      const nroA = `${String(a.ptoVta).padStart(5, '0')}-${String(a.nro).padStart(8, '0')}`
-      N(`Comprobante Asociado — Factura C: ${nroA}`, L + 2, y, { fs: 8 })
-      y += 14
-    }
-
-    // ---- Tabla de ítems ----
-    const cols = [
-      { k: 'codigo', t: 'Código', x: L, w: 45, a: 'left' },
-      { k: 'desc', t: 'Producto / Servicio', x: L + 45, w: 200, a: 'left' },
-      { k: 'cant', t: 'Cantidad', x: L + 245, w: 55, a: 'right' },
-      { k: 'med', t: 'U. Medida', x: L + 300, w: 55, a: 'center' },
-      { k: 'pu', t: 'Precio Unit.', x: L + 355, w: 60, a: 'right' },
-      { k: 'bon', t: '% Bonif', x: L + 415, w: 40, a: 'right' },
-      { k: 'impbon', t: 'Imp. Bonif.', x: L + 455, w: 45, a: 'right' },
-      { k: 'sub', t: 'Subtotal', x: L + 500, w: CW - 500, a: 'right' },
-    ]
-    const headY = y
-    doc.rect(L, headY, CW, 16).fillAndStroke('#dddddd', '#000')
-    doc.fillColor('#000')
-    for (const c of cols) B(c.t, c.x + 3, headY + 5, { width: c.w - 6, align: c.a, fs: 7.5 })
-    y = headY + 16
-
-    for (const it of datos.items || []) {
-      const sub = Number(it.cantidad || 1) * Number(it.precioUnit || 0)
-      const rowY = y + 4
-      N('', cols[0].x + 3, rowY, { width: cols[0].w - 6 })
-      N(String(it.descripcion || ''), cols[1].x + 3, rowY, { width: cols[1].w - 6 })
-      N(money(it.cantidad || 1), cols[2].x + 3, rowY, { width: cols[2].w - 6, align: 'right' })
-      N('unidades', cols[3].x + 3, rowY, { width: cols[3].w - 6, align: 'center' })
-      N(money(it.precioUnit), cols[4].x + 3, rowY, { width: cols[4].w - 6, align: 'right' })
-      N('0,00', cols[5].x + 3, rowY, { width: cols[5].w - 6, align: 'right' })
-      N('0,00', cols[6].x + 3, rowY, { width: cols[6].w - 6, align: 'right' })
-      N(money(sub), cols[7].x + 3, rowY, { width: cols[7].w - 6, align: 'right' })
-      y += 18
-    }
-
-    // ---- Caja grande (cuerpo + totales) ----
-    const totBoxTop = headY + 16
-    const totBoxH = 250
-    box(L, totBoxTop, CW, totBoxH)
-
-    // Totales abajo a la derecha
-    let ty = totBoxTop + totBoxH - 66
-    const tLabelX = midX + 40
-    const tLabelW = R - 90 - (tLabelX)
-    const totLine = (label, val, bold) => {
-      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica-Bold').fontSize(bold ? 11 : 9)
-      doc.text(label, tLabelX, ty, { width: R - 12 - tLabelX - 90, align: 'right', continued: false })
-      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(bold ? 11 : 9)
-      doc.text('$ ' + money(val), R - 92, ty, { width: 80, align: 'right' })
-      ty += bold ? 20 : 16
-    }
-    totLine('Subtotal:', datos.importeTotal)
-    totLine('Importe Otros Tributos:', 0)
-    totLine('Importe Total:', datos.importeTotal, true)
-
-    y = totBoxTop + totBoxH + 14
-
-    // ---- Pie: QR + logo + CAE ----
-    doc.image(qrPng, L, y, { width: 85 })
-    // Logo textual ARCA
-    B('ARCA', L + 95, y + 20, { fs: 15 })
-    N('AGENCIA DE RECAUDACIÓN', L + 95, y + 38, { fs: 5.5 })
-    N('Y CONTROL ADUANERO', L + 95, y + 45, { fs: 5.5 })
-    B('Pág. 1/1', midX - 20, y + 22, { fs: 9 })
-    // CAE a la derecha
-    doc.font('Helvetica-Bold').fontSize(10).text('CAE N°:  ', R - 220, y + 18, { continued: true })
-    doc.font('Helvetica').text(String(datos.cae || ''))
-    doc.font('Helvetica-Bold').text('Fecha de Vto. de CAE:  ', R - 220, y + 34, { continued: true })
-    doc.font('Helvetica').text(fechaAR(datos.caeVto))
-
-    doc.font('Helvetica-BoldOblique').fontSize(9).text('Comprobante Autorizado', L + 95, y + 60)
-    doc.font('Helvetica').fontSize(6.5).fillColor('#333').text(
-      'Esta Agencia no se responsabiliza por los datos ingresados en el detalle de la operación',
-      L + 95, y + 72, { width: CW - 95 }
-    )
+    const copias = ['ORIGINAL', 'DUPLICADO', 'TRIPLICADO']
+    copias.forEach((copia, i) => {
+      if (i > 0) doc.addPage({ size: 'A4', margin: 0 })
+      dibujarComprobante(doc, datos, { copia, titulo, codImp, esNC, qrPng })
+    })
 
     doc.end()
   })
+}
+
+function dibujarComprobante(doc, d, ctx) {
+  const { copia, titulo, codImp, esNC, qrPng } = ctx
+
+  // ---- helpers ----
+  const put = (t, x, top, o = {}) => {
+    const f = o.f || 'Helvetica'
+    const s = o.s || 9
+    doc.font(f).fontSize(s).fillColor(o.color || '#000')
+    const opt = {}
+    if (o.w != null) opt.width = o.w
+    if (o.align) opt.align = o.align
+    if (o.lineGap != null) opt.lineGap = o.lineGap
+    doc.text(t == null ? '' : String(t), x, top + VOFF, opt)
+  }
+  const B = (t, x, top, o = {}) => put(t, x, top, { ...o, f: 'Helvetica-Bold' })
+  const N = (t, x, top, o = {}) => put(t, x, top, { ...o, f: 'Helvetica' })
+  const box = (x, y, w, h) => doc.roundedRect(x, y, w, h, 3).lineWidth(0.8).stroke('#000')
+  const hline = (x1, x2, y) => doc.moveTo(x1, y).lineTo(x2, y).lineWidth(0.8).stroke('#000')
+  const vline = (x, y1, y2) => doc.moveTo(x, y1).lineTo(x, y2).lineWidth(0.8).stroke('#000')
+
+  const LX = 15
+  const RX = 581
+
+  // ¿Se muestra la banda "Período Facturado"? (Servicios / Prod. y Servicios)
+  const conPeriodo = Number(d.concepto) !== 1
+  // Sin período, el receptor y la tabla suben 22pt (alto de la banda).
+  const pOff = conPeriodo ? 0 : -22
+
+  // ======================= CAJA ENCABEZADO (23 -> 169) =======================
+  box(LX, 23, RX - LX, 146)
+  hline(LX, RX, 50.4) // separa la barra de copia del encabezado
+
+  // Barra de copia (ORIGINAL / DUPLICADO / TRIPLICADO)
+  B(copia, LX, 32, { s: 14, w: RX - LX, align: 'center' })
+
+  // Caja de la letra "C" centrada, tapando la línea divisoria
+  const cbx = 275, cby = 51, cbw = 47, cbh = 41
+  doc.rect(cbx, cby, cbw, cbh).lineWidth(0.9).fillAndStroke('#ffffff', '#000')
+  doc.fillColor('#000').font('Helvetica-Bold').fontSize(24).text('C', cbx, cby + 4, { width: cbw, align: 'center' })
+  B(codImp, cbx, cby + 29, { s: 8, w: cbw, align: 'center' })
+
+  // Divisor vertical izquierda/derecha (solo debajo de la caja C)
+  vline(298.5, 89, 169)
+
+  // ----- Columna izquierda (emisor) -----
+  const razon = d.emisor.razonSocial || ''
+  const domicilio = d.emisor.domicilio || ''
+  B(razon, LX, 69, { s: 10, w: 260, align: 'center' })
+
+  B('Razón Social:', 21, 109.5, { s: 9 })
+  N(razon, 84, 109.5, { s: 9, w: 190 })
+
+  B('Domicilio Comercial:', 21, 133.5, { s: 9 })
+  N(domicilio, 116, 133.5, { s: 9, w: 162, lineGap: 1 })
+
+  B('Condición frente al IVA:', 21, 158.3, { s: 9 })
+  N(d.emisor.condIva || 'Responsable Monotributo', 131, 158.3, { s: 9 })
+
+  // ----- Columna derecha -----
+  B(titulo, 341, 63, { s: 18 })
+
+  B('Punto de Venta:', 341, 92.1, { s: 9 })
+  B(String(d.ptoVta).padStart(5, '0'), 417, 92.1, { s: 10 })
+  B('Comp. Nro:', 461, 92.1, { s: 9 })
+  B(String(d.numero).padStart(8, '0'), 517, 92.1, { s: 10 })
+
+  B('Fecha de Emisión:', 341, 108.3, { s: 9 })
+  B(fechaAR(d.fecha), 428, 108.3, { s: 10 })
+
+  // Etiqueta bold + valor normal, con el valor pegado a la etiqueta + un gap
+  // fijo (medido en runtime para que nunca se encimen ni queden pegados).
+  const labVal = (label, value, x, top, s = 9, gap = 4) => {
+    doc.font('Helvetica-Bold').fontSize(s)
+    const lw = doc.widthOfString(label)
+    B(label, x, top, { s })
+    N(value, x + lw + gap, top, { s })
+  }
+  labVal('CUIT:', d.emisor.cuit, 341, 131.3)
+  labVal('Ingresos Brutos:', d.emisor.iibb || '', 341, 143.3)
+  labVal('Fecha de Inicio de Actividades:', fechaAR(d.emisor.inicioAct), 341, 155.3)
+
+  // ======================= BANDA PERÍODO (170 -> 192) =======================
+  if (conPeriodo) {
+    box(LX, 170, RX - LX, 22)
+    B('Período Facturado Desde:', 21, 177.4, { s: 10 })
+    N(fechaAR(d.periodo?.desde || d.fecha), 159, 177.4, { s: 10 })
+    B('Hasta:', 232, 177.4, { s: 10 })
+    N(fechaAR(d.periodo?.hasta || d.fecha), 265, 177.4, { s: 10 })
+    B('Fecha de Vto. para el pago:', 363, 177.4, { s: 10 })
+    N(fechaAR(d.periodo?.vtoPago || d.fecha), 495, 177.4, { s: 10 })
+  }
+
+  // ======================= BANDA RECEPTOR (194 -> 256) =======================
+  const recTop = 194 + pOff
+  box(LX, recTop, RX - LX, 62)
+  B('Doc.:', 21, recTop + 6, { s: 8 })
+  N(d.receptor.docNro ? String(d.receptor.docNro) : '-', 43, recTop + 6, { s: 8 })
+  B('Apellido y Nombre / Razón Social:', 222, recTop + 3, { s: 8 })
+  B('Condición frente al IVA:', 21, recTop + 20, { s: 8 })
+  N(d.receptor.condIva || 'Consumidor Final', 130, recTop + 20, { s: 8 })
+  B('Domicilio:', 312, recTop + 20, { s: 8 })
+  B('Condición de venta:', 21, recTop + 40, { s: 8 })
+  N(d.receptor.condVenta || 'Contado', 113, recTop + 40, { s: 8 })
+
+  // ======================= TABLA DE ÍTEMS =======================
+  // Cabecera gris con celdas (bordes verticales en los cortes de columna)
+  const thTop = 258 + pOff
+  const thBot = 276 + pOff
+  const cortes = [15, 55, 196, 261, 304, 384, 416, 489, 581]
+  doc.rect(LX, thTop, RX - LX, thBot - thTop).fillAndStroke('#d6d6d6', '#000')
+  doc.fillColor('#000')
+  for (const cx of cortes) vline(cx, thTop, thBot)
+  hline(LX, RX, thBot)
+
+  B('Código', 19, thTop + 5.5, { s: 8 })
+  B('Producto / Servicio', 60, thTop + 5.5, { s: 8 })
+  B('Cantidad', 205, thTop + 5.5, { s: 8, w: 52, align: 'center' })
+  B('U. Medida', 263, thTop + 5.5, { s: 8 })
+  B('Precio Unit.', 316, thTop + 6, { s: 7, w: 66, align: 'center' })
+  B('% Bonif', 385, thTop + 6, { s: 7 })
+  B('Imp. Bonif.', 428, thTop + 6, { s: 7 })
+  B('Subtotal', 500, thTop + 6, { s: 7, w: 78, align: 'center' })
+
+  // Filas (área abierta, sin bordes laterales)
+  let rowTop = thBot + 6
+  for (const it of d.items || []) {
+    const sub = Number(it.cantidad || 1) * Number(it.precioUnit || 0)
+    N(String(it.descripcion || ''), 57, rowTop, { s: 8, w: 135 })
+    N(money(it.cantidad || 1), 196, rowTop, { s: 8, w: 61, align: 'right' })
+    N('unidades', 261, rowTop, { s: 7, w: 43, align: 'center' })
+    N(money(it.precioUnit), 304, rowTop, { s: 8, w: 76, align: 'right' })
+    N('0,00', 384, rowTop, { s: 8, w: 30, align: 'right' })
+    N('0,00', 416, rowTop, { s: 8, w: 71, align: 'right' })
+    N(money(sub), 489, rowTop, { s: 8, w: 89, align: 'right' })
+    rowTop += 15
+  }
+
+  // Comprobantes asociados (solo Nota de Crédito)
+  if (esNC && d.comprobanteAsociado) {
+    const a = d.comprobanteAsociado
+    const nroA = `${String(a.ptoVta).padStart(5, '0')}-${String(a.nro).padStart(8, '0')}`
+    N(`Comprobante Asociado — Factura C: ${nroA}`, 21, rowTop + 6, { s: 8 })
+  }
+
+  // ======================= CAJA TOTALES (516 -> 610) =======================
+  box(LX, 516, RX - LX, 94)
+  const totLine = (label, val, top, s) => {
+    B(label, 300, top, { s, w: 181, align: 'right' })
+    B('$', 486, top, { s })
+    B(money(val), 500, top, { s, w: 78, align: 'right' })
+  }
+  totLine('Subtotal:', d.importeTotal, 554.5, 9)
+  totLine('Importe Otros Tributos:', 0, 572.5, 9)
+  totLine('Importe Total:', d.importeTotal, 590.6, 10)
+
+  // ======================= PIE (fuera del marco) =======================
+  doc.image(qrPng, 20, 636, { width: 80 })
+
+  // Logo textual ARCA
+  B('ARCA', 116, 644, { s: 14 })
+  N('AGENCIA DE RECAUDACIÓN', 116, 661, { s: 5 })
+  N('Y CONTROL ADUANERO', 116, 667, { s: 5 })
+
+  B('Pág. 1/1', 275.8, 649.4, { s: 10 })
+
+  B('CAE N°:', 434.6, 646.6, { s: 10 })
+  N(String(d.cae || ''), 478, 646.6, { s: 10 })
+  B('Fecha de Vto. de CAE:', 366.4, 661.6, { s: 10 })
+  N(fechaAR(d.caeVto), 478, 661.6, { s: 10 })
+
+  put('Comprobante Autorizado', 116, 688.5, { f: 'Helvetica-BoldOblique', s: 9 })
+  put(
+    'Esta Agencia no se responsabiliza por los datos ingresados en el detalle de la operación',
+    116, 708, { f: 'Helvetica-BoldOblique', s: 6 }
+  )
 }
