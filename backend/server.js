@@ -22,7 +22,8 @@ import {
   inspeccionarPuntosVenta,
   crearPuntoVentaWS,
 } from './arca-setup.js'
-import { cifrar } from './crypto-ws.js'
+import { cifrar, descifrar } from './crypto-ws.js'
+import { datosPadron } from './arca-padron.js'
 import {
   mpConfigurado,
   firmarState,
@@ -1045,6 +1046,43 @@ app.post('/mp/webhook', async (req, res) => {
   } catch (e) {
     console.log('[MP-WEBHOOK] error:', String((e && e.message) || e))
   }
+})
+
+// DEV — prueba de consulta al Padrón de ARCA con el certificado del usuario.
+// Prueba varios servicios y devuelve qué respondió cada uno (o el error).
+app.post('/arca/padron-test', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data: cred, error } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('cuit, ws_cert_pem, ws_cert_key_enc')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (error) return res.status(500).json({ error: error.message })
+  if (!cred || !cred.ws_cert_pem || !cred.ws_cert_key_enc) {
+    return res.status(400).json({ error: 'No tenés certificado wsfe configurado' })
+  }
+  let keyPem
+  try {
+    keyPem = descifrar(cred.ws_cert_key_enc)
+  } catch (e) {
+    return res.status(500).json({ error: 'No se pudo descifrar la clave: ' + String((e && e.message) || e) })
+  }
+  const servicios = req.query.svc
+    ? [String(req.query.svc)]
+    : ['ws_sr_padron_a13', 'ws_sr_constancia_inscripcion', 'ws_sr_padron_a5']
+  const resultados = {}
+  for (const svc of servicios) {
+    try {
+      const out = await datosPadron({ cuit: cred.cuit, certPem: cred.ws_cert_pem, keyPem, servicio: svc })
+      resultados[svc] = { ok: true, razonSocial: out.razonSocial, domicilio: out.domicilio, inicio: out.inicio }
+      console.log('[PADRON]', svc, 'OK', JSON.stringify({ razonSocial: out.razonSocial, domicilio: out.domicilio, inicio: out.inicio }))
+    } catch (e) {
+      const msg = String((e && e.message) || e).slice(0, 300)
+      resultados[svc] = { ok: false, error: msg }
+      console.log('[PADRON]', svc, 'ERROR', msg)
+    }
+  }
+  res.json({ cuit: cred.cuit, resultados })
 })
 
 app.get('/', (req, res) => {

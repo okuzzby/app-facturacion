@@ -702,6 +702,30 @@ export default function Configuracion() {
     }
   }
 
+  async function probarPadron() {
+    setArcaMsg(null); setArcaError(null); setArcaShot(null); setArcaPasos([]); setArcaCampos(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+      const r = await fetch(`${backend}/arca/padron-test`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setArcaCampos(j)
+      setArcaMsg('Padrón consultado ✓')
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function detectarEmpresas() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -1090,6 +1114,9 @@ export default function Configuracion() {
         <div className="fila-botones">
           <button type="button" onClick={probarArca} disabled={arcaCargando}>
             {arcaCargando ? 'Probando…' : 'Probar login ARCA'}
+          </button>
+          <button type="button" onClick={probarPadron} disabled={arcaCargando}>
+            {arcaCargando ? 'Consultando…' : 'Probar Padrón (datos del emisor)'}
           </button>
           <button
             type="button"

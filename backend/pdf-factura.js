@@ -85,12 +85,18 @@ export async function generarPdfComprobante(datos) {
 
     // Izquierda
     const lx = L + 10
-    B(datos.emisor.razonSocial || '', lx, hTop + 14, { width: midX - lx - 30, align: 'center', fs: 11 })
+    const razon = datos.emisor.razonSocial || ''
+    const domicilio = datos.emisor.domicilio || ''
+    B(razon, lx, hTop + 14, { width: midX - lx - 30, align: 'center', fs: 11 })
     let ly = hTop + 46
-    LV('Razón Social:', datos.emisor.razonSocial || '', lx, ly); ly += 16
-    doc.font('Helvetica-Bold').fontSize(8).text('Domicilio Comercial: ', lx, ly, { continued: true })
-    doc.font('Helvetica').text(datos.emisor.domicilio || '', { width: midX - lx - 12 })
-    ly = doc.y + 2
+    LV('Razón Social:', razon, lx, ly); ly += 15
+    // Domicilio: puede ocupar más de una línea. Medimos el alto real y avanzamos
+    // con un mínimo fijo, para que NUNCA se encime con la línea siguiente aunque
+    // el domicilio venga vacío (bug de layout que dejaba texto montado).
+    const domY = ly
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#000').text('Domicilio Comercial: ', lx, domY, { continued: true })
+    doc.font('Helvetica').text(domicilio, { width: midX - lx - 12 })
+    ly = Math.max(domY + 15, doc.y + 2)
     LV('Condición frente al IVA:', datos.emisor.condIva || 'Responsable Monotributo', lx, ly)
 
     // Derecha (toda la columna arranca a la derecha de la caja C)
