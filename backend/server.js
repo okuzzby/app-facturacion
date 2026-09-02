@@ -289,26 +289,37 @@ function parseInicioActividades(s) {
 // completo. No bloquea: si algo falla, se registra y se sigue.
 async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem }) {
   const SVC = 'ws_sr_constancia_inscripcion'
+  const consultar = () => datosPadron({ cuit, certPem, keyPem, servicio: SVC })
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
+  const noAutorizado = (e) => /notauthorized|no autorizado/i.test(String((e && e.message) || e))
   try {
     // Intentamos consultar directo; si el certificado no está autorizado para el
     // padrón, recién ahí lo autorizamos (RPA) y reintentamos. Así, al reconectar
     // una cuenta ya autorizada, no repetimos la automatización.
     let d
     try {
-      d = await datosPadron({ cuit, certPem, keyPem, servicio: SVC })
+      d = await consultar()
     } catch (e) {
-      const msg = String((e && e.message) || e)
-      if (/notauthorized|no autorizado/i.test(msg)) {
-        console.log('[PADRON] no autorizado, autorizando…')
-        try {
-          await autorizarServicio(cuit, clave, alias, SVC)
-        } catch (e2) {
-          console.log('[PADRON] autorizar falló:', String((e2 && e2.message) || e2))
-        }
-        d = await datosPadron({ cuit, certPem, keyPem, servicio: SVC })
-      } else {
-        throw e
+      if (!noAutorizado(e)) throw e
+      console.log('[PADRON] no autorizado, autorizando…')
+      try {
+        await autorizarServicio(cuit, clave, alias, SVC)
+      } catch (e2) {
+        console.log('[PADRON] autorizar falló:', String((e2 && e2.message) || e2))
       }
+      // La autorización en ARCA TARDA en propagarse (no queda activa al instante).
+      // Reintentamos con esperas crecientes hasta que el certificado sea aceptado.
+      const esperas = [8000, 15000, 20000, 30000]
+      for (let i = 0; i < esperas.length && !d; i++) {
+        await esperar(esperas[i])
+        try {
+          d = await consultar()
+        } catch (e3) {
+          console.log(`[PADRON] reintento ${i + 1}/${esperas.length}:`, String((e3 && e3.message) || e3).slice(0, 90))
+          if (!noAutorizado(e3)) throw e3
+        }
+      }
+      if (!d) throw new Error('El certificado todavía no quedó autorizado para el padrón (propagación pendiente en ARCA). Reintentá en un minuto.')
     }
     console.log('[PADRON] datos:', JSON.stringify({ razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio }))
     const patch = {}
@@ -1247,7 +1258,24 @@ app.post('/arca/sincronizar-padron', requireAuth, async (req, res) => {
     certPem: row.ws_cert_pem,
     keyPem,
   })
-  res.json({ ok: d.ok !== false, razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio, error: d.error })
+
+  // Si la captura trajo datos, regeneramos las facturas de una para que queden
+  // completas (viejas y nueva). Así este botón deja todo listo en un solo paso.
+  let regeneradas = null
+  if (d && d.razonSocial) {
+    try {
+      const r = await regenerarFacturasUsuario(supabaseAdmin, req.user.id)
+      regeneradas = { total: r.total, regeneradas: r.regeneradas, ok: r.ok }
+      if (r.ok) {
+        await supabaseAdmin.from('credenciales_arca').update({ facturas_regeneradas: true }).eq('user_id', req.user.id)
+      }
+      console.log('[SINCRONIZAR-PADRON+REGEN]', req.user.id, JSON.stringify(regeneradas))
+    } catch (e) {
+      console.log('[SINCRONIZAR-PADRON] regen falló:', String((e && e.message) || e))
+    }
+  }
+
+  res.json({ ok: d.ok !== false, razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio, error: d.error, regeneradas })
 })
 
 // Regenera MIS facturas al formato nuevo (calcado de ARCA, 3 copias). Cada

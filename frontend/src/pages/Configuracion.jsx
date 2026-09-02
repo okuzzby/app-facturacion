@@ -751,7 +751,8 @@ export default function Configuracion() {
       setArcaCampos(j)
       setArcaMsg(
         j.razonSocial
-          ? `Datos guardados ✓ — ${j.razonSocial}`
+          ? `Datos guardados ✓ — ${j.razonSocial}` +
+              (j.regeneradas ? ` · Facturas regeneradas: ${j.regeneradas.regeneradas}/${j.regeneradas.total}` : '')
           : 'No se pudieron traer los datos (revisá el detalle)'
       )
     } catch (e) {
