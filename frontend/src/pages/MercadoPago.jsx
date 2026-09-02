@@ -15,6 +15,12 @@ const IconMP = () => (
     <rect x="2" y="5" width="20" height="14" rx="3" /><path d="M2 10h20" />
   </svg>
 )
+const IconCompartir = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+    <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+  </svg>
+)
 
 async function apiMP(path, { method = 'GET', body } = {}) {
   const backend = import.meta.env.VITE_BACKEND_URL
@@ -158,6 +164,61 @@ export default function MercadoPago() {
     }
   }
 
+  // Comparte / descarga el PDF de la factura vinculada a un cobro ya facturado.
+  // Mismo comportamiento que el botón Compartir del Historial.
+  async function compartirCobro(c) {
+    setError(null)
+    if (!c.factura_id) return setError('Este cobro no tiene factura vinculada.')
+    let numero = ''
+    let pdfPath = null
+    try {
+      const { data: f } = await supabase
+        .from('facturas_emitidas')
+        .select('numero, pdf_path')
+        .eq('id', c.factura_id)
+        .maybeSingle()
+      numero = f?.numero || ''
+      pdfPath = f?.pdf_path || null
+    } catch (e) {
+      return setError(e.message ?? String(e))
+    }
+    if (!pdfPath) return setError('La factura todavía no tiene PDF guardado.')
+
+    let url
+    try {
+      const { data, error: e } = await supabase.storage.from('facturas').createSignedUrl(pdfPath, 120)
+      if (e) throw e
+      url = data.signedUrl
+    } catch (e) {
+      return setError(e.message ?? String(e))
+    }
+    const nombre = `comprobante-${String(numero || c.id).replace(/[^\dA-Za-z-]/g, '')}.pdf`
+
+    // 1) Compartir el ARCHIVO (menú nativo del celular).
+    try {
+      const resp = await fetch(url)
+      const blob = await resp.blob()
+      const file = new File([blob], nombre, { type: 'application/pdf' })
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Comprobante ${numero || ''}` })
+        return
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return
+    }
+    // 2) Compartir el LINK.
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `Comprobante ${numero || ''}`, url })
+        return
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return
+    }
+    // 3) Fallback: abrir el PDF.
+    window.open(url, '_blank')
+  }
+
   const pendientes = cobros.filter((c) => !c.facturado)
 
   return (
@@ -277,6 +338,19 @@ export default function MercadoPago() {
                     </div>
                     <div className="hrow-right">
                       <div className="hrow-monto">$ {ent}<small>,{dec}</small></div>
+                      {c.facturado && c.factura_id && (
+                        <div className="hrow-acc">
+                          <button
+                            type="button"
+                            className="icon-btn sm"
+                            onClick={() => compartirCobro(c)}
+                            title="Compartir factura"
+                            aria-label="Compartir factura"
+                          >
+                            <IconCompartir />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
