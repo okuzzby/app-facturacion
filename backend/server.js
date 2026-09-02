@@ -25,6 +25,7 @@ import {
 } from './arca-setup.js'
 import { cifrar, descifrar } from './crypto-ws.js'
 import { datosPadron } from './arca-padron.js'
+import { regenerarFacturasUsuario, regenerarTodas } from './regenerar-facturas.js'
 import {
   mpConfigurado,
   firmarState,
@@ -427,6 +428,29 @@ async function correrOnboardingWsfe(userId, cuit, clave) {
       await capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem })
     } catch (e) {
       console.log('[PADRON] captura en onboarding falló:', String((e && e.message) || e))
+    }
+
+    // Regeneración one-time: la PRIMERA vez que el usuario completa el onboarding
+    // (o reconecta) con sus datos de emisor ya cargados, regenera sus facturas
+    // viejas al formato nuevo. Se marca la bandera para no repetirlo nunca más.
+    try {
+      const { data: rr } = await supabaseAdmin
+        .from('credenciales_arca')
+        .select('facturas_regeneradas')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!rr || rr.facturas_regeneradas !== true) {
+        const out = await regenerarFacturasUsuario(supabaseAdmin, userId)
+        console.log('[REGEN] onboarding', userId, JSON.stringify({ ok: out.ok, total: out.total, regeneradas: out.regeneradas }))
+        if (out.ok) {
+          await supabaseAdmin
+            .from('credenciales_arca')
+            .update({ facturas_regeneradas: true })
+            .eq('user_id', userId)
+        }
+      }
+    } catch (e) {
+      console.log('[REGEN] onboarding falló:', String((e && e.message) || e))
     }
   } catch (e) {
     await marcarSetup(userId, 'error', null, String((e && e.message) || e))
@@ -1224,6 +1248,41 @@ app.post('/arca/sincronizar-padron', requireAuth, async (req, res) => {
     keyPem,
   })
   res.json({ ok: d.ok !== false, razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio, error: d.error })
+})
+
+// Regenera MIS facturas al formato nuevo (calcado de ARCA, 3 copias). Cada
+// usuario regenera solo las suyas. Pisa los PDFs viejos en Storage.
+app.post('/arca/regenerar-mis', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const out = await regenerarFacturasUsuario(supabaseAdmin, req.user.id)
+    // Marca la bandera para no repetir la regeneración automática en el onboarding.
+    if (out.ok) {
+      await supabaseAdmin.from('credenciales_arca').update({ facturas_regeneradas: true }).eq('user_id', req.user.id)
+    }
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Regenera las facturas de TODOS los usuarios. Admin: protegido con SPIKE_SECRET.
+app.post('/arca/regenerar-todas', async (req, res) => {
+  if (!process.env.SPIKE_SECRET || req.query.key !== process.env.SPIKE_SECRET) {
+    return res.status(403).json({ error: 'no autorizado' })
+  }
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const resultados = await regenerarTodas(supabaseAdmin)
+    // Marca la bandera de los que se regeneraron OK.
+    for (const r of resultados) {
+      if (r.ok) await supabaseAdmin.from('credenciales_arca').update({ facturas_regeneradas: true }).eq('user_id', r.userId)
+    }
+    console.log('[REGEN-TODAS]', JSON.stringify(resultados.map((r) => ({ u: r.userId, ok: r.ok, t: r.total, r: r.regeneradas, m: r.motivo }))))
+    res.json({ ok: true, resultados })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
 })
 
 app.get('/', (req, res) => {

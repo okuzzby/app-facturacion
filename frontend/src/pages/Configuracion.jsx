@@ -761,6 +761,33 @@ export default function Configuracion() {
     }
   }
 
+  async function regenerarMisFacturas() {
+    setArcaMsg(null); setArcaError(null); setArcaShot(null); setArcaPasos([]); setArcaCampos(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+      const r = await fetch(`${backend}/arca/regenerar-mis`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      if (j.ok === false) {
+        setArcaMsg(`No se regeneró: ${j.motivo || 'sin datos'}`)
+      } else {
+        setArcaMsg(`Facturas regeneradas ✓ — ${j.regeneradas}/${j.total}`)
+      }
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function detectarEmpresas() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -1145,6 +1172,9 @@ export default function Configuracion() {
           </button>
           <button type="button" onClick={autorizarPadron} disabled={arcaCargando}>
             {arcaCargando ? 'Sincronizando…' : 'Sincronizar datos emisor (Padrón)'}
+          </button>
+          <button type="button" onClick={regenerarMisFacturas} disabled={arcaCargando}>
+            {arcaCargando ? 'Regenerando…' : 'Regenerar mis facturas (formato nuevo)'}
           </button>
           <button
             type="button"

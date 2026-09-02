@@ -140,6 +140,36 @@ export async function proximoNumero(opts) {
   return _proximo(contextoDe(opts), opts)
 }
 
+// Consulta un comprobante ya emitido (FECompConsultar) para recuperar sus datos
+// autoritativos desde ARCA: fecha de emisión (CbteFch) y vencimiento del CAE
+// (FchVto). Útil para regenerar PDFs de facturas viejas cuya fecha no quedó
+// guardada. opts = { cuit, pv, tipo, nro, certPem?, keyPem?, homo? }
+export async function consultarComprobante(opts) {
+  const ctx = contextoDe(opts)
+  const cuit = Number(String(opts.cuit).replace(/\D/g, ''))
+  const CbteTipo = codigoTipo(opts.tipo)
+  await restaurarCache(ctx.cacheId)
+  const res = await afipDe(ctx).execRemote('wsfev1', 'FECompConsultar', {
+    Auth: { Cuit: cuit },
+    params: { FeCompConsReq: { CbteTipo, CbteNro: Number(opts.nro), PtoVta: Number(opts.pv) } },
+  })
+  await guardarCache(ctx.cacheId)
+  const g = (res && res.ResultGet) || {}
+  const aISO = (v) => {
+    const s = v == null ? '' : String(v)
+    const m = s.match(/^(\d{4})(\d{2})(\d{2})$/) // YYYYMMDD
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : null
+  }
+  return {
+    ok: true,
+    fecha: aISO(g.CbteFch), // fecha de emisión
+    caeVto: aISO(g.FchVto), // vencimiento del CAE
+    cae: g.CodAutorizacion ? String(g.CodAutorizacion) : null,
+    resultado: g.Resultado || null,
+    raw: g,
+  }
+}
+
 // Lista los puntos de venta HABILITADOS para Web Service (FEParamGetPtosVenta).
 // Los puntos de "Comprobantes en línea" (RCEL/portal) NO aparecen acá: para
 // emitir por WS hace falta un punto de venta de tipo Web Service.
