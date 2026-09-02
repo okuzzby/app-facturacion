@@ -174,6 +174,14 @@ function dibujarComprobante(doc, d, ctx) {
   B('Domicilio:', 312, recTop + 20, { s: 8 })
   B('Condición de venta:', 21, recTop + 40, { s: 8 })
   N(d.receptor.condVenta || 'Contado', 113, recTop + 40, { s: 8 })
+  // Comprobante asociado (Nota de Crédito): ARCA lo muestra acá, en la banda del
+  // receptor, como "Fac. C: 00001-00000813".
+  if (esNC && d.comprobanteAsociado) {
+    const a = d.comprobanteAsociado
+    const nroA = `${String(a.ptoVta).padStart(5, '0')}-${String(a.nro).padStart(8, '0')}`
+    B('Fac. C:', 285, recTop + 38, { s: 8 })
+    N(nroA, 314, recTop + 38, { s: 8 })
+  }
 
   // ======================= TABLA DE ÍTEMS =======================
   // Cabecera gris con celdas (bordes verticales en los cortes de columna)
@@ -206,13 +214,6 @@ function dibujarComprobante(doc, d, ctx) {
     N('0,00', 416, rowTop, { s: 8, w: 71, align: 'right' })
     N(money(sub), 489, rowTop, { s: 8, w: 89, align: 'right' })
     rowTop += 15
-  }
-
-  // Comprobantes asociados (solo Nota de Crédito)
-  if (esNC && d.comprobanteAsociado) {
-    const a = d.comprobanteAsociado
-    const nroA = `${String(a.ptoVta).padStart(5, '0')}-${String(a.nro).padStart(8, '0')}`
-    N(`Comprobante Asociado — Factura C: ${nroA}`, 21, rowTop + 6, { s: 8 })
   }
 
   // ======================= CAJA TOTALES (516 -> 610) =======================
