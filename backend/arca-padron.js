@@ -40,6 +40,8 @@ function parsePersona(persona) {
     (dg.razonSocial && String(dg.razonSocial).trim()) ||
     [dg.apellido, dg.nombre].filter(Boolean).join(' ').trim() ||
     ''
+  // Nombre de pila (solo personas físicas). Se usa para el saludo "Hola, {nombre}".
+  const nombre = (dg.nombre && String(dg.nombre).trim()) || ''
   const dom = dg.domicilioFiscal || {}
   const domicilio = [
     dom.direccion,
@@ -57,7 +59,7 @@ function parsePersona(persona) {
   const fechas = arr.map((a) => a.periodo || a.fechaInicio || a.nomenclador).filter(Boolean)
   if (dg.fechaInscripcion) inicio = dg.fechaInscripcion
   else if (fechas.length) inicio = String(fechas.sort()[0])
-  return { razonSocial, domicilio, inicio }
+  return { razonSocial, nombre, domicilio, inicio }
 }
 
 // Devuelve { ok, razonSocial, domicilio, inicio } o { ok:false, error }.

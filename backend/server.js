@@ -257,6 +257,7 @@ const ESTADOS_EN_PROGRESO = [
   'guardando',
   'detectando_pv',
   'creando_pv',
+  'capturando_datos',
 ]
 
 async function marcarSetup(userId, estado, paso, error) {
@@ -321,7 +322,7 @@ async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem
       }
       if (!d) throw new Error('El certificado todavía no quedó autorizado para el padrón (propagación pendiente en ARCA). Reintentá en un minuto.')
     }
-    console.log('[PADRON] datos:', JSON.stringify({ razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio }))
+    console.log('[PADRON] datos:', JSON.stringify({ razonSocial: d.razonSocial, nombre: d.nombre, domicilio: d.domicilio, inicio: d.inicio }))
     const patch = {}
     if (d.razonSocial) patch.razon_social = d.razonSocial
     if (d.domicilio) patch.domicilio = d.domicilio
@@ -329,6 +330,14 @@ async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem
     if (ini) patch.inicio_actividades = ini
     if (Object.keys(patch).length) {
       await supabaseAdmin.from('credenciales_arca').update(patch).eq('user_id', userId)
+    }
+    // Guardamos el nombre de pila en el perfil para el saludo "Hola, {nombre}".
+    // Con formato lindo: "ADALBERTO JOSE" → "Adalberto Jose".
+    if (d.nombre) {
+      const nombreLindo = String(d.nombre)
+        .toLowerCase()
+        .replace(/\b\p{L}/gu, (c) => c.toUpperCase())
+      await supabaseAdmin.from('perfiles').update({ nombre: nombreLindo }).eq('id', userId)
     }
     return d
   } catch (e) {
@@ -427,14 +436,10 @@ async function correrOnboardingWsfe(userId, cuit, clave) {
       }
     }
 
-    if (pvSeteado) {
-      await marcarSetup(userId, 'listo', 'Todo listo para facturar ✓')
-    } else {
-      await marcarSetup(userId, 'falta_pv', 'No pudimos habilitar un punto de venta automáticamente')
-    }
-
     // Traer/confirmar los datos del emisor (Razón Social/Domicilio) desde el
-    // padrón para que el PDF salga completo. No bloquea el onboarding.
+    // padrón para que el PDF salga completo. Marcamos "listo" RECIÉN al final,
+    // así el usuario no puede emitir hasta tener sus datos cargados.
+    await marcarSetup(userId, 'capturando_datos', 'Trayendo tus datos de ARCA (razón social, domicilio)…')
     try {
       await capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem })
     } catch (e) {
@@ -462,6 +467,13 @@ async function correrOnboardingWsfe(userId, cuit, clave) {
       }
     } catch (e) {
       console.log('[REGEN] onboarding falló:', String((e && e.message) || e))
+    }
+
+    // Estado final (recién ahora, con los datos del emisor ya cargados).
+    if (pvSeteado) {
+      await marcarSetup(userId, 'listo', 'Todo listo para facturar ✓')
+    } else {
+      await marcarSetup(userId, 'falta_pv', 'No pudimos habilitar un punto de venta automáticamente')
     }
   } catch (e) {
     await marcarSetup(userId, 'error', null, String((e && e.message) || e))

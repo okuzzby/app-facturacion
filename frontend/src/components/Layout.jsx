@@ -82,7 +82,9 @@ export default function Layout() {
 
       {/* Barra superior (celular) */}
       <header className="mtop">
-        <div className="mtop-saludo">Hola{nombre ? `, ${nombre}` : ''}</div>
+        <div className="mtop-saludo">
+          {nombre ? `Hola, ${nombre}` : <span className="mtop-brand"><span className="glyph">◆</span> App</span>}
+        </div>
         <button type="button" className="mtop-logout" onClick={signOut} aria-label="Cerrar sesión">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9">
             <path d="M16 17l5-5-5-5M21 12H9M12 19H5V5h7" />
