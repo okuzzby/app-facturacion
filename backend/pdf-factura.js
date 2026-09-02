@@ -126,7 +126,8 @@ function dibujarComprobante(doc, d, ctx) {
   N(domicilio, 116, 133.5, { s: 9, w: 162, lineGap: 1 })
 
   B('Condición frente al IVA:', 21, 158.3, { s: 9 })
-  N(d.emisor.condIva || 'Responsable Monotributo', 131, 158.3, { s: 9 })
+  // El valor también va en negrita en la original de ARCA.
+  B(d.emisor.condIva || 'Responsable Monotributo', 131, 158.3, { s: 9 })
 
   // ----- Columna derecha -----
   B(titulo, 341, 63, { s: 18 })
