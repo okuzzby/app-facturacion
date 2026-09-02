@@ -8,11 +8,17 @@ import Facturar from './pages/Facturar'
 import Historial from './pages/Historial'
 import Integraciones from './pages/Integraciones'
 import MercadoPago from './pages/MercadoPago'
+import Privacidad from './pages/Privacidad'
+import Terminos from './pages/Terminos'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+
+      {/* Páginas legales públicas (accesibles sin iniciar sesión) */}
+      <Route path="/privacidad" element={<Privacidad />} />
+      <Route path="/terminos" element={<Terminos />} />
 
       {/* Páginas autenticadas: comparten el Layout con menú lateral */}
       <Route

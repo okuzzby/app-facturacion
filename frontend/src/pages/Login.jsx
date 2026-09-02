@@ -113,6 +113,11 @@ export default function Login() {
 
         {mensaje && <p className="ok">{mensaje}</p>}
         {error && <p className="error">{error}</p>}
+
+        <p className="auth-legal">
+          <a href="/privacidad">Política de Privacidad</a> ·{' '}
+          <a href="/terminos">Términos y Condiciones</a>
+        </p>
       </div>
     </div>
   )

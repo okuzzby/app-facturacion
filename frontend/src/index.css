@@ -657,3 +657,18 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   .periodo, .fila-fija { grid-template-columns: 1fr; }
   .page-head h1 { font-size: 21px; }
 }
+
+/* ---- Páginas legales (Privacidad / Términos) ---- */
+.auth-legal { margin-top: 14px; font-size: 12px; color: var(--ink-2); text-align: center; }
+.auth-legal a { color: var(--ink-2); text-decoration: underline; }
+.legal { min-height: 100vh; background: var(--bg, #f6f7f9); padding: 24px 16px; display: flex; justify-content: center; }
+.legal-card { width: 100%; max-width: 760px; background: #fff; border: 1px solid var(--linea, #e6e8ec); border-radius: 16px; padding: 28px clamp(18px, 4vw, 40px); }
+.legal-volver { display: inline-block; margin-bottom: 12px; color: var(--ink-2); text-decoration: none; font-size: 14px; }
+.legal-card h1 { font-size: 26px; margin: 0 0 4px; }
+.legal-fecha { color: var(--ink-2); font-size: 13px; margin: 0 0 20px; }
+.legal-card h2 { font-size: 17px; margin: 24px 0 8px; }
+.legal-card p { line-height: 1.6; margin: 0 0 12px; }
+.legal-card ul { line-height: 1.6; margin: 0 0 12px; padding-left: 20px; }
+.legal-card li { margin-bottom: 6px; }
+.legal-card a { color: #009ee3; }
+.legal-foot { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--linea, #e6e8ec); font-size: 13px; color: var(--ink-2); }
