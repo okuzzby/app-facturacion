@@ -302,11 +302,23 @@ async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem
       d = await consultar()
     } catch (e) {
       if (!noAutorizado(e)) throw e
-      console.log('[PADRON] no autorizado, autorizando…')
+      console.log('[PADRON] no autorizado, autorizando servicio… alias=' + alias)
       try {
-        await autorizarServicio(cuit, clave, alias, SVC)
+        const rAuth = await autorizarServicio(cuit, clave, alias, SVC)
+        console.log(
+          '[PADRON] autorizarServicio →',
+          JSON.stringify({
+            ok: rAuth && rAuth.ok,
+            autorizado: rAuth && rAuth.autorizado,
+            error: rAuth && rAuth.error,
+            opcionesComputador: rAuth && rAuth.diag && rAuth.diag.opcionesComputador,
+            svcInvocado: rAuth && rAuth.diag && rAuth.diag.svcInvocado,
+            textoFinal: rAuth && rAuth.diag && rAuth.diag.textoFinal,
+            pasos: rAuth && rAuth.pasos,
+          })
+        )
       } catch (e2) {
-        console.log('[PADRON] autorizar falló:', String((e2 && e2.message) || e2))
+        console.log('[PADRON] autorizar EXCEPCIÓN:', String((e2 && e2.message) || e2))
       }
       // La autorización en ARCA TARDA en propagarse (no queda activa al instante).
       // Reintentamos con esperas crecientes hasta que el certificado sea aceptado.
