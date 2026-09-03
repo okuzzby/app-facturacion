@@ -1,0 +1,208 @@
+<meta charset="utf-8">
+<title>YaFact — Logos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E9EAEC; --surface:#fff; --ink:#1B1E24; --ink2:#3A3F49; --muted:#727884;
+    --line:#E6E8EC; --orange:#F26A1B; --orange2:#D9550C; --green:#188A54;
+    --gold1:#FFD23F; --gold2:#F7A81B;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Poppins",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:28px 18px 60px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+  .lead{color:var(--muted);margin:0 0 26px;font-size:14px;max-width:640px;line-height:1.5}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;max-width:1040px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px 16px 16px;
+    display:flex;flex-direction:column;align-items:center;gap:14px;box-shadow:0 1px 2px rgba(20,24,31,.05)}
+  .card.dark{background:var(--ink)}
+  .card .ico{width:112px;height:112px}
+  .tag{font-size:12px;color:var(--muted);font-weight:600}
+  .card.dark .tag{color:#aeb4c0}
+  .mini{display:flex;gap:10px;align-items:center}
+  .mini svg{filter:drop-shadow(0 1px 1px rgba(0,0,0,.15))}
+  .section{max-width:1040px;margin:34px 0 10px;font-size:13px;font-weight:700;color:var(--ink2);
+    text-transform:uppercase;letter-spacing:.08em}
+  .lockups{display:flex;flex-direction:column;gap:14px;max-width:1040px}
+  .lock{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px 24px;
+    display:flex;align-items:center;gap:16px}
+  .lock.dark{background:var(--ink)}
+  .wm{font-weight:800;font-size:34px;letter-spacing:-.02em;line-height:1}
+  .wm .ink{color:var(--ink)} .wm .or{color:var(--orange)}
+  .lock.dark .wm .ink{color:#fff}
+  .wm.small{font-size:24px}
+  .note{max-width:1040px;color:var(--muted);font-size:13px;margin-top:26px;line-height:1.6}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin:0 4px}
+</style>
+
+<!-- ===== Reusable defs ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD23F"/><stop offset="1" stop-color="#F7A81B"/>
+    </linearGradient>
+    <linearGradient id="goldOr" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD23F"/><stop offset="1" stop-color="#F26A1B"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<h1>YaFact — propuestas de isotipo</h1>
+<p class="lead">Hoja de factura con esquinas alternadas (sup-izq cuadrada · sup-der redonda · inf-izq redonda · inf-der cuadrada), líneas de comprobante y un rayo encima. Colores de la app: naranja <span class="sw" style="background:#F26A1B"></span>, oscuro <span class="sw" style="background:#1B1E24"></span>, verde <span class="sw" style="background:#188A54"></span> y el rayo amarillo→naranja.</p>
+
+<div class="grid">
+
+  <!-- A: dark page, gold-orange bolt -->
+  <div class="card dark">
+    <svg class="ico" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#23272F" stroke="#3A3F49" stroke-width="2"/>
+      <g fill="#4b515c">
+        <rect x="40" y="42" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="54" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="66" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="78" width="26" height="5" rx="2.5"/>
+      </g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="url(#goldOr)" stroke="#23272F" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="tag">A · Hoja oscura</div>
+  </div>
+
+  <!-- B: white page, orange border, gold bolt -->
+  <div class="card">
+    <svg class="ico" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#fff" stroke="#F26A1B" stroke-width="3"/>
+      <g fill="#E6C9B4">
+        <rect x="40" y="42" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="54" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="66" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="78" width="26" height="5" rx="2.5"/>
+      </g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="url(#goldOr)" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="tag">B · Hoja blanca, borde naranja</div>
+  </div>
+
+  <!-- C: orange page, white lines, dark bolt -->
+  <div class="card">
+    <svg class="ico" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#F26A1B"/>
+      <g fill="#ffffff" opacity=".8">
+        <rect x="40" y="42" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="54" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="66" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="78" width="26" height="5" rx="2.5"/>
+      </g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="#1B1E24" stroke="#F26A1B" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="tag">C · Hoja naranja, rayo oscuro</div>
+  </div>
+
+  <!-- D: monoline ink -->
+  <div class="card">
+    <svg class="ico" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="none" stroke="#1B1E24" stroke-width="4"/>
+      <g fill="none" stroke="#C7B7AE" stroke-width="4" stroke-linecap="round">
+        <line x1="42" y1="45" x2="78" y2="45"/>
+        <line x1="42" y1="57" x2="78" y2="57"/>
+        <line x1="42" y1="69" x2="78" y2="69"/>
+        <line x1="42" y1="81" x2="64" y2="81"/>
+      </g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="#F26A1B" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="tag">D · Línea (contorno)</div>
+  </div>
+
+  <!-- E: white page, green accent -->
+  <div class="card">
+    <svg class="ico" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#fff" stroke="#188A54" stroke-width="3"/>
+      <rect x="26" y="14" width="68" height="18" fill="#188A54" opacity=".12"/>
+      <g fill="#CDE3D6">
+        <rect x="40" y="44" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="56" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="68" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="80" width="26" height="5" rx="2.5"/>
+      </g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="url(#goldOr)" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="tag">E · Blanca, acento verde</div>
+  </div>
+
+  <!-- F: dark page, gold bolt = also shows mini favicon sizes -->
+  <div class="card dark">
+    <svg class="ico" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#F26A1B"/>
+      <g fill="#fff" opacity=".92">
+        <rect x="40" y="42" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="54" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="66" width="40" height="5" rx="2.5"/>
+        <rect x="40" y="78" width="26" height="5" rx="2.5"/>
+      </g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="#FFD23F" stroke="#F26A1B" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="tag">F · Naranja + rayo amarillo</div>
+  </div>
+
+</div>
+
+<!-- ===== Favicon / tamaños chicos ===== -->
+<div class="section">Cómo se ve en chico (favicon / app)</div>
+<div class="lock">
+  <div class="mini">
+    <!-- 48 -->
+    <svg width="48" height="48" viewBox="0 0 120 120">
+      <rect x="6" y="6" width="108" height="108" rx="26" fill="#1B1E24"/>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" transform="translate(0,-2)" fill="url(#goldOr)"/>
+    </svg>
+    <!-- 32 -->
+    <svg width="32" height="32" viewBox="0 0 120 120">
+      <rect x="6" y="6" width="108" height="108" rx="26" fill="#1B1E24"/>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="url(#goldOr)"/>
+    </svg>
+    <!-- 24 -->
+    <svg width="24" height="24" viewBox="0 0 120 120">
+      <rect x="6" y="6" width="108" height="108" rx="26" fill="#F26A1B"/>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="#FFF"/>
+    </svg>
+  </div>
+  <div class="tag" style="margin-left:8px">Para el favicon conviene el rayo solo (la hoja no se lee tan chica).</div>
+</div>
+
+<!-- ===== Lockups (isotipo + nombre) ===== -->
+<div class="section">Logotipo completo (isotipo + nombre)</div>
+<div class="lockups">
+
+  <div class="lock">
+    <svg width="64" height="64" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#1B1E24"/>
+      <g fill="#4b515c"><rect x="40" y="42" width="40" height="5" rx="2.5"/><rect x="40" y="54" width="40" height="5" rx="2.5"/><rect x="40" y="66" width="40" height="5" rx="2.5"/><rect x="40" y="78" width="26" height="5" rx="2.5"/></g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="url(#goldOr)" stroke="#1B1E24" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="wm"><span class="ink">Ya</span><span class="or">Fact</span></div>
+  </div>
+
+  <div class="lock dark">
+    <svg width="64" height="64" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#F26A1B"/>
+      <g fill="#fff" opacity=".9"><rect x="40" y="42" width="40" height="5" rx="2.5"/><rect x="40" y="54" width="40" height="5" rx="2.5"/><rect x="40" y="66" width="40" height="5" rx="2.5"/><rect x="40" y="78" width="26" height="5" rx="2.5"/></g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="#FFD23F" stroke="#F26A1B" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="wm"><span class="ink">Ya</span><span class="or">Fact</span></div>
+  </div>
+
+  <div class="lock">
+    <svg width="52" height="52" viewBox="0 0 120 120">
+      <path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="none" stroke="#1B1E24" stroke-width="4"/>
+      <g fill="none" stroke="#C7B7AE" stroke-width="4" stroke-linecap="round"><line x1="42" y1="45" x2="78" y2="45"/><line x1="42" y1="57" x2="78" y2="57"/><line x1="42" y1="69" x2="78" y2="69"/><line x1="42" y1="81" x2="64" y2="81"/></g>
+      <path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="#F26A1B" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+    </svg>
+    <div class="wm small"><span class="ink">Ya</span><span class="or">Fact</span></div>
+  </div>
+
+</div>
+
+<p class="note">
+  Todas las hojas tienen las esquinas como pediste: <b>sup-izq cuadrada</b>, <b>sup-der redonda</b>, <b>inf-izq redonda</b>, <b>inf-der cuadrada</b>. El nombre está en Poppins (podemos probar otra tipografía). Decime <b>qué número te gusta</b> (A–F) y si el nombre lo querés <b>Ya</b>oscuro + <b>Fact</b>naranja o todo de un color, y te lo dejo final en SVG/PNG y lo pongo como logo y favicon de la app.
+</p>

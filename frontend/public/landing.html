@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YaFact — Facturá en segundos</title>
+<meta name="description" content="YaFact emite tus Facturas C ante ARCA al instante y hasta factura tus cobros de Mercado Pago. Todo desde el celular.">
+<meta property="og:title" content="YaFact — Facturá en segundos">
+<meta property="og:description" content="Facturación para monotributistas. Facturas C oficiales ante ARCA, sin planillas ni vueltas.">
+<meta property="og:type" content="website">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --orange:#F26A1B; --orange2:#D9550C; --orange-soft:#FDECE0;
+    --ink:#1B1E24; --ink2:#3A3F49; --muted:#727884;
+    --bg:#FFFFFF; --panel:#F6F7F9; --line:#E9EBEE; --gold:#FFD23F; --green:#188A54;
+    --r:16px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Manrope",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.wm{font-family:"Manrope",system-ui,sans-serif;letter-spacing:-.02em}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;
+    font-weight:700;font-family:"Manrope";font-size:15px;padding:13px 20px;cursor:pointer;border:1px solid transparent;transition:.15s}
+  .btn-primary{background:var(--orange);color:#fff}
+  .btn-primary:hover{background:var(--orange2)}
+  .btn-ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+  .btn-ghost:hover{border-color:#cfd4da}
+  .btn-lg{padding:15px 26px;font-size:16px}
+  .wm{font-weight:800;font-size:22px}
+  .wm .or{color:var(--orange)}
+  .eyebrow{display:inline-block;font-weight:700;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--orange2);background:var(--orange-soft);padding:6px 12px;border-radius:999px}
+
+  /* NAV */
+  header.nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px}
+  .brand{display:inline-flex;align-items:center;gap:9px}
+  .nav-links{display:flex;gap:26px;align-items:center}
+  .nav-links a{color:var(--ink2);font-weight:600;font-size:14.5px}
+  .nav-links a:hover{color:var(--ink)}
+  .nav-cta{display:flex;gap:10px;align-items:center}
+  @media(max-width:860px){.nav-links{display:none}.nav-cta .btn-ghost{display:none}}
+
+  /* HERO */
+  .hero{position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(700px 380px at 82% -6%, rgba(242,106,27,.14), transparent 60%),
+    radial-gradient(560px 320px at 8% 0%, rgba(255,210,63,.16), transparent 62%);}
+  .hero-in{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;padding:72px 0 76px}
+  .hero h1{font-size:52px;line-height:1.04;margin:14px 0 16px}
+  .hero h1 .or{color:var(--orange)}
+  .hero p.lead{font-size:19px;color:var(--ink2);max-width:540px;margin:0 0 26px}
+  .hero-cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero-mini{display:flex;gap:18px;margin-top:22px;color:var(--muted);font-size:13.5px;flex-wrap:wrap}
+  .hero-mini span{display:inline-flex;align-items:center;gap:7px}
+  .tick{color:var(--green)}
+  @media(max-width:900px){.hero-in{grid-template-columns:1fr;gap:30px;padding:48px 0 56px}.hero h1{font-size:38px}}
+
+  /* PHONE MOCKUP */
+  .phone-wrap{display:flex;justify-content:center}
+  .phone{width:290px;background:#0f1115;border-radius:38px;padding:12px;box-shadow:0 30px 60px rgba(20,24,31,.28);border:1px solid #23272f}
+  .screen{background:var(--panel);border-radius:28px;overflow:hidden;height:560px;display:flex;flex-direction:column}
+  .p-top{background:#1B1E24;color:#fff;padding:16px 16px 14px;display:flex;align-items:center;justify-content:space-between}
+  .p-hello{display:inline-flex;align-items:center;gap:8px;font-family:"Manrope";font-weight:800;font-size:16px}
+  .p-body{padding:14px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+  .mes-card{background:#1B1E24;color:#fff;border-radius:16px;padding:18px;text-align:center}
+  .mes-k{font-size:11px;color:#aeb4c0;font-weight:600}
+  .mes-v{font-family:"Manrope";font-weight:800;font-size:30px;margin-top:4px}
+  .mes-sub{font-size:11px;color:#8b93a1;margin-top:2px}
+  .p-sec{font-family:"Manrope";font-weight:800;font-size:13px;margin:2px 2px}
+  .frow{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:10px}
+  .frow .ic{width:34px;height:34px;border-radius:9px;background:rgba(0,158,227,.14);color:#009ee3;display:grid;place-items:center;flex:0 0 auto}
+  .frow .ic.g{background:rgba(24,138,84,.14);color:var(--green)}
+  .frow .mid{flex:1;min-width:0}
+  .frow .t{font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .frow .m{font-size:10.5px;color:var(--muted)}
+  .badge-mp{display:inline-block;margin-left:5px;padding:0 5px;border-radius:999px;background:#009ee3;color:#fff;font-size:8.5px;font-weight:800;vertical-align:1px}
+  .frow .amt{font-family:"Manrope";font-weight:800;font-size:13px}
+
+  /* TRUST */
+  .trust{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel)}
+  .trust-in{display:flex;align-items:center;justify-content:center;gap:34px;flex-wrap:wrap;padding:20px 0;color:var(--muted);font-weight:600;font-size:14px}
+  .trust b{color:var(--ink)}
+
+  /* SECTION */
+  section{padding:78px 0}
+  .sec-head{text-align:center;max-width:640px;margin:0 auto 44px}
+  .sec-head h2{font-size:34px;margin:12px 0 10px}
+  .sec-head p{color:var(--ink2);font-size:17px;margin:0}
+
+  /* FEATURES */
+  .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:24px;transition:.15s}
+  .card:hover{box-shadow:0 12px 30px rgba(20,24,31,.07);transform:translateY(-2px)}
+  .card .fic{width:44px;height:44px;border-radius:12px;background:var(--orange-soft);color:var(--orange2);display:grid;place-items:center;margin-bottom:14px}
+  .card h3{font-size:18px;margin:0 0 7px}
+  .card p{margin:0;color:var(--ink2);font-size:14.5px}
+  @media(max-width:860px){.feat{grid-template-columns:1fr}}
+
+  /* STEPS */
+  .steps{background:var(--panel)}
+  .steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  .step{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:26px;position:relative}
+  .step .n{width:36px;height:36px;border-radius:50%;background:var(--ink);color:#fff;font-family:"Manrope";font-weight:800;display:grid;place-items:center;margin-bottom:14px}
+  .step h3{font-size:18px;margin:0 0 6px}
+  .step p{margin:0;color:var(--ink2);font-size:14.5px}
+  @media(max-width:860px){.steps-grid{grid-template-columns:1fr}}
+
+  /* PRICING */
+  .price-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;max-width:760px;margin:0 auto}
+  .plan{border:1px solid var(--line);border-radius:20px;padding:30px;background:#fff}
+  .plan.pop{border:2px solid var(--orange);box-shadow:0 16px 40px rgba(242,106,27,.14);position:relative}
+  .plan.pop .tagpop{position:absolute;top:-13px;left:30px;background:var(--orange);color:#fff;font-size:12px;font-weight:800;padding:5px 12px;border-radius:999px}
+  .plan h3{font-size:20px;margin:0 0 4px}
+  .plan .pr{font-family:"Manrope";font-weight:800;font-size:40px;margin:8px 0 2px}
+  .plan .pr small{font-size:15px;color:var(--muted);font-weight:600}
+  .plan ul{list-style:none;padding:0;margin:18px 0 22px}
+  .plan li{padding:7px 0;color:var(--ink2);font-size:14.5px;display:flex;gap:9px}
+  .plan li .tick{color:var(--green);flex:0 0 auto}
+  .plan .btn{width:100%}
+  .price-note{text-align:center;color:var(--muted);font-size:13px;margin-top:16px}
+  @media(max-width:720px){.price-grid{grid-template-columns:1fr}}
+
+  /* FAQ */
+  .faq{max-width:760px;margin:0 auto}
+  details{border:1px solid var(--line);border-radius:12px;padding:2px 18px;margin-bottom:12px;background:#fff}
+  details summary{cursor:pointer;list-style:none;font-family:"Manrope";font-weight:700;font-size:16px;padding:16px 0;display:flex;justify-content:space-between;align-items:center}
+  details summary::-webkit-details-marker{display:none}
+  details summary::after{content:"+";color:var(--orange);font-size:22px;font-weight:700}
+  details[open] summary::after{content:"–"}
+  details p{margin:0 0 16px;color:var(--ink2);font-size:14.5px}
+
+  /* CTA BAND */
+  .ctaband{background:linear-gradient(120deg,#1B1E24,#2a2f38);color:#fff;border-radius:24px;padding:48px;text-align:center;overflow:hidden;position:relative}
+  .ctaband::before{content:"";position:absolute;right:-40px;top:-40px;width:220px;height:220px;background:radial-gradient(circle,rgba(242,106,27,.35),transparent 60%)}
+  .ctaband h2{font-size:32px;margin:0 0 10px;position:relative}
+  .ctaband p{color:#c9cdd4;font-size:17px;margin:0 0 22px;position:relative}
+
+  /* FOOTER */
+  footer{background:var(--panel);border-top:1px solid var(--line);padding:44px 0 30px}
+  .foot-in{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .foot-links{display:flex;gap:30px;flex-wrap:wrap}
+  .foot-col a{display:block;color:var(--ink2);font-size:14px;padding:5px 0}
+  .foot-col a:hover{color:var(--ink)}
+  .foot-col .h{font-family:"Manrope";font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+  .foot-bottom{margin-top:30px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+</style>
+</head>
+<body>
+
+<!-- Logo isotipo reutilizable -->
+<svg width="0" height="0" style="position:absolute"><symbol id="yf" viewBox="24 10 72 102"><path d="M26,14 L74,14 A20,20 0 0 1 94,34 L94,106 L46,106 A20,20 0 0 1 26,86 Z" fill="#F26A1B"/><g fill="#fff" opacity=".92"><rect x="40" y="42" width="40" height="5" rx="2.5"/><rect x="40" y="54" width="40" height="5" rx="2.5"/><rect x="40" y="66" width="40" height="5" rx="2.5"/><rect x="40" y="78" width="26" height="5" rx="2.5"/></g><path d="M70,22 L40,66 L56,66 L48,100 L84,50 L66,50 L74,22 Z" fill="#FFD23F" stroke="#F26A1B" stroke-width="3" stroke-linejoin="round"/></symbol></svg>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><svg width="30" height="30"><use href="#yf"/></svg><span class="wm">Ya<span class="or">Fact</span></span></a>
+    <nav class="nav-links">
+      <a href="#features">Funciones</a>
+      <a href="#como">Cómo funciona</a>
+      <a href="#precios">Precios</a>
+      <a href="#faq">Preguntas</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="/login" target="_top">Iniciar sesión</a>
+      <a class="btn btn-primary" href="/login" target="_top">Crear cuenta</a>
+    </div>
+  </div>
+</header>
+
+<a id="top"></a>
+<section class="hero">
+  <div class="wrap hero-in">
+    <div>
+      <span class="eyebrow">Facturación para monotributistas</span>
+      <h1>Facturá en <span class="or">segundos</span>, sin planillas ni vueltas</h1>
+      <p class="lead">YaFact emite tus <b>Facturas C ante ARCA</b> al instante, trae tus datos solos y hasta factura tus cobros de <b>Mercado Pago</b>. Todo desde el celular.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="/login" target="_top">Crear cuenta gratis</a>
+        <a class="btn btn-ghost btn-lg" href="#como">Ver cómo funciona</a>
+      </div>
+      <div class="hero-mini">
+        <span><svg width="16" height="16" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Factura oficial con CAE</span>
+        <span><svg width="16" height="16" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Sin instalar nada</span>
+        <span><svg width="16" height="16" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Desde el celular</span>
+      </div>
+    </div>
+
+    <div class="phone-wrap">
+      <div class="phone"><div class="screen">
+        <div class="p-top">
+          <span class="p-hello"><svg width="26" height="26"><use href="#yf"/></svg> Hola YaFact</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B7BCC5" stroke-width="1.9"><path d="M16 17l5-5-5-5M21 12H9M12 19H5V5h7"/></svg>
+        </div>
+        <div class="p-body">
+          <div class="mes-card">
+            <div class="mes-k">Facturado este mes con la App</div>
+            <div class="mes-v">$ 48.700</div>
+            <div class="mes-sub">9 comprobantes emitidos</div>
+          </div>
+          <div class="p-sec">Últimas facturas</div>
+          <div class="frow"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h9l3 3v17H6z"/><path d="M9 12h6M9 16h4"/></svg></span><div class="mid"><div class="t">Servicio de transporte</div><div class="m">FC · Nº 00002-13 <span class="badge-mp">MP</span></div></div><div class="amt">$ 5.200</div></div>
+          <div class="frow"><span class="ic g"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h9l3 3v17H6z"/><path d="M9 12h6M9 16h4"/></svg></span><div class="mid"><div class="t">Servicio de transporte</div><div class="m">FC · Nº 00002-12</div></div><div class="amt">$ 8.000</div></div>
+          <div class="frow"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h9l3 3v17H6z"/><path d="M9 12h6M9 16h4"/></svg></span><div class="mid"><div class="t">Servicio de transporte</div><div class="m">FC · Nº 00002-11 <span class="badge-mp">MP</span></div></div><div class="amt">$ 9.500</div></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<div class="trust"><div class="wrap trust-in">
+  <span>Emite comprobantes reales ante <b>ARCA (AFIP)</b></span>
+  <span>Se integra con <b>Mercado Pago</b></span>
+  <span>Ingresás con <b>Google</b></span>
+</div></div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Todo lo que necesitás</span>
+      <h2>Facturar nunca fue tan simple</h2>
+      <p>Pensado para monotributistas que quieren facturar rápido y sin complicarse con ARCA.</p>
+    </div>
+    <div class="feat">
+      <div class="card"><div class="fic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l3 3v17H6z"/><path d="M9 12h6M9 16h4"/></svg></div><h3>Facturás real ante ARCA</h3><p>Facturas C con CAE oficial, válidas ante AFIP, emitidas en segundos por Web Service.</p></div>
+      <div class="card"><div class="fic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div><h3>Tus datos, automáticos</h3><p>Traemos tu razón social y domicilio del padrón de ARCA. No cargás nada a mano.</p></div>
+      <div class="card"><div class="fic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg></div><h3>Cobros de Mercado Pago</h3><p>Conectá tu cuenta y facturá tus cobros entrantes, de forma manual o automática.</p></div>
+      <div class="card"><div class="fic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg></div><h3>Desde el celular</h3><p>Hecho para el teléfono. Emití una factura en tres toques, estés donde estés.</p></div>
+      <div class="card"><div class="fic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div><h3>Historial y PDF</h3><p>Todas tus facturas en un lugar. Imprimí o compartí el PDF al instante.</p></div>
+      <div class="card"><div class="fic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l3 3v17H6z"/><path d="M9 14h6"/></svg></div><h3>Notas de crédito</h3><p>¿Te equivocaste? Anulá una factura con una Nota de Crédito C en un toque.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="como" class="steps">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">En 3 pasos</span>
+      <h2>De cero a facturando en minutos</h2>
+      <p>Sin trámites eternos ni configuraciones raras. Conectás una vez y listo.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step"><div class="n">1</div><h3>Creá tu cuenta</h3><p>Registrate gratis con tu email o con Google. Sin tarjeta.</p></div>
+      <div class="step"><div class="n">2</div><h3>Conectá ARCA</h3><p>Ingresás tu CUIT y Clave Fiscal una sola vez. Nosotros dejamos todo listo solo.</p></div>
+      <div class="step"><div class="n">3</div><h3>Facturá</h3><p>Elegís producto y precio, confirmás y ya tenés tu Factura C con CAE.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="precios">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Precios</span>
+      <h2>Simple y sin sorpresas</h2>
+      <p>Empezá gratis. (Los planes son un borrador — ajustamos los valores cuando definas.)</p>
+    </div>
+    <div class="price-grid">
+      <div class="plan">
+        <h3>Gratis</h3>
+        <div class="pr">$ 0 <small>/ mes</small></div>
+        <p style="color:var(--muted);margin:0;font-size:14px">Para empezar a facturar hoy.</p>
+        <ul>
+          <li><svg width="18" height="18" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Facturas C ilimitadas ante ARCA</li>
+          <li><svg width="18" height="18" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Historial y PDF</li>
+          <li><svg width="18" height="18" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Notas de crédito</li>
+        </ul>
+        <a class="btn btn-ghost" href="/login" target="_top">Crear cuenta</a>
+      </div>
+      <div class="plan pop">
+        <span class="tagpop">Recomendado</span>
+        <h3>Pro</h3>
+        <div class="pr">$ 6.000 <small>+ IVA / mes</small></div>
+        <p style="color:var(--muted);margin:0;font-size:14px">Todo lo de Gratis, y más.</p>
+        <ul>
+          <li><svg width="18" height="18" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Facturación automática de Mercado Pago</li>
+          <li><svg width="18" height="18" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Múltiples productos guardados</li>
+          <li><svg width="18" height="18" class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5L20 7"/></svg> Soporte prioritario</li>
+        </ul>
+        <a class="btn btn-primary" href="/login" target="_top">Empezar</a>
+      </div>
+    </div>
+    <p class="price-note">Sin costos ocultos. Cancelás cuando quieras.</p>
+  </div>
+</section>
+
+<section id="faq" class="steps">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Preguntas frecuentes</span>
+      <h2>Lo que solés preguntar</h2>
+    </div>
+    <div class="faq">
+      <details open><summary>¿La factura es oficial?</summary><p>Sí. YaFact emite Facturas C con CAE por el Web Service de ARCA (AFIP): son comprobantes válidos, iguales a los que emitís desde el portal de ARCA.</p></details>
+      <details><summary>¿Necesito ser monotributista?</summary><p>Sí, está pensado para monotributistas con Clave Fiscal. Conectás tu cuenta una vez y facturás desde YaFact.</p></details>
+      <details><summary>¿Puedo facturar desde el celular?</summary><p>Totalmente. YaFact es mobile-first: emitís una factura en pocos toques desde el teléfono, sin instalar nada.</p></details>
+      <details><summary>¿Cómo funciona lo de Mercado Pago?</summary><p>Conectás tu cuenta de Mercado Pago y ves tus cobros entrantes. Los facturás con un toque, o activás el modo automático para que se facturen solos al acreditarse.</p></details>
+      <details><summary>¿Mis datos están seguros?</summary><p>Sí. Tus credenciales sensibles se guardan cifradas y solo se usan para emitir tus comprobantes ante ARCA en tu nombre.</p></details>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="ctaband">
+      <h2>Empezá a facturar hoy</h2>
+      <p>Creá tu cuenta gratis y emití tu primera Factura C en minutos.</p>
+      <a class="btn btn-primary btn-lg" href="/login" target="_top" style="position:relative">Crear cuenta gratis</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-in">
+      <div style="max-width:300px">
+        <a class="brand" href="#top"><svg width="28" height="28"><use href="#yf"/></svg><span class="wm">Ya<span class="or">Fact</span></span></a>
+        <p style="color:var(--muted);font-size:14px;margin:12px 0 0">Facturación electrónica simple para monotributistas de Argentina.</p>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <div class="h">Producto</div>
+          <a href="#features">Funciones</a>
+          <a href="#precios">Precios</a>
+          <a href="/login" target="_top">Iniciar sesión</a>
+        </div>
+        <div class="foot-col">
+          <div class="h">Legal</div>
+          <a href="/privacidad" target="_top">Política de Privacidad</a>
+          <a href="/terminos" target="_top">Términos y Condiciones</a>
+        </div>
+        <div class="foot-col">
+          <div class="h">Contacto</div>
+          <a href="mailto:yafact.ar@gmail.com">yafact.ar@gmail.com</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 YaFact. Todos los derechos reservados.</span>
+      <span>Hecho en Argentina 🇦🇷</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
