@@ -2,9 +2,8 @@ import { Link } from 'react-router-dom'
 
 // Página pública de Términos y Condiciones. El nombre del responsable queda
 // como placeholder para completar más adelante.
-const RESPONSABLE = '[Nombre del responsable]'
-const CONTACTO = 'albertzuk15a@gmail.com'
-const ACTUALIZADO = '2 de septiembre de 2026'
+const CONTACTO = 'yafact.ar@gmail.com'
+const ACTUALIZADO = '3 de septiembre de 2026'
 
 export default function Terminos() {
   return (
@@ -15,9 +14,9 @@ export default function Terminos() {
         <p className="legal-fecha">Última actualización: {ACTUALIZADO}</p>
 
         <p>
-          Estos Términos regulan el uso de esta aplicación de facturación para
-          monotributistas (“la App”), operada por {RESPONSABLE}. Al crear una
-          cuenta o usar la App, aceptás estos Términos.
+          Estos Términos regulan el uso de YaFact, una aplicación de facturación
+          para monotributistas (“la App”). Al crear una cuenta o usar la App,
+          aceptás estos Términos.
         </p>
 
         <h2>1. Qué es la App</h2>

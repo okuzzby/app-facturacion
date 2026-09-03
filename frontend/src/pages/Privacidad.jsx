@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 // Página pública de Política de Privacidad (requisito para publicar el login
 // con Google en producción). El nombre del responsable queda como placeholder
 // para completar más adelante.
-const RESPONSABLE = '[Nombre del responsable]'
-const CONTACTO = 'albertzuk15a@gmail.com'
-const ACTUALIZADO = '2 de septiembre de 2026'
+const RESPONSABLE = 'YaFact'
+const CONTACTO = 'yafact.ar@gmail.com'
+const ACTUALIZADO = '3 de septiembre de 2026'
 
 export default function Privacidad() {
   return (
@@ -65,10 +65,9 @@ export default function Privacidad() {
         <h2>3. Dónde se guardan</h2>
         <p>
           Tus datos se almacenan en servicios de infraestructura de terceros que
-          actúan como proveedores nuestros: la base de datos y el almacenamiento
-          de archivos (Supabase), y el alojamiento de la aplicación (Vercel y
-          Render). Los datos sensibles, como la Clave Fiscal y los tokens de
-          Mercado Pago, se guardan cifrados.
+          actúan como procesadores de datos por cuenta nuestra, con estándares de
+          seguridad de la industria. Los datos sensibles, como la Clave Fiscal y
+          los tokens de Mercado Pago, se guardan cifrados.
         </p>
 
         <h2>4. Con quién se comparten</h2>
@@ -78,8 +77,9 @@ export default function Privacidad() {
           <li><strong>Mercado Pago:</strong> si conectás tu cuenta, para leer tus cobros.</li>
           <li><strong>Google:</strong> si elegís iniciar sesión con Google.</li>
           <li>
-            <strong>Proveedores de infraestructura</strong> (Supabase, Vercel,
-            Render) que procesan datos por cuenta nuestra.
+            <strong>Proveedores tecnológicos</strong> que actúan como procesadores
+            de datos por cuenta nuestra (por ejemplo, alojamiento, base de datos y
+            almacenamiento), bajo obligaciones de confidencialidad.
           </li>
         </ul>
 
