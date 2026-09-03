@@ -663,6 +663,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .mtop-brand { gap: 8px; font-family: "Manrope"; font-weight: 800; font-size: 24px; color: #fff; letter-spacing: -.01em; }
 .auth-brand svg, .brand svg, .mtop-brand svg { display: block; flex: 0 0 auto; }
 .wm-or { color: var(--orange); }
+.msg-prog { color: var(--orange-2); font-weight: 600; font-size: 13px; }
 
 /* ---- Páginas legales (Privacidad / Términos) ---- */
 .auth-legal { margin-top: 14px; font-size: 12px; color: var(--ink-2); text-align: center; }

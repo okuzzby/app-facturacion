@@ -141,11 +141,14 @@ export default function Configuracion() {
       })
       if (error) throw error
       setClave('')
-      setCredMsg('Credencial guardada. Configurando tu facturación electrónica…')
+      setCredMsg('Credencial guardada. Configurando para dejarla lista…')
       setEditandoCred(false)
       await cargarCredencial()
       // Arranca todo el proceso automático (cert + autorizar + punto de venta).
       await iniciarSetupWsfe(false)
+      // Releemos para reflejar el estado "en progreso" y que arranque el polling
+      // (si no, quedaba mostrando el estado viejo, a veces el ✓ verde).
+      await cargarCredencial()
     } catch (err) {
       setCredError(err.message ?? 'No se pudo guardar')
     } finally {
@@ -934,10 +937,12 @@ export default function Configuracion() {
 
   // Estado del onboarding para el badge y el contenido de "Conexión con ARCA".
   const cEstado = credencial?.ws_setup_estado
-  const cListo = credencial
-    ? cEstado === 'listo' || !!(credencial.ws_cert_alias && credencial.punto_venta_ws)
-    : false
   const cProgreso = SETUP_EN_PROGRESO.includes(cEstado)
+  // "Listo" (badge verde) SOLO cuando terminó la configuración. Mientras está en
+  // progreso, nunca mostramos el ✓ verde aunque ya tenga certificado/PV.
+  const cListo = credencial && !cProgreso
+    ? cEstado === 'listo' || (!cEstado && !!(credencial.ws_cert_alias && credencial.punto_venta_ws))
+    : false
 
   return (
     <div className="page">
@@ -953,7 +958,7 @@ export default function Configuracion() {
             cListo ? (
               <span className="badge badge-ok">Credencial ✓</span>
             ) : cProgreso ? (
-              <span className="badge badge-load"><span className="spinner-inline" />Cargando</span>
+              <span className="badge badge-load"><span className="spinner-inline" />Configurando…</span>
             ) : cEstado === 'error' ? (
               <span className="badge badge-error">Error</span>
             ) : cEstado === 'falta_pv' ? (
@@ -1047,7 +1052,7 @@ export default function Configuracion() {
             </div>
           </form>
         )}
-        {credMsg && <p className="ok">{credMsg}</p>}
+        {credMsg && <p className="msg-prog">{credMsg}</p>}
         {credError && <p className="error">{credError}</p>}
 
         {mostrarDev && (

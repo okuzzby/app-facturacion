@@ -27,6 +27,8 @@ export default function Home() {
   const { perfilNombre } = useAuth()
   const [facturas, setFacturas] = useState([])
   const [cargando, setCargando] = useState(true)
+  // IDs de facturas que vienen de un cobro de Mercado Pago (para la etiqueta MP).
+  const [mpIds, setMpIds] = useState(() => new Set())
 
   useEffect(() => {
     if (!supabase) return
@@ -38,6 +40,11 @@ export default function Home() {
         .limit(20)
       setFacturas(data ?? [])
       setCargando(false)
+      const ids = (data ?? []).map((f) => f.id)
+      if (ids.length) {
+        const { data: mp } = await supabase.from('mp_cobros').select('factura_id').in('factura_id', ids)
+        setMpIds(new Set((mp ?? []).map((r) => r.factura_id).filter(Boolean)))
+      }
     })()
   }, [])
 
@@ -84,11 +91,12 @@ export default function Home() {
               const [ent, dec] = money2(f.importe_total).split(',')
               return (
                 <div key={f.id} className={`hrow ${f.estado === 'anulada' ? 'anulada' : ''}`}>
-                  <span className="hrow-ic"><IconDoc /></span>
+                  <span className={`hrow-ic ${mpIds.has(f.id) ? 'hrow-ic-mp' : ''}`}><IconDoc /></span>
                   <div className="hrow-mid">
                     <div className="hrow-t">{f.producto || f.tipo || 'Factura C'}</div>
                     <div className="hrow-meta">
                       {tipoCorto(f.tipo)} · Nº {f.numero} · {fechaCorta(f.created_at)}
+                      {mpIds.has(f.id) && <span className="badge-mp">MP</span>}
                       {f.estado === 'anulada' && <span className="hrow-anulada"> · Anulada</span>}
                     </div>
                   </div>

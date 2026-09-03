@@ -599,9 +599,25 @@ export async function autorizarServicio(cuit, clave, alias, servicio) {
     diag.svcInvocado = /relationadd/i.test(destino.url()) && destino.url().toLowerCase().includes(svcSlug)
     pasos.push('Navegado a relationAdd.aspx (' + servicio + '): ' + (diag.svcInvocado ? 'ok' : 'revisar'))
 
-    const btnBuscarRep = destino.locator('#cmdBuscarUsuario, input[name="cmdBuscarUsuario"]').first()
+    let btnBuscarRep = destino.locator('#cmdBuscarUsuario, input[name="cmdBuscarUsuario"]').first()
+    // La página de ARCA a veces tarda o carga en dos pasos: esperamos el botón y,
+    // si no aparece, recargamos una vez antes de darlo por fallido.
+    await btnBuscarRep.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
     if (!(await btnBuscarRep.count().catch(() => 0))) {
-      throw new Error('No apareció el botón Buscar (cmdBuscarUsuario) en relationAdd — puede que el servicio no exista con ese nombre')
+      await destino.goto(relUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+      await destino.waitForTimeout(3500)
+      btnBuscarRep = destino.locator('#cmdBuscarUsuario, input[name="cmdBuscarUsuario"]').first()
+      await btnBuscarRep.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+    }
+    if (!(await btnBuscarRep.count().catch(() => 0))) {
+      // Guardamos qué mostró realmente la página, para diagnosticar el caso.
+      diag.textoRelAdd = await destino
+        .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 400))
+        .catch(() => '')
+      throw new Error(
+        'No apareció el botón Buscar (cmdBuscarUsuario) en relationAdd. La página mostró: "' +
+          (diag.textoRelAdd || '(sin texto)') + '"'
+      )
     }
     const [pop2] = await Promise.all([
       destino.context().waitForEvent('page', { timeout: 12000 }).catch(() => null),
