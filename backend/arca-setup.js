@@ -749,6 +749,59 @@ export async function autorizarServicio(cuit, clave, alias, servicio) {
   }
 }
 
+// Diagnóstico: abre "Administrador de Relaciones" y devuelve una captura de
+// pantalla completa + la URL + el texto de la página. Sirve para ver cómo es el
+// portal de cada cuenta (viejo tipo serviciosweb vs nuevo tipo auth.afip).
+// NO cambia nada.
+export async function capturarPantallaAdminRel(cuit, clave) {
+  const pasos = []
+  let browser
+  let page
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const context = page.context()
+    if (!page.url().includes('portalcf')) {
+      await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+    }
+    await page.waitForTimeout(1500)
+    const buscador = page
+      .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+      .first()
+    await buscador.fill('Administrador de Relaciones', { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(2000)
+    const link = page.getByText(/Administrador de Relaciones/i).and(page.locator(':visible')).first()
+    await link.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+    const [popup] = await Promise.all([
+      context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+      link.click({ timeout: 15000 }).catch(() => {}),
+    ])
+    const destino = popup || page
+    await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+    await destino.waitForTimeout(3500)
+    const url = destino.url()
+    const texto = await destino
+      .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 1000))
+      .catch(() => '')
+    const buf = await destino.screenshot({ fullPage: true }).catch(() => null)
+    // También listamos botones/links visibles, útil para escribir la automatización.
+    const controles = await destino
+      .evaluate(() => {
+        const els = Array.from(document.querySelectorAll('a, button, input[type=button], input[type=submit], input[type=image]'))
+        return els
+          .map((e) => (e.innerText || e.value || e.alt || e.title || '').replace(/\s+/g, ' ').trim())
+          .filter((t) => t)
+          .slice(0, 40)
+      })
+      .catch(() => [])
+    return { ok: true, url, texto, controles, shot: buf ? buf.toString('base64') : null, pasos }
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e), pasos }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
 // Inspecciona el "Administrador de Relaciones" (donde se autoriza el cert al
 // servicio wsfe). Abre el servicio y devuelve captura + mapa. NO cambia nada.
 export async function inspeccionarRelaciones(cuit, clave) {

@@ -22,6 +22,7 @@ import {
   inspeccionarPuntosVenta,
   crearPuntoVentaWS,
   autorizarServicio,
+  capturarPantallaAdminRel,
 } from './arca-setup.js'
 import { cifrar, descifrar } from './crypto-ws.js'
 import { datosPadron } from './arca-padron.js'
@@ -1300,6 +1301,35 @@ app.post('/arca/sincronizar-padron', requireAuth, async (req, res) => {
   }
 
   res.json({ ok: d.ok !== false, razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio, error: d.error, regeneradas })
+})
+
+// DIAGNÓSTICO (dev): abre "Administrador de Relaciones" en la cuenta del usuario
+// y guarda una captura de pantalla para ver cómo es su portal. No cambia nada.
+app.post('/arca/padron-debug', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const r = await capturarPantallaAdminRel(cred.cuit, cred.clave)
+    let shotUrl = null
+    if (r.shot) {
+      const path = `debug/${req.user.id}-adminrel-${Date.now()}.png`
+      const buf = Buffer.from(r.shot, 'base64')
+      const { error: upErr } = await supabaseAdmin.storage
+        .from('facturas')
+        .upload(path, buf, { contentType: 'image/png', upsert: true })
+      if (!upErr) {
+        const { data: signed } = await supabaseAdmin.storage.from('facturas').createSignedUrl(path, 24 * 3600)
+        shotUrl = signed?.signedUrl || null
+      }
+    }
+    console.log('[PADRON-DEBUG]', JSON.stringify({ url: r.url, controles: r.controles, texto: (r.texto || '').slice(0, 250), shotUrl }))
+    res.json({ ok: r.ok, url: r.url, texto: r.texto, controles: r.controles, shotUrl, error: r.error })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
 })
 
 // Regenera MIS facturas al formato nuevo (calcado de ARCA, 3 copias). Cada

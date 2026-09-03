@@ -40,6 +40,7 @@ export default function Configuracion() {
   const [arcaShot, setArcaShot] = useState(null)
   const [arcaPasos, setArcaPasos] = useState([])
   const [arcaCampos, setArcaCampos] = useState(null)
+  const [debugUrl, setDebugUrl] = useState(null)
 
   // ---- empresa a representar (ARCA) ----
   const [empresas, setEmpresas] = useState([])
@@ -768,6 +769,31 @@ export default function Configuracion() {
     }
   }
 
+  async function diagPortalPadron() {
+    setArcaMsg(null); setArcaError(null); setArcaShot(null); setArcaPasos([]); setArcaCampos(null)
+    setDebugUrl(null)
+    setArcaCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+      const r = await fetch(`${backend}/arca/padron-debug`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Error del backend')
+      setDebugUrl(j.shotUrl || null)
+      setArcaMsg(`Portal: ${j.url || '?'} — captura ${j.shotUrl ? 'lista ✓' : 'no disponible'}`)
+    } catch (e) {
+      setArcaError(e.message ?? String(e))
+    } finally {
+      setArcaCargando(false)
+    }
+  }
+
   async function detectarEmpresas() {
     setEmpresaMsg(null)
     setEmpresaError(null)
@@ -1136,6 +1162,9 @@ export default function Configuracion() {
           <button type="button" onClick={regenerarMisFacturas} disabled={arcaCargando}>
             {arcaCargando ? 'Regenerando…' : 'Regenerar mis facturas (formato nuevo)'}
           </button>
+          <button type="button" onClick={diagPortalPadron} disabled={arcaCargando}>
+            {arcaCargando ? 'Capturando…' : 'Diagnóstico portal padrón (captura)'}
+          </button>
           <button
             type="button"
             className="secundario"
@@ -1223,6 +1252,11 @@ export default function Configuracion() {
           </button>
         </div>
         {arcaMsg && <p className="ok">{arcaMsg}</p>}
+        {debugUrl && (
+          <p className="sub">
+            Captura del portal: <a href={debugUrl} target="_blank" rel="noreferrer">abrir imagen</a>
+          </p>
+        )}
         {arcaError && <p className="error">{arcaError}</p>}
         {arcaPasos.length > 0 && (
           <ol className="pasos">
