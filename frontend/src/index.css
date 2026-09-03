@@ -69,7 +69,7 @@ a:hover { text-decoration: underline; }
 .brand {
   display: flex; align-items: center; gap: 10px;
   padding: 4px 8px 18px;
-  font-family: "Manrope"; font-weight: 800; color: #fff; font-size: 19px;
+  font-family: "Manrope"; font-weight: 800; color: #fff; font-size: 24px;
 }
 .brand .glyph {
   width: 32px; height: 32px; border-radius: 9px;
@@ -576,7 +576,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   border: 1px solid var(--line); border-radius: 18px; padding: 30px 28px;
   box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px;
 }
-.auth-brand { display: flex; align-items: center; gap: 11px; font-family: "Manrope"; font-weight: 800; font-size: 21px; }
+.auth-brand { display: flex; align-items: center; gap: 11px; font-family: "Manrope"; font-weight: 800; font-size: 28px; }
 .auth-brand .glyph { width: 34px; height: 34px; border-radius: 10px; background: var(--orange); display: grid; place-items: center; color: #fff; font-size: 17px; }
 .auth-card h1 { font-size: 21px; }
 .auth-card .lead { color: var(--muted); font-size: 14px; margin: -4px 0 4px; }
@@ -660,8 +660,9 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 
 /* ---- Marca con isotipo YaFact ---- */
 .auth-brand, .brand, .mtop-brand { display: inline-flex; align-items: center; gap: 8px; }
-.mtop-brand { gap: 6px; }
+.mtop-brand { gap: 8px; font-family: "Manrope"; font-weight: 800; font-size: 24px; color: #fff; letter-spacing: -.01em; }
 .auth-brand svg, .brand svg, .mtop-brand svg { display: block; flex: 0 0 auto; }
+.wm-or { color: var(--orange); }
 
 /* ---- Páginas legales (Privacidad / Términos) ---- */
 .auth-legal { margin-top: 14px; font-size: 12px; color: var(--ink-2); text-align: center; }

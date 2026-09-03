@@ -16,7 +16,7 @@ export default function Login() {
     return (
       <div className="auth-wrap">
         <div className="auth-card">
-          <div className="auth-brand"><Logo size={40} /> YaFact</div>
+          <div className="auth-brand"><Logo size={40} /> <span>Ya<span className="wm-or">Fact</span></span></div>
           <p className="error">
             Falta configurar Supabase (variables VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY).
           </p>
@@ -62,7 +62,7 @@ export default function Login() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <div className="auth-brand"><Logo size={40} /> YaFact</div>
+        <div className="auth-brand"><Logo size={40} /> <span>Ya<span className="wm-or">Fact</span></span></div>
         <div>
           <h1>{modo === 'login' ? 'Iniciá sesión' : 'Creá tu cuenta'}</h1>
           <p className="lead">Facturá como monotributista, sin vueltas.</p>
