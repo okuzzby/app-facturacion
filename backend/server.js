@@ -286,56 +286,44 @@ function parseInicioActividades(s) {
   return null
 }
 
-// Autoriza el certificado para el padrón (si hace falta) y guarda Razón Social /
-// Domicilio / Inicio del emisor en credenciales_arca, para que el PDF salga
-// completo. No bloquea: si algo falla, se registra y se sigue.
-async function capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem }) {
-  const SVC = 'ws_sr_constancia_inscripcion'
-  const consultar = () => datosPadron({ cuit, certPem, keyPem, servicio: SVC })
-  const esperar = (ms) => new Promise((r) => setTimeout(r, ms))
-  const noAutorizado = (e) => /notauthorized|no autorizado/i.test(String((e && e.message) || e))
+// Certificado "de la app" para consultar el padrón: es el de un usuario cuyo
+// certificado YA está autorizado al servicio de constancia. Con ese consumidor
+// consultamos el padrón de CUALQUIER CUIT, sin autorizar cuenta por cuenta.
+const PADRON_CERT_USER_ID = process.env.PADRON_CERT_USER_ID || 'e23ae5f6-286b-4735-8c03-d9d88c9e0f8f'
+async function certPadronApp() {
+  const { data } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('cuit, ws_cert_pem, ws_cert_key_enc')
+    .eq('user_id', PADRON_CERT_USER_ID)
+    .maybeSingle()
+  if (!data?.ws_cert_pem || !data?.ws_cert_key_enc) return null
   try {
-    // Intentamos consultar directo; si el certificado no está autorizado para el
-    // padrón, recién ahí lo autorizamos (RPA) y reintentamos. Así, al reconectar
-    // una cuenta ya autorizada, no repetimos la automatización.
-    let d
-    try {
-      d = await consultar()
-    } catch (e) {
-      if (!noAutorizado(e)) throw e
-      console.log('[PADRON] no autorizado, autorizando servicio… alias=' + alias)
-      try {
-        const rAuth = await autorizarServicio(cuit, clave, alias, SVC)
-        console.log(
-          '[PADRON] autorizarServicio →',
-          JSON.stringify({
-            ok: rAuth && rAuth.ok,
-            autorizado: rAuth && rAuth.autorizado,
-            error: rAuth && rAuth.error,
-            opcionesComputador: rAuth && rAuth.diag && rAuth.diag.opcionesComputador,
-            svcInvocado: rAuth && rAuth.diag && rAuth.diag.svcInvocado,
-            textoFinal: rAuth && rAuth.diag && rAuth.diag.textoFinal,
-            pasos: rAuth && rAuth.pasos,
-          })
-        )
-      } catch (e2) {
-        console.log('[PADRON] autorizar EXCEPCIÓN:', String((e2 && e2.message) || e2))
-      }
-      // La autorización en ARCA TARDA en propagarse (no queda activa al instante).
-      // Reintentamos con esperas crecientes hasta que el certificado sea aceptado.
-      const esperas = [8000, 15000, 20000, 30000]
-      for (let i = 0; i < esperas.length && !d; i++) {
-        await esperar(esperas[i])
-        try {
-          d = await consultar()
-        } catch (e3) {
-          console.log(`[PADRON] reintento ${i + 1}/${esperas.length}:`, String((e3 && e3.message) || e3).slice(0, 90))
-          if (!noAutorizado(e3)) throw e3
-        }
-      }
-      if (!d) throw new Error('El certificado todavía no quedó autorizado para el padrón (propagación pendiente en ARCA). Reintentá en un minuto.')
+    return { cuit: data.cuit, certPem: data.ws_cert_pem, keyPem: descifrar(data.ws_cert_key_enc) }
+  } catch {
+    return null
+  }
+}
+
+// Consulta el padrón del CUIT del usuario usando el certificado de la app y
+// guarda Razón Social / Domicilio / Inicio (y el nombre para el saludo). No
+// autoriza nada por usuario (eso lo resuelve el certificado de la app, ya
+// autorizado). No bloquea: si algo falla, se registra y se sigue.
+async function capturarDatosEmisor(userId, { cuit }) {
+  const SVC = 'ws_sr_constancia_inscripcion'
+  try {
+    const app = await certPadronApp()
+    if (!app) {
+      console.log('[PADRON] no hay certificado de app disponible para consultar el padrón')
+      return { ok: false, error: 'sin certificado de app para padrón' }
     }
-    console.log('[PADRON] datos:', JSON.stringify({ razonSocial: d.razonSocial, nombre: d.nombre, domicilio: d.domicilio, inicio: d.inicio }))
+    const d = await datosPadron({
+      cuit: app.cuit, // consumidor (cert autorizado)
+      idPersona: cuit, // CUIT del usuario a consultar
+      certPem: app.certPem,
+      keyPem: app.keyPem,
+      servicio: SVC,
+    })
+    console.log('[PADRON] datos:', JSON.stringify({ cuit, razonSocial: d.razonSocial, nombre: d.nombre, domicilio: d.domicilio, inicio: d.inicio }))
     const patch = {}
     if (d.razonSocial) patch.razon_social = d.razonSocial
     if (d.domicilio) patch.domicilio = d.domicilio

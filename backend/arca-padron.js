@@ -63,8 +63,12 @@ function parsePersona(persona) {
 }
 
 // Devuelve { ok, razonSocial, domicilio, inicio } o { ok:false, error }.
-export async function datosPadron({ cuit, certPem, keyPem, servicio = 'ws_sr_padron_a13' }) {
-  const cuitNum = Number(String(cuit).replace(/\D/g, ''))
+// `cuit` es el CONSUMIDOR (dueño del certificado autorizado al padrón).
+// `idPersona` es el CUIT a consultar; si no se pasa, se consulta el mismo `cuit`.
+// Así, con UN certificado autorizado (el de la app) consultamos cualquier CUIT.
+export async function datosPadron({ cuit, idPersona, certPem, keyPem, servicio = 'ws_sr_padron_a13' }) {
+  const cuitNum = Number(String(cuit).replace(/\D/g, '')) // consumidor / representada
+  const target = Number(String(idPersona ?? cuit).replace(/\D/g, '')) // a consultar
   const wsdl = ENDPOINTS[servicio] || ENDPOINTS.ws_sr_padron_a13
   const cred = await tokenWsaa({ certPem, keyPem, cuit: cuitNum, servicio })
   const token = cred?.tokens?.token
@@ -84,7 +88,7 @@ export async function datosPadron({ cuit, certPem, keyPem, servicio = 'ws_sr_pad
     token,
     sign,
     cuitRepresentada: cuitNum,
-    idPersona: cuitNum,
+    idPersona: target,
   })
 
   const persona =
