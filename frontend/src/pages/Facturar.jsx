@@ -36,6 +36,7 @@ const SETUP_EN_PROGRESO = [
   'guardando',
   'detectando_pv',
   'creando_pv',
+  'capturando_datos',
 ]
 
 function hoyDDMMYYYY() {
@@ -165,10 +166,13 @@ export default function Facturar() {
     )
   }
 
-  // Facturación electrónica lista = tiene certificado + punto de venta WS.
-  const setupListo =
-    !!((cred?.ws_cert_alias && cred?.punto_venta_ws) || cred?.ws_setup_estado === 'listo')
+  // Mientras se está configurando NO se puede facturar (para no emitir con datos
+  // incompletos). "Listo" solo cuando terminó el proceso.
   const setupEnProgreso = SETUP_EN_PROGRESO.includes(cred?.ws_setup_estado)
+  const setupListo =
+    !setupEnProgreso &&
+    (cred?.ws_setup_estado === 'listo' ||
+      (!cred?.ws_setup_estado && !!(cred?.ws_cert_alias && cred?.punto_venta_ws)))
 
   if (!setupListo) {
     return (

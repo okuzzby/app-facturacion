@@ -34,6 +34,12 @@ async function cargarCred(supabaseAdmin, userId) {
   if (error) throw new Error(error.message)
   if (!cred) throw new Error('No tenés configuración ARCA cargada')
   if (cred.activa === false) throw new Error('Tu cuenta de ARCA está desconectada. Reconectala en Configuración.')
+  // Mientras se está configurando (trayendo datos del emisor, etc.) no emitimos,
+  // para no generar comprobantes con datos incompletos.
+  const EN_PROGRESO = ['iniciando', 'creando_cert', 'autorizando', 'guardando', 'detectando_pv', 'creando_pv', 'capturando_datos']
+  if (EN_PROGRESO.includes(cred.ws_setup_estado)) {
+    throw new Error('Tu cuenta se está configurando. Esperá unos minutos a que termine para poder facturar.')
+  }
   if (!cred.punto_venta_ws) throw new Error('Falta el punto de venta web service en la configuración')
   return cred
 }

@@ -588,35 +588,44 @@ export async function autorizarServicio(cuit, clave, alias, servicio) {
       }
     }
 
-    let origin = 'https://serviciosweb.afip.gob.ar'
-    try {
-      origin = new URL(destino.url()).origin
-    } catch {}
-    const relUrl = `${origin}/clavefiscal/adminRel/relationAdd.aspx?representado=${cuitDigits}&servicename=ws://${servicio}`
-    await destino.goto(relUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
-    await destino.waitForTimeout(2500)
-    diag.relUrl = relUrl
-    diag.svcInvocado = /relationadd/i.test(destino.url()) && destino.url().toLowerCase().includes(svcSlug)
-    pasos.push('Navegado a relationAdd.aspx (' + servicio + '): ' + (diag.svcInvocado ? 'ok' : 'revisar'))
+    // La página relationAdd.aspx vive en hosts específicos de ARCA. Según la
+    // cuenta, "Administrador de Relaciones" puede quedar en un dominio donde esa
+    // ruta NO existe (da 404). Probamos varios hosts conocidos hasta que aparezca
+    // el botón Buscar (cmdBuscarUsuario).
+    const candidatos = []
+    try { candidatos.push(new URL(destino.url()).origin) } catch {}
+    candidatos.push('https://serviciosweb.afip.gob.ar')
+    candidatos.push('https://serviciosweb.arca.gob.ar')
+    const origenes = [...new Set(candidatos)]
 
-    let btnBuscarRep = destino.locator('#cmdBuscarUsuario, input[name="cmdBuscarUsuario"]').first()
-    // La página de ARCA a veces tarda o carga en dos pasos: esperamos el botón y,
-    // si no aparece, recargamos una vez antes de darlo por fallido.
-    await btnBuscarRep.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
-    if (!(await btnBuscarRep.count().catch(() => 0))) {
+    let relUrl = ''
+    let btnBuscarRep = null
+    const hostsProbados = []
+    for (const origin of origenes) {
+      relUrl = `${origin}/clavefiscal/adminRel/relationAdd.aspx?representado=${cuitDigits}&servicename=ws://${servicio}`
       await destino.goto(relUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
-      await destino.waitForTimeout(3500)
+      await destino.waitForTimeout(3000)
       btnBuscarRep = destino.locator('#cmdBuscarUsuario, input[name="cmdBuscarUsuario"]').first()
-      await btnBuscarRep.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+      await btnBuscarRep.waitFor({ state: 'visible', timeout: 12000 }).catch(() => {})
+      const hay = await btnBuscarRep.count().catch(() => 0)
+      const txt = await destino
+        .evaluate(() => (document.body.innerText || '').slice(0, 120))
+        .catch(() => '')
+      hostsProbados.push(origin + (hay ? ' ✓' : /not found/i.test(txt) ? ' 404' : ' sin-botón'))
+      if (hay) break
     }
-    if (!(await btnBuscarRep.count().catch(() => 0))) {
-      // Guardamos qué mostró realmente la página, para diagnosticar el caso.
+    diag.relUrl = relUrl
+    diag.hostsProbados = hostsProbados
+    diag.svcInvocado = /relationadd/i.test(destino.url()) && destino.url().toLowerCase().includes(svcSlug)
+    pasos.push('relationAdd.aspx (' + servicio + '): ' + hostsProbados.join(' | '))
+
+    if (!btnBuscarRep || !(await btnBuscarRep.count().catch(() => 0))) {
       diag.textoRelAdd = await destino
         .evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 400))
         .catch(() => '')
       throw new Error(
-        'No apareció el botón Buscar (cmdBuscarUsuario) en relationAdd. La página mostró: "' +
-          (diag.textoRelAdd || '(sin texto)') + '"'
+        'No apareció el botón Buscar (cmdBuscarUsuario) en relationAdd. Hosts probados: ' +
+          hostsProbados.join(' | ') + '. Página: "' + (diag.textoRelAdd || '(sin texto)') + '"'
       )
     }
     const [pop2] = await Promise.all([
