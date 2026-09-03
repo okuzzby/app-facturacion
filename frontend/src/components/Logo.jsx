@@ -6,7 +6,7 @@ export default function Logo({ size = 28, className }) {
       className={className}
       width={size}
       height={size}
-      viewBox="0 0 120 120"
+      viewBox="24 10 72 102"
       role="img"
       aria-label="YaFact"
     >

@@ -61,7 +61,7 @@ export default function Layout() {
       {/* Menú lateral (escritorio) */}
       <aside className="side">
         <div className="brand">
-          <Logo size={22} /> YaFact
+          <Logo size={32} /> YaFact
         </div>
         <nav className="nav">
           {NAV.map(({ to, end, label, Icon }) => (
@@ -84,7 +84,7 @@ export default function Layout() {
       {/* Barra superior (celular) */}
       <header className="mtop">
         <div className="mtop-saludo">
-          {nombre ? `Hola, ${nombre}` : <span className="mtop-brand"><Logo size={22} /> YaFact</span>}
+          {nombre ? `Hola, ${nombre}` : <span className="mtop-brand"><Logo size={32} /> YaFact</span>}
         </div>
         <button type="button" className="mtop-logout" onClick={signOut} aria-label="Cerrar sesión">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9">
@@ -121,7 +121,7 @@ export default function Layout() {
       {menuAbierto && (
         <div className="menu-overlay">
           <div className="menu-head">
-            <div className="brand"><Logo size={22} /> YaFact</div>
+            <div className="brand"><Logo size={32} /> YaFact</div>
             <button type="button" className="menu-close" onClick={cerrar} aria-label="Cerrar menú">
               <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 6l12 12M18 6L6 18" />
