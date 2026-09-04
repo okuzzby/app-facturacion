@@ -18,12 +18,24 @@ const COND_VENTA = [
   { v: 'Otra', l: 'Otra' },
 ]
 
-// Convierte "10.000,20" o "10000.20" a número.
+// Convierte lo que escribe el usuario a número. Acepta "." o "," como separador
+// decimal de forma indiferente, entiende los separadores de miles y redondea
+// siempre a 2 decimales (centavos). Ejemplos:
+//   "100,50" y "100.50" -> 100.5 · "1.500" -> 1500 · "1.500,50" -> 1500.5
 function parsePrecio(s) {
-  let t = String(s ?? '').trim()
-  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')
-  const n = Number(t.replace(/[^\d.]/g, ''))
-  return isNaN(n) ? 0 : n
+  const t = String(s ?? '').trim().replace(/[^\d.,]/g, '')
+  if (!t) return 0
+  // Si el último . o , va seguido de 1 o 2 dígitos al final, ese es el separador
+  // decimal; lo que quede antes (otros . o ,) son separadores de miles.
+  const m = t.match(/^(.*)[.,](\d{1,2})$/)
+  let n
+  if (m) {
+    const entero = m[1].replace(/[.,]/g, '') || '0'
+    n = Number(entero + '.' + m[2])
+  } else {
+    n = Number(t.replace(/[.,]/g, ''))
+  }
+  return isNaN(n) ? 0 : Math.round(n * 100) / 100
 }
 const money = (n) =>
   new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)

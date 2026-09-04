@@ -34,7 +34,9 @@ export function validarFactura(body = {}) {
   const producto = limpiarTexto(body.producto, 80)
   if (!producto) throw new Error('Producto/servicio inválido')
 
-  const precio = Number(body.precio)
+  // Redondeamos a 2 decimales (centavos): ARCA no acepta más.
+  const precioRaw = Number(body.precio)
+  const precio = Math.round(precioRaw * 100) / 100
   if (!Number.isFinite(precio) || precio <= 0 || precio > 100000000) {
     throw new Error('Precio inválido')
   }
