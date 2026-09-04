@@ -21,6 +21,9 @@ const IconMenu = () => (
 const IconIntegraciones = () => (
   <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><path d="M17.5 14v3.5M14 17.5h7" /></svg>
 )
+const IconAdmin = () => (
+  <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z" /></svg>
+)
 
 const NAV = [
   { to: '/', end: true, label: 'Inicio', Icon: IconInicio },
@@ -37,10 +40,15 @@ const primerNombre = (n) => {
 }
 
 export default function Layout() {
-  const { user, perfilNombre, signOut } = useAuth()
+  const { user, perfilNombre, signOut, esAdmin } = useAuth()
   const inicial = (perfilNombre || user?.email || '?').trim().charAt(0).toUpperCase()
   const nombre = primerNombre(perfilNombre)
   const [menuAbierto, setMenuAbierto] = useState(false)
+
+  // El link de Admin solo aparece para cuentas admin.
+  const navItems = esAdmin
+    ? [...NAV, { to: '/admin', label: 'Admin', Icon: IconAdmin }]
+    : NAV
 
   // Cerrar el menú con Escape y bloquear el scroll de fondo mientras está abierto.
   useEffect(() => {
@@ -64,7 +72,7 @@ export default function Layout() {
           <Logo size={32} /> <span>Ya<span className="wm-or">Fact</span></span>
         </div>
         <nav className="nav">
-          {NAV.map(({ to, end, label, Icon }) => (
+          {navItems.map(({ to, end, label, Icon }) => (
             <NavLink key={to} to={to} end={end}>
               <Icon /> <span>{label}</span>
             </NavLink>
@@ -130,7 +138,7 @@ export default function Layout() {
           </div>
 
           <nav className="menu-list">
-            {NAV.map(({ to, end, label, Icon }) => (
+            {navItems.map(({ to, end, label, Icon }) => (
               <NavLink key={to} to={to} end={end} onClick={cerrar}>
                 <Icon /> <span>{label}</span>
               </NavLink>

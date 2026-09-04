@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [perfilNombre, setPerfilNombre] = useState('')
+  const [esAdmin, setEsAdmin] = useState(false)
 
   useEffect(() => {
     if (!supabase) {
@@ -43,11 +44,42 @@ export function AuthProvider({ children }) {
     cargarPerfil()
   }, [cargarPerfil])
 
+  // ¿La cuenta actual es admin? Lo decide el backend (lista de correos).
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      if (!supabase || !userId) {
+        setEsAdmin(false)
+        return
+      }
+      try {
+        const backend = import.meta.env.VITE_BACKEND_URL
+        if (!backend) return
+        const {
+          data: { session: s },
+        } = await supabase.auth.getSession()
+        const token = s?.access_token
+        if (!token) return
+        const r = await fetch(`${backend}/admin/soy-admin`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const j = await r.json().catch(() => ({}))
+        if (vivo) setEsAdmin(Boolean(j?.admin))
+      } catch {
+        if (vivo) setEsAdmin(false)
+      }
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [userId])
+
   const value = {
     session,
     user: session?.user ?? null,
     loading,
     perfilNombre,
+    esAdmin,
     refrescarPerfil: cargarPerfil,
     signOut: () => supabase?.auth.signOut(),
   }

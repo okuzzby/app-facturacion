@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
 import Landing from './pages/Landing'
+import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import Configuracion from './pages/Configuracion'
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="configuracion" element={<Configuracion />} />
         <Route path="integraciones" element={<Integraciones />} />
         <Route path="mercadopago" element={<MercadoPago />} />
+        <Route path="admin" element={<Admin />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

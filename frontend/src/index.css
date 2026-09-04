@@ -273,6 +273,30 @@ button.peligro:hover { background: var(--red-soft); color: var(--red); }
 .modal-card h3 { font-family: "Manrope"; font-weight: 800; font-size: 18px; margin: 0; color: var(--red); }
 .modal-card > p { margin: 0; font-size: 14px; line-height: 1.5; }
 .modal-card .fila-botones { justify-content: flex-end; margin-top: 4px; }
+
+/* --- Panel admin --- */
+.admin-tabla { display: flex; flex-direction: column; gap: 10px; }
+.admin-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface);
+}
+.admin-user { display: flex; flex-direction: column; gap: 3px; min-width: 200px; }
+.admin-email { font-weight: 700; font-size: 14px; word-break: break-all; }
+.admin-meta { color: var(--muted); font-size: 12.5px; }
+.plan-pro { color: var(--orange-2); }
+.plan-gratis { color: var(--muted); }
+.admin-controles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-controles select {
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
+  font-size: 14px; font-family: inherit; background: var(--surface);
+}
+.admin-controles button { padding: 9px 14px; font-size: 13.5px; }
+.admin-ok { font-weight: 800; }
+@media (max-width: 560px) {
+  .admin-row { flex-direction: column; align-items: stretch; }
+  .admin-controles { justify-content: flex-start; }
+}
 .seccion h2 { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
 .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .sec-head h2 { margin-bottom: 0; }

@@ -120,6 +120,22 @@ async function requireAuth(req, res, next) {
   next()
 }
 
+// Correos autorizados como admin. Por defecto la cuenta de YaFact; se puede
+// ampliar con la env ADMIN_EMAILS (separados por coma). La verificación es acá,
+// en el backend: el cliente no puede autoascenderse.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'yafact.ar@gmail.com')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+function esAdmin(user) {
+  return !!user?.email && ADMIN_EMAILS.includes(String(user.email).toLowerCase())
+}
+// Middleware: exige que el usuario autenticado sea admin.
+function requireAdmin(req, res, next) {
+  if (!esAdmin(req.user)) return res.status(403).json({ error: 'No autorizado' })
+  next()
+}
+
 // ---------------- Endpoints públicos ----------------
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'app-facturacion-backend', phase: '3C' })
@@ -1427,6 +1443,7 @@ app.post('/cuenta/eliminar', requireAuth, async (req, res) => {
       'mp_cuentas',
       'credenciales_arca',
       'productos_configurados',
+      'suscripciones',
     ]
     for (const t of tablasUser) {
       const { error } = await supabaseAdmin.from(t).delete().eq('user_id', userId)
@@ -1454,6 +1471,67 @@ app.post('/cuenta/eliminar', requireAuth, async (req, res) => {
     console.log('[CUENTA-ELIMINAR][err]', userId, String((e && e.message) || e))
     res.status(500).json({ error: String((e && e.message) || e), resumen })
   }
+})
+
+// ---------------- Admin ----------------
+
+// ¿El usuario actual es admin? (para mostrar/ocultar la sección en el front)
+app.get('/admin/soy-admin', requireAuth, (req, res) => {
+  res.json({ admin: esAdmin(req.user) })
+})
+
+// Lista de usuarios con su plan actual.
+app.get('/admin/usuarios', requireAuth, requireAdmin, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const { data: list, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    if (error) throw new Error(error.message)
+    const { data: subs } = await supabaseAdmin.from('suscripciones').select('user_id, plan, vence, origen')
+    const porId = Object.fromEntries((subs || []).map((s) => [s.user_id, s]))
+    const ahora = Date.now()
+    const usuarios = (list?.users || []).map((u) => {
+      const s = porId[u.id]
+      const vigente = s?.plan === 'pro' && (!s.vence || new Date(s.vence).getTime() > ahora)
+      return {
+        id: u.id,
+        email: u.email,
+        creado: u.created_at,
+        plan: s?.plan || 'gratis',
+        vence: s?.vence || null,
+        origen: s?.origen || null,
+        proVigente: !!vigente,
+      }
+    })
+    // Más nuevos primero.
+    usuarios.sort((a, b) => new Date(b.creado) - new Date(a.creado))
+    res.json({ usuarios })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Asigna un plan a un usuario con una duración en meses (0 = sin vencimiento).
+app.post('/admin/plan', requireAuth, requireAdmin, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const userId = req.body?.userId
+  const plan = req.body?.plan
+  const meses = Number(req.body?.meses)
+  if (!esUUID(userId)) return res.status(400).json({ error: 'Usuario inválido' })
+  if (!['gratis', 'pro'].includes(plan)) return res.status(400).json({ error: 'Plan inválido' })
+  if (![0, 1, 3, 6, 12].includes(meses)) return res.status(400).json({ error: 'Duración inválida' })
+
+  let vence = null
+  if (plan === 'pro' && meses > 0) {
+    const d = new Date()
+    d.setMonth(d.getMonth() + meses)
+    vence = d.toISOString()
+  }
+  const { error } = await supabaseAdmin.from('suscripciones').upsert(
+    { user_id: userId, plan, vence, origen: 'admin', actualizado: new Date().toISOString() },
+    { onConflict: 'user_id' }
+  )
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ ok: true, plan, vence })
 })
 
 app.get('/', (req, res) => {
