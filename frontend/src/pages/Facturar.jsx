@@ -104,7 +104,11 @@ export default function Facturar() {
     e.preventDefault()
     setError(null)
     if (!productoFinal) return setError('Elegí o escribí un producto/servicio')
+    if (productoFinal.length > 80) return setError('La descripción es demasiado larga (máx. 80)')
     if (precioNum <= 0) return setError('Ingresá un precio válido')
+    if (precioNum > 100000000) return setError('El precio es demasiado alto')
+    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 99999)
+      return setError('Cantidad inválida')
     if (condicionesVenta.length === 0) return setError('Elegí al menos una condición de venta')
     setPaso('preview')
   }
@@ -367,7 +371,14 @@ export default function Facturar() {
             </div>
             <label className="campo">
               <span>Vto. para el pago</span>
-              <input type="text" value={vtoPago} onChange={(e) => setVtoPago(e.target.value)} />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="dd/mm/aaaa"
+                value={vtoPago}
+                onChange={(e) => setVtoPago(e.target.value.replace(/[^\d/]/g, '').slice(0, 10))}
+                maxLength={10}
+              />
             </label>
           </>
         )}
@@ -411,6 +422,7 @@ export default function Facturar() {
               value={productoCustom}
               onChange={(e) => setProductoCustom(e.target.value)}
               placeholder="Ej: Servicio de flete"
+              maxLength={80}
             />
           </label>
         )}
@@ -421,7 +433,7 @@ export default function Facturar() {
             <div className="stepper">
               <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))} aria-label="Menos">−</button>
               <span className="stepper-val">{cantidad}</span>
-              <button type="button" onClick={() => setCantidad((c) => c + 1)} aria-label="Más">+</button>
+              <button type="button" onClick={() => setCantidad((c) => Math.min(99999, c + 1))} aria-label="Más">+</button>
             </div>
           </div>
           <div className="campo">
@@ -432,7 +444,8 @@ export default function Facturar() {
                 type="text"
                 inputMode="decimal"
                 value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
+                onChange={(e) => setPrecio(e.target.value.replace(/[^\d.,]/g, '').slice(0, 15))}
+                maxLength={15}
                 placeholder="0,00"
               />
             </div>

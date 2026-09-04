@@ -75,6 +75,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            maxLength={254}
             autoComplete="email"
           />
           <input
@@ -84,6 +85,7 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={6}
+            maxLength={72}
             autoComplete={modo === 'login' ? 'current-password' : 'new-password'}
           />
           <button type="submit" disabled={cargando}>

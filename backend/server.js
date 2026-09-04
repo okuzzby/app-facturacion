@@ -27,6 +27,7 @@ import {
 import { cifrar, descifrar } from './crypto-ws.js'
 import { datosPadron } from './arca-padron.js'
 import { regenerarFacturasUsuario, regenerarTodas } from './regenerar-facturas.js'
+import { validarFactura, esUUID } from './validaciones.js'
 import {
   mpConfigurado,
   firmarState,
@@ -53,8 +54,38 @@ async function docTitular(accessToken) {
 }
 
 const app = express()
-app.use(cors())
-app.use(express.json())
+
+// CORS: solo el dominio de la app (y previews de Vercel) + desarrollo local.
+// Podés agregar dominios extra por env CORS_ORIGINS (separados por coma).
+const ORIGENES_OK = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+function origenPermitido(origin) {
+  if (!origin) return true // curl / apps / server-to-server (sin cabecera Origin)
+  if (ORIGENES_OK.includes(origin)) return true
+  try {
+    const h = new URL(origin).hostname
+    if (h === 'localhost' || h === '127.0.0.1') return true
+    if (h.endsWith('.vercel.app')) return true
+  } catch {
+    /* origin inválido → se rechaza abajo */
+  }
+  return false
+}
+app.use(cors({ origin: (origin, cb) => cb(null, origenPermitido(origin)) }))
+
+// Límite de tamaño del body: las peticiones legítimas son chicas.
+app.use(express.json({ limit: '256kb' }))
+
+// Cabeceras de seguridad básicas en todas las respuestas.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none')
+  next()
+})
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
@@ -107,7 +138,7 @@ async function handlerSpike(req, res) {
     res.json(out)
   } catch (e) {
     console.log('[WSTEST-ERR]', String((e && e.message) || e))
-    res.status(500).json({ error: String((e && e.message) || e), stack: (e && e.stack) || null })
+    res.status(500).json({ error: String((e && e.message) || e) })
   }
 }
 app.get('/arca/ws-spike', handlerSpike)
@@ -116,8 +147,15 @@ app.get('/wscheck', handlerSpike)
 // --- Emisión por Web Service (flujo real: emite + PDF + Storage + base) ---
 app.post('/arca/ws/factura-generar', requireAuth, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  // Revalidamos los datos (nunca confiar en el cliente). Datos malos → 400.
+  let datos
   try {
-    const out = await emitirFacturaFlow({ supabaseAdmin, userId: req.user.id, body: req.body || {} })
+    datos = validarFactura(req.body || {})
+  } catch (e) {
+    return res.status(400).json({ error: String((e && e.message) || 'Datos inválidos') })
+  }
+  try {
+    const out = await emitirFacturaFlow({ supabaseAdmin, userId: req.user.id, body: datos })
     res.json(out)
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
@@ -1102,9 +1140,12 @@ async function facturarUnCobro(userId, cobro, productoNombre) {
 // Facturar los cobros seleccionados (manual). Cada cobro = una Factura C.
 app.post('/mp/facturar', requireAuth, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
-  const ids = Array.isArray(req.body?.cobroIds) ? req.body.cobroIds : []
+  // Solo IDs con formato UUID válido (evita basura llegando a la consulta).
+  const ids = (Array.isArray(req.body?.cobroIds) ? req.body.cobroIds : []).filter(esUUID).slice(0, 200)
   if (ids.length === 0) return res.status(400).json({ error: 'No elegiste ningún cobro' })
-  const productoNombre = await resolverProducto(req.user.id, req.body?.productoId)
+  const productoId = req.body?.productoId
+  if (!esUUID(productoId)) return res.status(400).json({ error: 'Elegí un producto para facturar' })
+  const productoNombre = await resolverProducto(req.user.id, productoId)
   if (!productoNombre) return res.status(400).json({ error: 'Elegí un producto para facturar' })
 
   const { data: cobros, error } = await supabaseAdmin
@@ -1459,6 +1500,17 @@ async function selfTestWS() {
     console.log('[WSTEST-ERR]', String((e && e.message) || e), (e && e.stack) || '')
   }
 }
+
+// 404 genérico (rutas no encontradas).
+app.use((req, res) => res.status(404).json({ error: 'No encontrado' }))
+
+// Handler de errores: registra el detalle en el log, pero NO lo expone al cliente.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.log('[ERROR]', err && (err.stack || err.message || err))
+  if (res.headersSent) return
+  res.status(500).json({ error: 'Error interno' })
+})
 
 const port = process.env.PORT || 3000
 app.listen(port, () => {

@@ -1103,9 +1103,11 @@ export default function Configuracion() {
           <form onSubmit={guardarCredencial} className="form">
             <input
               type="text"
+              inputMode="numeric"
               placeholder="CUIT (ej: 20-12345678-9)"
               value={cuit}
-              onChange={(e) => setCuit(e.target.value)}
+              onChange={(e) => setCuit(e.target.value.replace(/[^\d-]/g, '').slice(0, 13))}
+              maxLength={13}
               required
             />
             <input
@@ -1114,6 +1116,7 @@ export default function Configuracion() {
               value={clave}
               onChange={(e) => setClave(e.target.value)}
               required
+              maxLength={64}
               autoComplete="new-password"
             />
             <p className="sub">
@@ -1164,6 +1167,7 @@ export default function Configuracion() {
                 type="text"
                 value={p.borrador}
                 onChange={(e) => cambiarBorrador(p.id, e.target.value)}
+                maxLength={80}
               />
               <button
                 type="button"
@@ -1189,6 +1193,7 @@ export default function Configuracion() {
             placeholder="Nuevo producto / servicio"
             value={nuevoProducto}
             onChange={(e) => setNuevoProducto(e.target.value)}
+            maxLength={80}
           />
           <button type="submit">Agregar</button>
         </form>
@@ -1232,6 +1237,7 @@ export default function Configuracion() {
                 onChange={(e) => setDelTexto(e.target.value)}
                 placeholder="ELIMINAR"
                 autoComplete="off"
+                maxLength={16}
               />
             </label>
             <div className="fila-botones">
@@ -1280,6 +1286,7 @@ export default function Configuracion() {
                   onChange={(e) => setDelPass(e.target.value)}
                   placeholder="Tu contraseña"
                   autoComplete="current-password"
+                  maxLength={72}
                 />
               </label>
             ) : (
