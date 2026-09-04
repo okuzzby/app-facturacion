@@ -15,7 +15,19 @@ const SETUP_EN_PROGRESO = [
 ]
 
 export default function Configuracion() {
-  const { user, refrescarPerfil } = useAuth()
+  const { user, refrescarPerfil, signOut } = useAuth()
+
+  // ---- eliminar cuenta ----
+  const [delAbierto, setDelAbierto] = useState(false) // panel desplegado
+  const [delTexto, setDelTexto] = useState('') // debe escribir "ELIMINAR"
+  const [delModal, setDelModal] = useState(false) // 2da confirmación (modal)
+  const [delPass, setDelPass] = useState('')
+  const [delCargando, setDelCargando] = useState(false)
+  const [delError, setDelError] = useState(null)
+  // ¿Tiene contraseña (registro con email) o entró solo con Google?
+  const tienePassword =
+    !!(user?.identities || []).some((i) => i.provider === 'email') ||
+    user?.app_metadata?.provider === 'email'
 
   // ---- perfil (nombre para el saludo) ----
 
@@ -955,6 +967,48 @@ export default function Configuracion() {
     )
   }
 
+  // Elimina la cuenta: verifica la contraseña (si el registro fue con email) y
+  // llama al backend, que borra todos los datos y el usuario de acceso.
+  async function eliminarCuenta() {
+    setDelError(null)
+    setDelCargando(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL en el frontend')
+
+      // Si tiene contraseña, la verificamos del lado del cliente antes de borrar
+      // (así la contraseña nunca pasa por nuestro servidor).
+      if (tienePassword) {
+        if (!delPass) throw new Error('Ingresá tu contraseña')
+        const { error: reauthErr } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: delPass,
+        })
+        if (reauthErr) throw new Error('Contraseña incorrecta')
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/cuenta/eliminar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'No se pudo eliminar la cuenta')
+
+      // Listo: cerramos sesión y salimos a la landing.
+      await signOut()
+      window.location.href = '/'
+    } catch (e) {
+      setDelError(e.message ?? String(e))
+      setDelCargando(false)
+    }
+  }
+
   // Los botones de desarrollo se ocultan para clientes. Se muestran solo en
   // local (vite dev) o si agregás ?dev a la URL (puerta trasera para vos).
   const mostrarDev =
@@ -1140,6 +1194,122 @@ export default function Configuracion() {
         </form>
         {prodError && <p className="error">{prodError}</p>}
       </section>
+
+      {/* ---------------- Eliminar cuenta ---------------- */}
+      <section className="seccion zona-peligro">
+        <h2>Eliminar cuenta</h2>
+        {!delAbierto ? (
+          <>
+            <p className="sub">
+              Borra de forma permanente todos los datos que YaFact usa de tu cuenta.
+            </p>
+            <div className="fila-botones">
+              <button type="button" className="peligro" onClick={() => setDelAbierto(true)}>
+                Eliminar mi cuenta
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="del-box">
+            <p>
+              Al eliminar tu cuenta se borra <strong>toda</strong> la información que YaFact
+              guarda de vos: facturas emitidas, credenciales de ARCA, cobros y cuentas de
+              Mercado Pago, productos guardados, tu perfil y los PDF.
+            </p>
+            <p className="del-legal">
+              Importante: las facturas que ya emitiste <strong>quedan registradas legalmente
+              en ARCA</strong>. Este borrado <strong>no</strong> las anula ni las elimina ante
+              ARCA — solo elimina los datos que usa YaFact.
+            </p>
+            <p className="sub">Esta acción no se puede deshacer.</p>
+            <label className="del-label">
+              <span>
+                Para continuar, escribí <strong>ELIMINAR</strong>:
+              </span>
+              <input
+                type="text"
+                value={delTexto}
+                onChange={(e) => setDelTexto(e.target.value)}
+                placeholder="ELIMINAR"
+                autoComplete="off"
+              />
+            </label>
+            <div className="fila-botones">
+              <button
+                type="button"
+                className="secundario"
+                onClick={() => {
+                  setDelAbierto(false)
+                  setDelTexto('')
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="peligro"
+                disabled={delTexto.trim().toUpperCase() !== 'ELIMINAR'}
+                onClick={() => {
+                  setDelError(null)
+                  setDelPass('')
+                  setDelModal(true)
+                }}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Modal: segunda confirmación */}
+      {delModal && (
+        <div className="modal-overlay" onClick={() => !delCargando && setDelModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>¿Estás seguro?</h3>
+            <p>
+              ¿Estás consciente de que esto va a eliminar <strong>toda tu información y tu
+              cuenta de YaFact</strong>? Esta acción no se puede deshacer.
+            </p>
+            {tienePassword ? (
+              <label className="del-label">
+                <span>Confirmá con tu contraseña:</span>
+                <input
+                  type="password"
+                  value={delPass}
+                  onChange={(e) => setDelPass(e.target.value)}
+                  placeholder="Tu contraseña"
+                  autoComplete="current-password"
+                />
+              </label>
+            ) : (
+              <p className="sub">
+                Iniciaste sesión con Google, así que no hay contraseña que ingresar. Al
+                confirmar se elimina tu cuenta y se corta el vínculo con Google.
+              </p>
+            )}
+            {delError && <p className="error">{delError}</p>}
+            <div className="fila-botones">
+              <button
+                type="button"
+                className="secundario"
+                onClick={() => setDelModal(false)}
+                disabled={delCargando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="peligro"
+                onClick={eliminarCuenta}
+                disabled={delCargando || (tienePassword && !delPass)}
+              >
+                {delCargando ? 'Eliminando…' : 'Eliminar todo y mi cuenta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sección de desarrollo: oculta para clientes (visible en local o con ?dev). */}
       {mostrarDev && (

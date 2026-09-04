@@ -243,6 +243,36 @@ button.peligro:hover { background: var(--red-soft); color: var(--red); }
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--r); padding: 20px 22px; box-shadow: var(--shadow-sm);
 }
+
+/* --- Zona de peligro: eliminar cuenta --- */
+.zona-peligro { border-color: var(--red-soft); }
+.zona-peligro h2 { color: var(--red); }
+.del-box { display: flex; flex-direction: column; gap: 10px; }
+.del-box > p { margin: 0; font-size: 14px; line-height: 1.5; }
+.del-legal {
+  background: var(--red-soft); border-radius: 10px; padding: 10px 12px;
+  font-size: 13px; color: var(--ink-2);
+}
+.del-label { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--ink-2); }
+.del-label input {
+  border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px;
+  font-size: 15px; font-family: inherit; background: var(--surface);
+}
+.del-label input:focus { outline: none; border-color: var(--red); }
+
+/* --- Modal de confirmación --- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 140; background: rgba(20,24,31,.5);
+  display: grid; place-items: center; padding: 18px;
+}
+.modal-card {
+  width: 100%; max-width: 380px; background: var(--surface);
+  border-radius: 16px; box-shadow: var(--shadow); padding: 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.modal-card h3 { font-family: "Manrope"; font-weight: 800; font-size: 18px; margin: 0; color: var(--red); }
+.modal-card > p { margin: 0; font-size: 14px; line-height: 1.5; }
+.modal-card .fila-botones { justify-content: flex-end; margin-top: 4px; }
 .seccion h2 { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
 .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .sec-head h2 { margin-bottom: 0; }

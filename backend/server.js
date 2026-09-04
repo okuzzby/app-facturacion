@@ -1355,6 +1355,66 @@ app.post('/arca/regenerar-todas', async (req, res) => {
   }
 })
 
+// ---- Eliminar cuenta: borra TODOS los datos que YaFact usa + el login ----
+// Las facturas ya emitidas siguen registradas legalmente en ARCA; esto NO las
+// anula ni las borra ante ARCA. Solo elimina los datos locales de la app y la
+// cuenta de acceso (email o Google). Es irreversible.
+app.post('/cuenta/eliminar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const userId = req.user.id
+  const resumen = {}
+  try {
+    // 1) PDF en Storage bajo <userId>/ (bucket "facturas").
+    try {
+      const { data: files } = await supabaseAdmin.storage.from('facturas').list(userId, { limit: 1000 })
+      if (files && files.length) {
+        const paths = files.map((f) => `${userId}/${f.name}`)
+        await supabaseAdmin.storage.from('facturas').remove(paths)
+        resumen.pdfs = paths.length
+      } else {
+        resumen.pdfs = 0
+      }
+    } catch (e) {
+      resumen.pdfsError = String((e && e.message) || e)
+    }
+
+    // 2) Filas por user_id (hijos primero).
+    const tablasUser = [
+      'facturas_emitidas',
+      'facturas',
+      'mp_cobros',
+      'mp_cuentas',
+      'credenciales_arca',
+      'productos_configurados',
+    ]
+    for (const t of tablasUser) {
+      const { error } = await supabaseAdmin.from(t).delete().eq('user_id', userId)
+      resumen[t] = error ? `error: ${error.message}` : 'ok'
+    }
+
+    // 3) Perfil (su clave es "id", no "user_id").
+    {
+      const { error } = await supabaseAdmin.from('perfiles').delete().eq('id', userId)
+      resumen.perfiles = error ? `error: ${error.message}` : 'ok'
+    }
+
+    // 4) Usuario de autenticación (corta el login de email/Google).
+    const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    if (delErr) {
+      console.log('[CUENTA-ELIMINAR][auth-err]', userId, delErr.message, JSON.stringify(resumen))
+      return res
+        .status(500)
+        .json({ error: 'No se pudo eliminar la cuenta de acceso: ' + delErr.message, resumen })
+    }
+
+    console.log('[CUENTA-ELIMINAR][ok]', userId, JSON.stringify(resumen))
+    res.json({ ok: true, resumen })
+  } catch (e) {
+    console.log('[CUENTA-ELIMINAR][err]', userId, String((e && e.message) || e))
+    res.status(500).json({ error: String((e && e.message) || e), resumen })
+  }
+})
+
 app.get('/', (req, res) => {
   res.send('app-facturacion backend (Docker + Playwright + Supabase). Ver /health')
 })
