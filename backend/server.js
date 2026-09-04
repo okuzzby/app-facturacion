@@ -29,6 +29,13 @@ import { datosPadron } from './arca-padron.js'
 import { regenerarFacturasUsuario, regenerarTodas } from './regenerar-facturas.js'
 import { validarFactura, esUUID } from './validaciones.js'
 import {
+  proConfigurado,
+  PRO_PRECIO,
+  crearPreapproval,
+  obtenerPreapproval,
+  cancelarPreapproval,
+} from './mp-pro.js'
+import {
   mpConfigurado,
   firmarState,
   verificarState,
@@ -134,6 +141,30 @@ function esAdmin(user) {
 function requireAdmin(req, res, next) {
   if (!esAdmin(req.user)) return res.status(403).json({ error: 'No autorizado' })
   next()
+}
+
+// Devuelve el plan vigente del usuario. "pro" solo si el plan es pro y no venció.
+async function planDe(userId) {
+  if (!supabaseAdmin) return { plan: 'gratis', proVigente: false }
+  const { data } = await supabaseAdmin
+    .from('suscripciones')
+    .select('plan, vence')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const pro = data?.plan === 'pro' && (!data.vence || new Date(data.vence).getTime() > Date.now())
+  return { plan: pro ? 'pro' : 'gratis', proVigente: pro }
+}
+// Middleware: exige plan Pro vigente. Responde 402 si no lo tiene.
+async function requirePro(req, res, next) {
+  try {
+    const p = await planDe(req.user.id)
+    if (!p.proVigente) {
+      return res.status(402).json({ error: 'PLAN_PRO_REQUERIDO', mensaje: 'Esta función es del plan Pro.' })
+    }
+    next()
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
 }
 
 // ---------------- Endpoints públicos ----------------
@@ -1040,8 +1071,10 @@ app.get('/mp/estado', requireAuth, async (req, res) => {
     .eq('user_id', req.user.id)
     .maybeSingle()
   if (error) return res.status(500).json({ error: error.message })
+  const { proVigente } = await planDe(req.user.id)
   res.json({
     configurado: mpConfigurado(),
+    pro: proVigente,
     conectada: Boolean(data && data.access_token_enc),
     auto_facturar: data?.auto_facturar || false,
     producto_default_id: data?.producto_default_id || null,
@@ -1050,7 +1083,7 @@ app.get('/mp/estado', requireAuth, async (req, res) => {
 })
 
 // Genera la URL de autorización de Mercado Pago. El frontend redirige ahí.
-app.get('/mp/oauth/url', requireAuth, async (req, res) => {
+app.get('/mp/oauth/url', requireAuth, requirePro, async (req, res) => {
   if (!mpConfigurado()) return res.status(500).json({ error: 'Falta configurar MP_CLIENT_ID / MP_CLIENT_SECRET' })
   const origin = String(req.query.origin || '')
   if (!/^https?:\/\//.test(origin)) return res.status(400).json({ error: 'origin inválido' })
@@ -1078,7 +1111,7 @@ app.get('/mp/oauth/callback', async (req, res) => {
 })
 
 // Cambiar ajustes: facturación automática y/o producto por defecto.
-app.post('/mp/config', requireAuth, async (req, res) => {
+app.post('/mp/config', requireAuth, requirePro, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
   const patch = { updated_at: new Date().toISOString() }
   if (typeof req.body?.auto_facturar === 'boolean') patch.auto_facturar = req.body.auto_facturar
@@ -1097,7 +1130,7 @@ app.post('/mp/desconectar', requireAuth, async (req, res) => {
 })
 
 // Traer los últimos cobros de Mercado Pago y guardarlos (sin facturar).
-app.post('/mp/cobros/sync', requireAuth, async (req, res) => {
+app.post('/mp/cobros/sync', requireAuth, requirePro, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
   try {
     const tk = await accessTokenValido(supabaseAdmin, req.user.id)
@@ -1154,7 +1187,7 @@ async function facturarUnCobro(userId, cobro, productoNombre) {
 }
 
 // Facturar los cobros seleccionados (manual). Cada cobro = una Factura C.
-app.post('/mp/facturar', requireAuth, async (req, res) => {
+app.post('/mp/facturar', requireAuth, requirePro, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
   // Solo IDs con formato UUID válido (evita basura llegando a la consulta).
   const ids = (Array.isArray(req.body?.cobroIds) ? req.body.cobroIds : []).filter(esUUID).slice(0, 200)
@@ -1221,8 +1254,10 @@ app.post('/mp/webhook', async (req, res) => {
     const ownerDoc = await docTitular(tk.accessToken)
     const nuevos = await guardarCobrosNuevos(supabaseAdmin, cta.user_id, [pago], tk.mpUserId || cta.mp_user_id, ownerDoc)
 
-    // Facturación automática (si está activada y hay producto por defecto).
-    if (cta.auto_facturar && cta.producto_default_id && nuevos.length > 0) {
+    // Facturación automática (si está activada, hay producto por defecto y el
+    // usuario tiene Pro vigente — MP es una función del plan Pro).
+    const { proVigente } = await planDe(cta.user_id)
+    if (proVigente && cta.auto_facturar && cta.producto_default_id && nuevos.length > 0) {
       const productoNombre = await resolverProducto(cta.user_id, cta.producto_default_id)
       if (productoNombre) {
         for (const c of nuevos) {
@@ -1532,6 +1567,138 @@ app.post('/admin/plan', requireAuth, requireAdmin, async (req, res) => {
   )
   if (error) return res.status(500).json({ error: error.message })
   res.json({ ok: true, plan, vence })
+})
+
+// ---------------- Suscripción Pro (pago por Mercado Pago) ----------------
+
+// Estado de la suscripción del usuario + si el pago está habilitado y el precio.
+app.get('/pro/estado', requireAuth, async (req, res) => {
+  const { plan, proVigente } = await planDe(req.user.id)
+  let vence = null
+  let mpEstado = null
+  if (supabaseAdmin) {
+    const { data } = await supabaseAdmin
+      .from('suscripciones')
+      .select('vence, mp_estado, origen')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    vence = data?.vence || null
+    mpEstado = data?.mp_estado || null
+  }
+  res.json({ configurado: proConfigurado(), precio: PRO_PRECIO, plan, proVigente, vence, mpEstado })
+})
+
+// Inicia la suscripción: crea el preapproval en MP y devuelve el link de pago.
+app.post('/pro/suscribir', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  if (!proConfigurado()) {
+    return res.status(503).json({ error: 'El pago del plan Pro todavía no está habilitado.' })
+  }
+  const origin = String(req.body?.origin || '')
+  const base = /^https?:\/\//.test(origin) ? origin : process.env.PRO_BACK_URL || ''
+  const backUrl = `${base}/configuracion?pro=ok`
+  try {
+    const { id, initPoint } = await crearPreapproval({
+      email: req.user.email,
+      userId: req.user.id,
+      backUrl,
+    })
+    // Guardamos el id; el plan se activa recién cuando MP confirma (webhook).
+    await supabaseAdmin.from('suscripciones').upsert(
+      {
+        user_id: req.user.id,
+        mp_preapproval_id: id,
+        mp_estado: 'pending',
+        origen: 'mp',
+        actualizado: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    )
+    res.json({ ok: true, initPoint })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Cancela la suscripción (deja de renovarse; el Pro sigue hasta el vencimiento).
+app.post('/pro/cancelar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const { data } = await supabaseAdmin
+      .from('suscripciones')
+      .select('mp_preapproval_id')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (data?.mp_preapproval_id && proConfigurado()) {
+      try {
+        await cancelarPreapproval(data.mp_preapproval_id)
+      } catch (e) {
+        console.log('[PRO] no se pudo cancelar en MP:', String((e && e.message) || e))
+      }
+    }
+    await supabaseAdmin
+      .from('suscripciones')
+      .update({ mp_estado: 'cancelled', actualizado: new Date().toISOString() })
+      .eq('user_id', req.user.id)
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Webhook de MP para la suscripción. Verificamos SIEMPRE el estado real contra
+// MP (no confiamos en el cuerpo del webhook).
+app.post('/pro/webhook', async (req, res) => {
+  res.status(200).json({ ok: true })
+  if (!supabaseAdmin || !proConfigurado()) return
+  try {
+    const tipo = String(req.body?.type || req.query?.topic || req.query?.type || '')
+    if (!/preapproval|subscription/i.test(tipo)) return
+    const preapprovalId = String(req.body?.data?.id || req.query?.id || '')
+    if (!preapprovalId) return
+    const { data: fila } = await supabaseAdmin
+      .from('suscripciones')
+      .select('user_id')
+      .eq('mp_preapproval_id', preapprovalId)
+      .maybeSingle()
+    const pre = await obtenerPreapproval(preapprovalId)
+    const userId = fila?.user_id || pre?.external_reference
+    if (!userId) return
+
+    if (pre.status === 'authorized') {
+      // Activa/renueva. Usamos la próxima fecha de cobro si viene, con 3 días de
+      // gracia; si no, 1 mes desde ahora.
+      let vence
+      if (pre.next_payment_date) {
+        vence = new Date(pre.next_payment_date)
+      } else {
+        vence = new Date()
+        vence.setMonth(vence.getMonth() + 1)
+      }
+      vence.setDate(vence.getDate() + 3)
+      await supabaseAdmin.from('suscripciones').upsert(
+        {
+          user_id: userId,
+          plan: 'pro',
+          vence: vence.toISOString(),
+          origen: 'mp',
+          mp_preapproval_id: preapprovalId,
+          mp_estado: 'authorized',
+          actualizado: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      )
+      console.log('[PRO] activada/renovada', userId, vence.toISOString())
+    } else if (['cancelled', 'paused'].includes(pre.status)) {
+      await supabaseAdmin
+        .from('suscripciones')
+        .update({ mp_estado: pre.status, actualizado: new Date().toISOString() })
+        .eq('user_id', userId)
+      console.log('[PRO] estado', pre.status, userId)
+    }
+  } catch (e) {
+    console.log('[PRO-WEBHOOK] error:', String((e && e.message) || e))
+  }
 })
 
 app.get('/', (req, res) => {

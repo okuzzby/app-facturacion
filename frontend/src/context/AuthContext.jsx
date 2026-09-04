@@ -8,6 +8,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [perfilNombre, setPerfilNombre] = useState('')
   const [esAdmin, setEsAdmin] = useState(false)
+  const [esPro, setEsPro] = useState(false)
+  const [planCargado, setPlanCargado] = useState(false)
 
   useEffect(() => {
     if (!supabase) {
@@ -43,6 +45,28 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     cargarPerfil()
   }, [cargarPerfil])
+
+  // Plan del usuario (para mostrar/ocultar funciones Pro en la UI). El control
+  // real está en el backend/base; esto es solo para la interfaz.
+  const cargarPlan = useCallback(async () => {
+    if (!supabase || !userId) {
+      setEsPro(false)
+      setPlanCargado(true)
+      return
+    }
+    const { data } = await supabase
+      .from('suscripciones')
+      .select('plan, vence')
+      .eq('user_id', userId)
+      .maybeSingle()
+    const pro = data?.plan === 'pro' && (!data.vence || new Date(data.vence).getTime() > Date.now())
+    setEsPro(Boolean(pro))
+    setPlanCargado(true)
+  }, [userId])
+
+  useEffect(() => {
+    cargarPlan()
+  }, [cargarPlan])
 
   // ¿La cuenta actual es admin? Lo decide el backend (lista de correos).
   useEffect(() => {
@@ -80,7 +104,10 @@ export function AuthProvider({ children }) {
     loading,
     perfilNombre,
     esAdmin,
+    esPro,
+    planCargado,
     refrescarPerfil: cargarPerfil,
+    refrescarPlan: cargarPlan,
     signOut: () => supabase?.auth.signOut(),
   }
 

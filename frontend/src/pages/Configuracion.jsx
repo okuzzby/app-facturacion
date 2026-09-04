@@ -15,7 +15,13 @@ const SETUP_EN_PROGRESO = [
 ]
 
 export default function Configuracion() {
-  const { user, refrescarPerfil, signOut } = useAuth()
+  const { user, refrescarPerfil, refrescarPlan, signOut, esPro } = useAuth()
+
+  // ---- plan / suscripción Pro ----
+  const [proEstado, setProEstado] = useState(null)
+  const [proMsg, setProMsg] = useState(null)
+  const [proError, setProError] = useState(null)
+  const [proAccion, setProAccion] = useState(false)
 
   // ---- eliminar cuenta ----
   const [delAbierto, setDelAbierto] = useState(false) // panel desplegado
@@ -932,7 +938,11 @@ export default function Configuracion() {
       .from('productos_configurados')
       .insert({ user_id: user.id, nombre })
     if (error) {
-      setProdError(error.message)
+      if (/LIMITE_PRODUCTOS_GRATIS/.test(error.message || '')) {
+        setProdError('El plan Gratis permite hasta 3 productos. Pasá a Pro para guardar ilimitados.')
+      } else {
+        setProdError(error.message)
+      }
       return
     }
     setNuevoProducto('')
@@ -1009,6 +1019,94 @@ export default function Configuracion() {
     }
   }
 
+  // ---- Plan / suscripción Pro ----
+  async function cargarPro() {
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) return
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+      const r = await fetch(`${backend}/pro/estado`, { headers: { Authorization: `Bearer ${token}` } })
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setProEstado(j)
+    } catch {
+      /* silencioso */
+    }
+  }
+
+  async function suscribirPro() {
+    setProError(null)
+    setProMsg(null)
+    setProAccion(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+      const r = await fetch(`${backend}/pro/suscribir`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin: window.location.origin }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'No se pudo iniciar la suscripción')
+      if (j.initPoint) window.location.href = j.initPoint
+      else throw new Error('No se recibió el link de pago')
+    } catch (e) {
+      setProError(e.message ?? String(e))
+      setProAccion(false)
+    }
+  }
+
+  async function cancelarPro() {
+    if (!window.confirm('¿Cancelar la suscripción Pro? Seguís con Pro hasta la fecha de vencimiento y después pasás a Gratis.')) return
+    setProError(null)
+    setProMsg(null)
+    setProAccion(true)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch(`${backend}/pro/cancelar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'No se pudo cancelar')
+      setProMsg('Suscripción cancelada. Mantenés Pro hasta el vencimiento.')
+      await cargarPro()
+    } catch (e) {
+      setProError(e.message ?? String(e))
+    } finally {
+      setProAccion(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!supabase) return
+    cargarPro()
+    const p = new URLSearchParams(window.location.search).get('pro')
+    if (p === 'ok') {
+      setProMsg('¡Gracias! Tu suscripción se está activando. Puede tardar unos minutos en confirmarse.')
+      const url = new URL(window.location.href)
+      url.searchParams.delete('pro')
+      window.history.replaceState({}, '', url.toString())
+      setTimeout(() => {
+        refrescarPlan?.()
+        cargarPro()
+      }, 4000)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Los botones de desarrollo se ocultan para clientes. Se muestran solo en
   // local (vite dev) o si agregás ?dev a la URL (puerta trasera para vos).
   const mostrarDev =
@@ -1029,6 +1127,53 @@ export default function Configuracion() {
       <div className="page-head">
         <div><h1>Configuración</h1><div className="sub">Tu conexión con ARCA y tus productos</div></div>
       </div>
+
+      {/* ---------------- Plan ---------------- */}
+      <section className="seccion">
+        <div className="sec-head">
+          <h2>Tu plan</h2>
+          <span className={`badge ${esPro ? 'badge-ok' : ''}`}>{esPro ? 'Pro' : 'Gratis'}</span>
+        </div>
+
+        {esPro ? (
+          <>
+            <p className="sub">
+              Tenés el plan <strong>Pro</strong> activo
+              {proEstado?.vence && <> · vence el {new Date(proEstado.vence).toLocaleDateString('es-AR')}</>}.
+            </p>
+            {proEstado?.mpEstado === 'authorized' && (
+              <div className="fila-botones">
+                <button type="button" className="peligro" onClick={cancelarPro} disabled={proAccion}>
+                  {proAccion ? 'Procesando…' : 'Cancelar suscripción'}
+                </button>
+              </div>
+            )}
+            {proEstado?.mpEstado === 'cancelled' && (
+              <p className="sub">Suscripción cancelada: no se renueva. Mantenés Pro hasta el vencimiento.</p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="sub">
+              Estás en el plan <strong>Gratis</strong>. Con <strong>Pro</strong> desbloqueás productos
+              ilimitados y toda la integración con Mercado Pago.
+            </p>
+            {proEstado && !proEstado.configurado ? (
+              <p className="sub">El pago del plan Pro todavía no está habilitado.</p>
+            ) : (
+              <div className="fila-botones">
+                <button type="button" onClick={suscribirPro} disabled={proAccion || !proEstado}>
+                  {proAccion
+                    ? 'Abriendo pago…'
+                    : `Suscribirme a Pro${proEstado?.precio ? ` ($${new Intl.NumberFormat('es-AR').format(proEstado.precio)}/mes)` : ''}`}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        {proMsg && <p className="ok">{proMsg}</p>}
+        {proError && <p className="error">{proError}</p>}
+      </section>
 
       {/* ---------------- Credencial ARCA ---------------- */}
       <section className="seccion">
@@ -1187,6 +1332,11 @@ export default function Configuracion() {
           ))}
         </ul>
 
+        {!esPro && (
+          <p className="sub">
+            Plan Gratis: hasta 3 productos ({productos.length}/3). Con Pro guardás ilimitados.
+          </p>
+        )}
         <form onSubmit={agregarProducto} className="agregar">
           <input
             type="text"
@@ -1194,8 +1344,11 @@ export default function Configuracion() {
             value={nuevoProducto}
             onChange={(e) => setNuevoProducto(e.target.value)}
             maxLength={80}
+            disabled={!esPro && productos.length >= 3}
           />
-          <button type="submit">Agregar</button>
+          <button type="submit" disabled={!esPro && productos.length >= 3}>
+            Agregar
+          </button>
         </form>
         {prodError && <p className="error">{prodError}</p>}
       </section>

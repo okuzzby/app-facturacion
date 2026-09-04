@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 
 const money = (n) =>
   new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)
@@ -45,6 +46,7 @@ async function apiMP(path, { method = 'GET', body } = {}) {
 
 export default function MercadoPago() {
   const navigate = useNavigate()
+  const { esPro, planCargado } = useAuth()
 
   const [estado, setEstado] = useState(null)
   const [productos, setProductos] = useState([])
@@ -230,6 +232,17 @@ export default function MercadoPago() {
         <h1>Mercado Pago</h1>
       </div>
 
+      {planCargado && !esPro ? (
+        <section className="seccion">
+          <span className="badge badge-warn" style={{ marginBottom: 10 }}>Plan Pro</span>
+          <p>
+            La integración con <strong>Mercado Pago</strong> es parte del plan <strong>Pro</strong>.
+            Con Pro conectás tu cuenta, ves tus cobros entrantes y los facturás con un toque, o los
+            dejás en automático.
+          </p>
+        </section>
+      ) : (
+      <>
       {msg && <p className="ok">{msg}</p>}
       {error && <p className="error">{error}</p>}
       {cargando && <p className="sub">Cargando…</p>}
@@ -378,6 +391,8 @@ export default function MercadoPago() {
             )}
           </section>
         </>
+      )}
+      </>
       )}
     </div>
   )

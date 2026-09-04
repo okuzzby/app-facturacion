@@ -98,6 +98,7 @@ export default function Integraciones() {
   }
 
   const conectada = estado?.conectada
+  const pro = estado?.pro
 
   return (
     <div className="page">
@@ -129,9 +130,22 @@ export default function Integraciones() {
               </div>
             </div>
             {conectada && <span className="badge badge-ok">Conectado</span>}
+            {!pro && <span className="badge badge-warn">Pro</span>}
           </div>
 
-          {!conectada ? (
+          {!pro ? (
+            <div className="setup-box setup-aviso" style={{ marginTop: 6 }}>
+              <p style={{ margin: 0 }}>
+                La integración con <strong>Mercado Pago</strong> es parte del plan <strong>Pro</strong>.
+                Con Pro conectás tu cuenta, ves tus cobros y los facturás (a mano o en automático).
+              </p>
+              {conectada && (
+                <div className="fila-botones" style={{ marginTop: 10 }}>
+                  <button type="button" className="peligro" onClick={desconectar}>Desconectar</button>
+                </div>
+              )}
+            </div>
+          ) : !conectada ? (
             <div className="fila-botones" style={{ marginTop: 6 }}>
               <button type="button" onClick={conectar} disabled={conectando}>
                 {conectando ? 'Abriendo…' : 'Conectar Mercado Pago'}
