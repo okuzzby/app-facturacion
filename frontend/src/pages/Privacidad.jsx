@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 // para completar más adelante.
 const RESPONSABLE = 'YaFact'
 const CONTACTO = 'yafact.ar@gmail.com'
-const ACTUALIZADO = '3 de septiembre de 2026'
+const ACTUALIZADO = '4 de septiembre de 2026'
 
 export default function Privacidad() {
   return (
@@ -64,10 +64,12 @@ export default function Privacidad() {
 
         <h2>3. Dónde se guardan</h2>
         <p>
-          Tus datos se almacenan en servicios de infraestructura de terceros que
-          actúan como procesadores de datos por cuenta nuestra, con estándares de
-          seguridad de la industria. Los datos sensibles, como la Clave Fiscal y
-          los tokens de Mercado Pago, se guardan cifrados.
+          Tus datos se alojan en servicios de terceros que actúan como procesadores
+          de datos por cuenta nuestra: <strong>Supabase</strong> (base de datos,
+          autenticación y almacenamiento de archivos) y <strong>Vercel</strong> y{' '}
+          <strong>Render</strong> (alojamiento de la App y del servidor), con
+          estándares de seguridad de la industria. Los datos sensibles, como la
+          Clave Fiscal y los tokens de Mercado Pago, se guardan cifrados.
         </p>
 
         <h2>4. Con quién se comparten</h2>
@@ -77,9 +79,10 @@ export default function Privacidad() {
           <li><strong>Mercado Pago:</strong> si conectás tu cuenta, para leer tus cobros.</li>
           <li><strong>Google:</strong> si elegís iniciar sesión con Google.</li>
           <li>
-            <strong>Proveedores tecnológicos</strong> que actúan como procesadores
-            de datos por cuenta nuestra (por ejemplo, alojamiento, base de datos y
-            almacenamiento), bajo obligaciones de confidencialidad.
+            <strong>Supabase, Vercel y Render:</strong> proveedores de
+            infraestructura (base de datos, almacenamiento y alojamiento) que
+            actúan como procesadores de datos por cuenta nuestra, bajo obligaciones
+            de confidencialidad.
           </li>
         </ul>
 
