@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Logo from './Logo'
+import InstallPWA from './InstallPWA'
 
 const IconInicio = () => (
   <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /></svg>
@@ -102,6 +103,7 @@ export default function Layout() {
       </header>
 
       <main className="content">
+        <InstallPWA />
         <Outlet />
       </main>
 
