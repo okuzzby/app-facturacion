@@ -103,7 +103,6 @@ export default function Layout() {
       </header>
 
       <main className="content">
-        <InstallPWA />
         <Outlet />
       </main>
 
@@ -145,6 +144,7 @@ export default function Layout() {
                 <Icon /> <span>{label}</span>
               </NavLink>
             ))}
+            <InstallPWA onClose={cerrar} />
           </nav>
 
           <div className="menu-foot">

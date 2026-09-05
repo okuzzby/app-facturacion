@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 
-// ¿Ya está instalada / abierta como app?
 function esStandalone() {
   try {
     return (
@@ -11,80 +10,67 @@ function esStandalone() {
     return false
   }
 }
+function esMobile() {
+  return /android|iphone|ipad|ipod|mobile/i.test(window.navigator.userAgent || '')
+}
 function esIOS() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent || '')
 }
 
-// Banner "Instalá YaFact": botón nativo en Android/escritorio; instrucción en iPhone.
-export default function InstallPWA() {
+const IconInstalar = () => (
+  <svg viewBox="0 0 24 24">
+    <path d="M12 3v12M8 11l4 4 4-4M5 21h14" />
+  </svg>
+)
+
+// Ítem de menú "Instalar app": solo aparece en el celular y desaparece cuando la
+// app ya está instalada en ese dispositivo (o en escritorio).
+export default function InstallPWA({ onClose }) {
   const [deferred, setDeferred] = useState(null)
-  const [visible, setVisible] = useState(false)
-  const [iosHelp, setIosHelp] = useState(false)
+  const [standalone, setStandalone] = useState(esStandalone())
+  const [ayuda, setAyuda] = useState(false)
 
   useEffect(() => {
-    if (esStandalone()) return
-    try {
-      if (localStorage.getItem('yf_install_dismiss') === '1') return
-    } catch {
-      /* noop */
-    }
     const onBip = (e) => {
       e.preventDefault()
       setDeferred(e)
-      setVisible(true)
     }
-    const onInstalled = () => setVisible(false)
+    const onInstalled = () => setStandalone(true)
     window.addEventListener('beforeinstallprompt', onBip)
     window.addEventListener('appinstalled', onInstalled)
-    // iPhone no dispara beforeinstallprompt: mostramos el banner con la ayuda.
-    if (esIOS()) setVisible(true)
     return () => {
       window.removeEventListener('beforeinstallprompt', onBip)
       window.removeEventListener('appinstalled', onInstalled)
     }
   }, [])
 
-  function cerrar() {
-    setVisible(false)
-    try {
-      localStorage.setItem('yf_install_dismiss', '1')
-    } catch {
-      /* noop */
-    }
-  }
+  // Solo en celular y si todavía no está instalada.
+  if (standalone || !esMobile()) return null
 
   async function instalar() {
-    if (esIOS()) {
-      setIosHelp(true)
+    if (deferred) {
+      deferred.prompt()
+      const r = await deferred.userChoice.catch(() => null)
+      setDeferred(null)
+      if (r?.outcome === 'accepted') onClose?.()
       return
     }
-    if (!deferred) return
-    deferred.prompt()
-    const { outcome } = await deferred.userChoice.catch(() => ({ outcome: 'dismissed' }))
-    setDeferred(null)
-    if (outcome === 'accepted') setVisible(false)
+    // Sin instalador nativo (iPhone, o Android que aún no lo ofreció): mostramos ayuda.
+    setAyuda(true)
   }
 
-  if (!visible) return null
-
   return (
-    <div className="pwa-banner">
-      <div className="pwa-banner-row">
-        <div className="pwa-banner-txt">
-          <strong>Instalá YaFact</strong>
-          <span>Tenela en tu celular como una app, siempre a mano.</span>
-        </div>
-        <div className="pwa-banner-acts">
-          <button type="button" className="secundario" onClick={cerrar}>Ahora no</button>
-          <button type="button" onClick={instalar}>Instalar</button>
-        </div>
-      </div>
-      {iosHelp && (
-        <div className="pwa-ios">
-          En iPhone: tocá el botón <strong>Compartir</strong> (el cuadradito con la flecha) y después{' '}
-          <strong>“Agregar a pantalla de inicio”</strong>.
-        </div>
+    <>
+      <button type="button" className="menu-install" onClick={instalar}>
+        <IconInstalar /> <span>Instalar app</span>
+      </button>
+      {ayuda && (
+        <p className="menu-install-ayuda">
+          {esIOS()
+            ? 'En iPhone: tocá Compartir y después “Agregar a pantalla de inicio”.'
+            : 'Abrí el menú de tu navegador (⋮) y elegí “Instalar app” o “Agregar a pantalla de inicio”.'}
+        </p>
       )}
-    </div>
+    </>
   )
 }
