@@ -1588,33 +1588,54 @@ app.get('/pro/estado', requireAuth, async (req, res) => {
   res.json({ configurado: proConfigurado(), precio: PRO_PRECIO, plan, proVigente, vence, mpEstado })
 })
 
-// Inicia la suscripción: crea el preapproval en MP y devuelve el link de pago.
+// Inicia la suscripción con la tarjeta tokenizada en el navegador (Card Brick).
+// Con la tarjeta, la suscripción se autoriza en el momento (sin login ni email).
 app.post('/pro/suscribir', requireAuth, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
   if (!proConfigurado()) {
     return res.status(503).json({ error: 'El pago del plan Pro todavía no está habilitado.' })
   }
+  const cardToken = typeof req.body?.cardToken === 'string' && req.body.cardToken ? req.body.cardToken : null
+  // Email del pagador (viene del formulario de tarjeta); si no, el de la app.
+  const emailMp =
+    typeof req.body?.payerEmail === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.payerEmail.trim())
+      ? req.body.payerEmail.trim()
+      : req.user.email
   const origin = String(req.body?.origin || '')
   const base = /^https?:\/\//.test(origin) ? origin : process.env.PRO_BACK_URL || ''
   const backUrl = `${base}/configuracion?pro=ok`
   try {
-    const { id, initPoint } = await crearPreapproval({
-      email: req.user.email,
+    const { id, status, initPoint } = await crearPreapproval({
+      email: emailMp,
       userId: req.user.id,
+      cardToken,
       backUrl,
     })
-    // Guardamos el id; el plan se activa recién cuando MP confirma (webhook).
-    await supabaseAdmin.from('suscripciones').upsert(
-      {
-        user_id: req.user.id,
-        mp_preapproval_id: id,
-        mp_estado: 'pending',
-        origen: 'mp',
-        actualizado: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    )
-    res.json({ ok: true, initPoint })
+    const now = new Date().toISOString()
+    if (status === 'authorized') {
+      // Cobro OK: activamos Pro ya (el webhook lo mantiene renovado).
+      const d = new Date()
+      d.setMonth(d.getMonth() + 1)
+      d.setDate(d.getDate() + 3)
+      await supabaseAdmin.from('suscripciones').upsert(
+        {
+          user_id: req.user.id,
+          plan: 'pro',
+          vence: d.toISOString(),
+          origen: 'mp',
+          mp_preapproval_id: id,
+          mp_estado: 'authorized',
+          actualizado: now,
+        },
+        { onConflict: 'user_id' }
+      )
+    } else {
+      await supabaseAdmin.from('suscripciones').upsert(
+        { user_id: req.user.id, mp_preapproval_id: id, mp_estado: status || 'pending', origen: 'mp', actualizado: now },
+        { onConflict: 'user_id' }
+      )
+    }
+    res.json({ ok: true, status, initPoint })
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) })
   }

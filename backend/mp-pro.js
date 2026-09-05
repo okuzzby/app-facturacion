@@ -33,24 +33,31 @@ async function mpFetch(path, { method = 'GET', body } = {}) {
   return j
 }
 
-// Crea una suscripción (preapproval) pendiente y devuelve el punto de pago
-// (init_point) al que se redirige al usuario para autorizarla.
-export async function crearPreapproval({ email, userId, backUrl }) {
+// Crea una suscripción (preapproval). Si viene `cardToken` (tarjeta tokenizada
+// en el navegador), la suscripción se AUTORIZA en el momento cobrando esa
+// tarjeta, sin que el usuario inicie sesión en Mercado Pago. Si no, cae al flujo
+// viejo con init_point (por compatibilidad).
+export async function crearPreapproval({ email, userId, cardToken, backUrl }) {
   const body = {
     reason: 'YaFact Pro',
     external_reference: String(userId),
     payer_email: email,
-    back_url: backUrl,
     auto_recurring: {
       frequency: 1,
       frequency_type: 'months',
       transaction_amount: PRO_PRECIO,
       currency_id: 'ARS',
     },
-    status: 'pending',
+  }
+  if (cardToken) {
+    body.card_token_id = cardToken
+    body.status = 'authorized'
+  } else {
+    body.back_url = backUrl
+    body.status = 'pending'
   }
   const j = await mpFetch('/preapproval', { method: 'POST', body })
-  return { id: j.id, initPoint: j.init_point || j.sandbox_init_point || null }
+  return { id: j.id, status: j.status || null, initPoint: j.init_point || j.sandbox_init_point || null }
 }
 
 // Consulta el estado de una suscripción.

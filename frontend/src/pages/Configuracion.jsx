@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import MpCardBrick from '../components/MpCardBrick'
 
 // Estados intermedios del onboarding automático de facturación electrónica.
 const SETUP_EN_PROGRESO = [
@@ -22,6 +23,7 @@ export default function Configuracion() {
   const [proMsg, setProMsg] = useState(null)
   const [proError, setProError] = useState(null)
   const [proAccion, setProAccion] = useState(false)
+  const [checkoutAbierto, setCheckoutAbierto] = useState(false)
 
   // ---- eliminar cuenta ----
   const [delAbierto, setDelAbierto] = useState(false) // panel desplegado
@@ -1037,31 +1039,38 @@ export default function Configuracion() {
     }
   }
 
-  async function suscribirPro() {
+  // Recibe la tarjeta ya tokenizada (del Card Brick) y crea la suscripción.
+  // Devuelve una Promise: si resuelve, el Brick muestra éxito; si rechaza, error.
+  async function suscribirConTarjeta(cardFormData) {
     setProError(null)
     setProMsg(null)
-    setProAccion(true)
-    try {
-      const backend = import.meta.env.VITE_BACKEND_URL
-      if (!backend) throw new Error('Falta VITE_BACKEND_URL')
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('No hay sesión activa')
-      const r = await fetch(`${backend}/pro/suscribir`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origin: window.location.origin }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'No se pudo iniciar la suscripción')
-      if (j.initPoint) window.location.href = j.initPoint
-      else throw new Error('No se recibió el link de pago')
-    } catch (e) {
-      setProError(e.message ?? String(e))
-      setProAccion(false)
-    }
+    const backend = import.meta.env.VITE_BACKEND_URL
+    if (!backend) throw new Error('Falta VITE_BACKEND_URL')
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) throw new Error('No hay sesión activa')
+    const r = await fetch(`${backend}/pro/suscribir`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origin: window.location.origin,
+        cardToken: cardFormData?.token,
+        payerEmail: cardFormData?.payer?.email,
+      }),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(j.error || 'No se pudo procesar el pago')
+    // Listo: cerramos el checkout, avisamos y refrescamos el plan.
+    setCheckoutAbierto(false)
+    setProMsg(
+      j.status === 'authorized'
+        ? '¡Listo! Tu plan Pro quedó activo.'
+        : 'Pago recibido. Tu plan se está activando; puede tardar unos minutos.'
+    )
+    await cargarPro()
+    refrescarPlan?.()
   }
 
   async function cancelarPro() {
@@ -1162,10 +1171,8 @@ export default function Configuracion() {
               <p className="sub">El pago del plan Pro todavía no está habilitado.</p>
             ) : (
               <div className="fila-botones">
-                <button type="button" onClick={suscribirPro} disabled={proAccion || !proEstado}>
-                  {proAccion
-                    ? 'Abriendo pago…'
-                    : `Suscribirme a Pro${proEstado?.precio ? ` ($${new Intl.NumberFormat('es-AR').format(proEstado.precio)}/mes)` : ''}`}
+                <button type="button" onClick={() => setCheckoutAbierto(true)} disabled={!proEstado}>
+                  {`Suscribirme a Pro${proEstado?.precio ? ` ($${new Intl.NumberFormat('es-AR').format(proEstado.precio)}/mes)` : ''}`}
                 </button>
               </div>
             )}
@@ -1420,6 +1427,29 @@ export default function Configuracion() {
           </div>
         )}
       </section>
+
+      {/* Modal: checkout de suscripción Pro (tarjeta) */}
+      {checkoutAbierto && (
+        <div className="modal-overlay" onClick={() => setCheckoutAbierto(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <h3 style={{ color: 'var(--ink)' }}>Suscribirme a Pro</h3>
+            <p className="sub" style={{ marginTop: -4 }}>
+              {proEstado?.precio ? `$${new Intl.NumberFormat('es-AR').format(proEstado.precio)} por mes` : ''} · pagás con tu tarjeta y se renueva solo cada mes.
+            </p>
+            <MpCardBrick
+              amount={proEstado?.precio || 0}
+              onSubmitToken={suscribirConTarjeta}
+              onError={(m) => setProError(typeof m === 'string' ? m : 'Hubo un problema con el pago')}
+            />
+            {proError && <p className="error">{proError}</p>}
+            <div className="fila-botones">
+              <button type="button" className="secundario" onClick={() => setCheckoutAbierto(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: segunda confirmación */}
       {delModal && (
