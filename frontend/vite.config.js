@@ -26,10 +26,15 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-        navigateFallback: '/index.html',
-        // La landing es un archivo estático propio: no la reemplacemos por index.html.
-        navigateFallbackDenylist: [/^\/landing\.html/],
+        // NO cacheamos el HTML: las navegaciones van SIEMPRE a la red, así el
+        // index.html es siempre el último y nunca queda apuntando a un JS viejo
+        // (evita la pantalla en blanco tras un deploy). Solo cacheamos estáticos
+        // con hash (inmutables). Sigue siendo instalable.
+        globPatterns: ['**/*.{js,css,svg,png,ico,woff,woff2}'],
+        navigateFallback: null,
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
       },
     }),
   ],
