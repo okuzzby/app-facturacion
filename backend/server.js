@@ -1604,6 +1604,7 @@ app.post('/pro/suscribir', requireAuth, async (req, res) => {
   const origin = String(req.body?.origin || '')
   const base = /^https?:\/\//.test(origin) ? origin : process.env.PRO_BACK_URL || ''
   const backUrl = `${base}/configuracion?pro=ok`
+  console.log('[PRO-SUSCRIBIR] intento', req.user.id, 'card:', cardToken ? 'sí' : 'no', 'email:', emailMp)
   try {
     const { id, status, initPoint } = await crearPreapproval({
       email: emailMp,
@@ -1611,6 +1612,7 @@ app.post('/pro/suscribir', requireAuth, async (req, res) => {
       cardToken,
       backUrl,
     })
+    console.log('[PRO-SUSCRIBIR] preapproval', id, 'status', status)
     const now = new Date().toISOString()
     if (status === 'authorized') {
       // Cobro OK: activamos Pro ya (el webhook lo mantiene renovado).
@@ -1637,6 +1639,7 @@ app.post('/pro/suscribir', requireAuth, async (req, res) => {
     }
     res.json({ ok: true, status, initPoint })
   } catch (e) {
+    console.log('[PRO-SUSCRIBIR][err]', req.user.id, String((e && e.message) || e))
     res.status(500).json({ error: String((e && e.message) || e) })
   }
 })

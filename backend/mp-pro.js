@@ -27,6 +27,8 @@ async function mpFetch(path, { method = 'GET', body } = {}) {
   })
   const j = await r.json().catch(() => ({}))
   if (!r.ok) {
+    // Log del error crudo de MP para diagnóstico (status + cuerpo).
+    console.log('[PRO-MP-ERR]', method, path, r.status, JSON.stringify(j).slice(0, 800))
     const msg = j?.message || j?.error || `MP error ${r.status}`
     throw new Error(msg)
   }
