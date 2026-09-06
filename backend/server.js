@@ -1602,7 +1602,9 @@ app.post('/pro/suscribir', requireAuth, async (req, res) => {
       ? req.body.payerEmail.trim()
       : req.user.email
   const origin = String(req.body?.origin || '')
-  const base = /^https?:\/\//.test(origin) ? origin : process.env.PRO_BACK_URL || ''
+  const base = /^https?:\/\//.test(origin)
+    ? origin
+    : process.env.PRO_BACK_URL || 'https://app-facturacion-inky.vercel.app'
   const backUrl = `${base}/configuracion?pro=ok`
   console.log('[PRO-SUSCRIBIR] intento', req.user.id, 'card:', cardToken ? 'sí' : 'no', 'email:', emailMp)
   try {

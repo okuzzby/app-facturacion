@@ -44,6 +44,8 @@ export async function crearPreapproval({ email, userId, cardToken, backUrl }) {
     reason: 'YaFact Pro',
     external_reference: String(userId),
     payer_email: email,
+    // Mercado Pago exige back_url SIEMPRE (también en el flujo con tarjeta).
+    back_url: backUrl,
     auto_recurring: {
       frequency: 1,
       frequency_type: 'months',
@@ -55,7 +57,6 @@ export async function crearPreapproval({ email, userId, cardToken, backUrl }) {
     body.card_token_id = cardToken
     body.status = 'authorized'
   } else {
-    body.back_url = backUrl
     body.status = 'pending'
   }
   const j = await mpFetch('/preapproval', { method: 'POST', body })
