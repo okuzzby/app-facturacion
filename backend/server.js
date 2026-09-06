@@ -1692,15 +1692,13 @@ app.post('/pro/webhook', async (req, res) => {
     if (!userId) return
 
     if (pre.status === 'authorized') {
-      // Activa/renueva. Usamos la próxima fecha de cobro si viene, con 3 días de
-      // gracia; si no, 1 mes desde ahora.
-      let vence
-      if (pre.next_payment_date) {
-        vence = new Date(pre.next_payment_date)
-      } else {
-        vence = new Date()
-        vence.setMonth(vence.getMonth() + 1)
-      }
+      // Activa/renueva. El vencimiento es al menos 1 mes desde ahora; si MP
+      // informa una próxima fecha de cobro MÁS LEJANA, usamos esa. Siempre + 3
+      // días de gracia. (Evita que MP devuelva una fecha corta y corte el Pro.)
+      const unMes = new Date()
+      unMes.setMonth(unMes.getMonth() + 1)
+      const prox = pre.next_payment_date ? new Date(pre.next_payment_date) : null
+      let vence = prox && prox > unMes ? prox : unMes
       vence.setDate(vence.getDate() + 3)
       await supabaseAdmin.from('suscripciones').upsert(
         {
