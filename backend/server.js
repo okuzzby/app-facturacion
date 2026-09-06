@@ -1521,7 +1521,9 @@ app.get('/admin/usuarios', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { data: list, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     if (error) throw new Error(error.message)
-    const { data: subs } = await supabaseAdmin.from('suscripciones').select('user_id, plan, vence, origen')
+    const { data: subs } = await supabaseAdmin
+      .from('suscripciones')
+      .select('user_id, plan, vence, origen, mp_estado')
     const porId = Object.fromEntries((subs || []).map((s) => [s.user_id, s]))
     const ahora = Date.now()
     const usuarios = (list?.users || []).map((u) => {
@@ -1534,6 +1536,7 @@ app.get('/admin/usuarios', requireAuth, requireAdmin, async (req, res) => {
         plan: s?.plan || 'gratis',
         vence: s?.vence || null,
         origen: s?.origen || null,
+        mpEstado: s?.mp_estado || null,
         proVigente: !!vigente,
       }
     })

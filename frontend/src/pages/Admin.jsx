@@ -19,6 +19,27 @@ function fechaCorta(iso) {
   }
 }
 
+// Describe de dónde viene la suscripción y en qué estado está.
+function estadoSub(u) {
+  if (u.origen === 'mp' && u.mpEstado) {
+    const m = {
+      authorized: 'Pago Mercado Pago · activa',
+      pending: 'Pago pendiente (sin confirmar)',
+      cancelled: 'Suscripción cancelada',
+      paused: 'Suscripción pausada',
+    }
+    return m[u.mpEstado] || `Mercado Pago (${u.mpEstado})`
+  }
+  if (u.plan === 'pro') return 'Asignado por vos (admin)'
+  return null
+}
+function estadoClase(u) {
+  if (u.origen === 'mp' && u.mpEstado === 'authorized') return 'sub-ok'
+  if (u.mpEstado === 'pending') return 'sub-pend'
+  if (u.mpEstado === 'cancelled' || u.mpEstado === 'paused') return 'sub-cancel'
+  return 'sub-admin'
+}
+
 async function token() {
   const {
     data: { session },
@@ -136,6 +157,9 @@ export default function Admin() {
                       </strong>
                       {u.plan === 'pro' && <> · vence {fechaCorta(u.vence)}</>}
                     </span>
+                    {estadoSub(u) && (
+                      <span className={`admin-sub ${estadoClase(u)}`}>{estadoSub(u)}</span>
+                    )}
                   </div>
                   <div className="admin-controles">
                     <select value={plan} onChange={(e) => setDraftPlan(u.id, e.target.value)}>
