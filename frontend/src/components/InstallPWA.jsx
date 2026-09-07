@@ -26,20 +26,27 @@ const IconInstalar = () => (
 // Ítem de menú "Instalar app": solo aparece en el celular y desaparece cuando la
 // app ya está instalada en ese dispositivo (o en escritorio).
 export default function InstallPWA({ onClose }) {
-  const [deferred, setDeferred] = useState(null)
+  // Arrancamos con lo que ya haya capturado main.jsx (el evento suele dispararse
+  // apenas carga la página, antes de que este botón exista).
+  const [deferred, setDeferred] = useState(() => window.__yafactInstall || null)
   const [standalone, setStandalone] = useState(esStandalone())
   const [ayuda, setAyuda] = useState(false)
 
   useEffect(() => {
+    // Por si el evento llega mientras el botón ya está en pantalla.
     const onBip = (e) => {
       e.preventDefault()
+      window.__yafactInstall = e
       setDeferred(e)
     }
+    const onReady = () => setDeferred(window.__yafactInstall || null)
     const onInstalled = () => setStandalone(true)
     window.addEventListener('beforeinstallprompt', onBip)
+    window.addEventListener('yafact-install-ready', onReady)
     window.addEventListener('appinstalled', onInstalled)
     return () => {
       window.removeEventListener('beforeinstallprompt', onBip)
+      window.removeEventListener('yafact-install-ready', onReady)
       window.removeEventListener('appinstalled', onInstalled)
     }
   }, [])
@@ -51,6 +58,8 @@ export default function InstallPWA({ onClose }) {
     if (deferred) {
       deferred.prompt()
       const r = await deferred.userChoice.catch(() => null)
+      // El evento sirve una sola vez.
+      window.__yafactInstall = null
       setDeferred(null)
       if (r?.outcome === 'accepted') onClose?.()
       return
