@@ -136,6 +136,20 @@ a:hover { text-decoration: underline; }
 .menu-list a:not(.active):active { background: rgba(255,255,255,.06); }
 .menu-foot { margin-top: auto; border-top: 1px solid rgba(255,255,255,.08); padding-top: 16px; display: flex; flex-direction: column; gap: 12px; }
 
+/* Botón "Replicar" en el Historial + banner de "Replicando" en Facturar */
+.icon-btn-repl { color: var(--orange); border-color: var(--naranja-linea, #f4c79e); background: var(--naranja-suave, #fdead9); }
+.repl-banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--naranja-suave, #fdead9); border: 1px solid var(--naranja-linea, #f4c79e);
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; font-size: 13.5px; line-height: 1.4; color: var(--ink);
+}
+.repl-banner strong { color: var(--orange); }
+.repl-banner-ic {
+  width: 30px; height: 30px; border-radius: 8px; background: var(--orange); color: #fff;
+  display: grid; place-items: center; flex: 0 0 auto;
+}
+.repl-banner-ic svg { width: 16px; height: 16px; }
+
 /* Sección "Legales" dentro del menú (celular) */
 .menu-legales { margin-top: 10px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 2px; }
 .menu-legales-tit { color: #8A8F98; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; padding: 4px 14px; font-family: "Manrope"; }

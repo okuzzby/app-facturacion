@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 
 const money = (n) =>
@@ -24,6 +24,11 @@ const IconCompartir = () => (
     <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
   </svg>
 )
+const IconReplicar = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" />
+  </svg>
+)
 
 export default function Historial() {
   const [facturas, setFacturas] = useState([])
@@ -37,6 +42,21 @@ export default function Historial() {
   const [mpIds, setMpIds] = useState(() => new Set())
   const [params] = useSearchParams()
   const modoAnular = params.get('nc') === '1'
+  const navigate = useNavigate()
+
+  // Abre "Facturar" con los datos de esta factura precargados (nueva factura,
+  // fecha de hoy). No duplica ni modifica la original.
+  function replicar(f) {
+    navigate('/facturar', {
+      state: {
+        replicar: {
+          producto: f.producto || '',
+          importe: Number(f.importe_total) || 0,
+          numero: f.numero || null,
+        },
+      },
+    })
+  }
 
   // Paginación
   const [pageSize, setPageSize] = useState(10)
@@ -226,6 +246,19 @@ export default function Historial() {
                     >
                       <IconCompartir />
                     </button>
+
+                    {!modoAnular && esFactura(f) && (
+                      <button
+                        type="button"
+                        className="icon-btn sm icon-btn-repl"
+                        onClick={() => replicar(f)}
+                        disabled={anulando != null}
+                        title="Replicar"
+                        aria-label="Replicar factura"
+                      >
+                        <IconReplicar />
+                      </button>
+                    )}
 
                     {modoAnular && esFactura(f) && f.estado === 'emitida' && (
                       confirmando === f.id ? (

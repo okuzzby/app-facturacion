@@ -1,0 +1,208 @@
+<title>Replicar factura · Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  :root{
+    --accent:#F26A1B; --accent-ink:#C4520D; --accent-soft:#FDEAD9; --accent-line:#F6C9A6;
+    --ground:#F4F1EC; --panel:#FFFFFF; --panel-2:#FBF5EF;
+    --ink:#241C17; --ink-2:#8A7C70; --line:#E9E0D6;
+    --hi:#FFF4E8; --hi-line:#F4C79E;
+    --shadow:0 1px 2px rgba(36,28,23,.05),0 10px 26px rgba(36,28,23,.08);
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+      --ground:#171310; --panel:#221B16; --panel-2:#2A211B;
+      --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25;
+      --hi:#2E2114; --hi-line:#6A4423;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+    --ground:#171310; --panel:#221B16; --panel-2:#2A211B;
+    --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25;
+    --hi:#2E2114; --hi-line:#6A4423;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);font-family:"Manrope",system-ui,-apple-system,sans-serif;line-height:1.5;}
+  .wrap{max-width:900px;margin:0 auto;padding-inline:18px;padding-block:24px 60px;}
+  h1{font-size:clamp(1.4rem,4.5vw,1.9rem);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance;}
+  .lead{color:var(--ink-2);margin:10px 0 0;max-width:62ch;font-size:.98rem;}
+  .mock-tag{display:inline-flex;align-items:center;gap:7px;font-size:.74rem;font-weight:700;color:var(--accent-ink);
+    background:var(--accent-soft);border:1px solid var(--accent-line);padding:5px 11px;border-radius:20px;margin-bottom:14px;}
+  .flow{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px;align-items:start;}
+  @media(max-width:720px){.flow{grid-template-columns:1fr;}}
+  .step{display:flex;flex-direction:column;gap:10px;}
+  .step-h{display:flex;align-items:center;gap:9px;}
+  .step-n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:.8rem;
+    display:grid;place-items:center;flex:0 0 auto;}
+  .step-h h2{font-size:1.02rem;font-weight:700;margin:0;}
+  .step-cap{color:var(--ink-2);font-size:.85rem;margin:-2px 0 0 33px;}
+  /* phone frame */
+  .phone{background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);
+    overflow:hidden;}
+  .phone-top{background:var(--accent);color:#fff;padding:15px 16px 14px;}
+  .phone-top .t{font-weight:800;font-size:1.05rem;}
+  .phone-top .s{font-size:.76rem;opacity:.9;margin-top:2px;}
+  .phone-body{padding:14px;}
+  /* historial row */
+  .hrow{display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid var(--line);}
+  .hrow:last-child{border-bottom:0;}
+  .hrow-ic{width:38px;height:38px;border-radius:11px;background:var(--panel-2);border:1px solid var(--line);
+    display:grid;place-items:center;color:var(--accent-ink);flex:0 0 auto;}
+  .hrow-ic svg{width:19px;height:19px;}
+  .hrow-mid{min-width:0;flex:1;}
+  .hrow-t{font-weight:700;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hrow-meta{color:var(--ink-2);font-size:.74rem;margin-top:1px;}
+  .hrow-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+  .hrow-monto{font-weight:800;font-size:.95rem;font-variant-numeric:tabular-nums;}
+  .hrow-monto small{font-size:.72em;font-weight:700;color:var(--ink-2);}
+  .hrow-acc{display:flex;gap:6px;}
+  .ibtn{width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--panel);
+    display:grid;place-items:center;color:var(--ink-2);}
+  .ibtn svg{width:15px;height:15px;}
+  .ibtn.new{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent-ink);
+    position:relative;}
+  .pulse{position:absolute;inset:-5px;border:2px solid var(--accent);border-radius:12px;opacity:.5;
+    animation:p 1.6s ease-out infinite;}
+  @keyframes p{0%{transform:scale(.85);opacity:.55}100%{transform:scale(1.25);opacity:0}}
+  @media(prefers-reduced-motion:reduce){.pulse{animation:none;opacity:.5}}
+  .tip{margin-top:10px;font-size:.78rem;color:var(--accent-ink);background:var(--accent-soft);
+    border:1px solid var(--accent-line);border-radius:10px;padding:8px 11px;display:flex;gap:7px;align-items:flex-start;}
+  .tip svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px;}
+  /* form */
+  .repl-banner{display:flex;align-items:center;gap:10px;background:var(--accent-soft);border:1px solid var(--accent-line);
+    border-radius:12px;padding:10px 12px;margin-bottom:14px;}
+  .repl-banner .ic{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:0 0 auto;}
+  .repl-banner .ic svg{width:16px;height:16px;}
+  .repl-banner .tx{font-size:.8rem;line-height:1.35;}
+  .repl-banner .tx b{color:var(--accent-ink);}
+  .field{margin-bottom:12px;}
+  .field .lbl{font-size:.74rem;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;display:block;}
+  .inp{border:1px solid var(--line);border-radius:11px;padding:11px 12px;background:var(--panel-2);font-size:.92rem;font-weight:600;
+    display:flex;align-items:center;justify-content:space-between;}
+  .inp.filled{border-color:var(--hi-line);background:var(--hi);}
+  .inp .chev{color:var(--ink-2);}
+  .inp .prefill{font-size:.64rem;font-weight:800;color:var(--accent-ink);background:var(--accent-soft);
+    padding:2px 6px;border-radius:5px;margin-left:8px;letter-spacing:.03em;}
+  .two{display:grid;grid-template-columns:1fr 1.2fr;gap:10px;}
+  .stepper{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--hi-line);background:var(--hi);border-radius:11px;overflow:hidden;}
+  .stepper button{border:0;background:transparent;color:var(--accent-ink);font-size:1.1rem;font-weight:800;width:38px;height:42px;}
+  .stepper .v{font-weight:800;}
+  .price{display:flex;align-items:center;gap:6px;border:1px solid var(--hi-line);background:var(--hi);border-radius:11px;padding:0 12px;height:44px;}
+  .price .sig{color:var(--ink-2);font-weight:800;}
+  .price .v{font-weight:800;font-size:1rem;}
+  .cta{margin-top:6px;background:var(--accent);color:#fff;border:0;border-radius:12px;padding:13px;width:100%;
+    font-weight:800;font-size:.95rem;box-shadow:0 6px 14px rgba(242,106,27,.35);}
+  .legend{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--ink-2);margin-top:14px;}
+  .swatch{width:22px;height:14px;border-radius:4px;background:var(--hi);border:1px solid var(--hi-line);flex:0 0 auto;}
+  .notas{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);
+    padding:18px 20px;margin-top:30px;}
+  .notas h3{margin:0 0 12px;font-size:1.02rem;font-weight:700;}
+  .notas ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px;}
+  .notas li{position:relative;padding-left:24px;font-size:.92rem;}
+  .notas li svg{position:absolute;left:0;top:2px;width:16px;height:16px;color:var(--accent);}
+  .notas li b{color:var(--accent-ink);}
+  footer{margin-top:26px;color:var(--ink-2);font-size:.8rem;text-align:center;}
+</style>
+
+<div class="wrap">
+  <span class="mock-tag">◆ Maqueta — todavía no aplicado</span>
+  <h1>Replicar factura — cómo quedaría en YaFact</h1>
+  <p class="lead">Para quien factura lo mismo todos los meses: desde el Historial, un toque copia una factura anterior al formulario ya cargado, listo para emitir de nuevo. Con tu identidad naranja y tus mismos componentes.</p>
+
+  <div class="flow">
+    <!-- Paso 1 -->
+    <div class="step">
+      <div class="step-h"><span class="step-n">1</span><h2>En el Historial</h2></div>
+      <p class="step-cap">Se suma un botón <b>Replicar</b> junto a Imprimir y Compartir.</p>
+      <div class="phone">
+        <div class="phone-top"><div class="t">Historial</div><div class="s">Todos tus comprobantes emitidos</div></div>
+        <div class="phone-body">
+          <div class="hrow">
+            <span class="hrow-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h9l3 3v17H6z"/><path d="M9 12h6M9 16h4"/></svg></span>
+            <div class="hrow-mid"><div class="hrow-t">Diseño de logo</div><div class="hrow-meta">FC · Nº 00003-0000021 · 14 sep 2026</div></div>
+            <div class="hrow-right">
+              <div class="hrow-monto">$ 15.000<small>,00</small></div>
+              <div class="hrow-acc">
+                <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 17H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/></svg></span>
+                <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></span>
+                <span class="ibtn new"><span class="pulse"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></span>
+              </div>
+            </div>
+          </div>
+          <div class="hrow">
+            <span class="hrow-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h9l3 3v17H6z"/><path d="M9 12h6M9 16h4"/></svg></span>
+            <div class="hrow-mid"><div class="hrow-t">Servicio de flete</div><div class="hrow-meta">FC · Nº 00003-0000020 · 2 sep 2026</div></div>
+            <div class="hrow-right">
+              <div class="hrow-monto">$ 8.500<small>,00</small></div>
+              <div class="hrow-acc">
+                <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 17H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/></svg></span>
+                <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></span>
+                <span class="ibtn new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></span>
+              </div>
+            </div>
+          </div>
+          <div class="tip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+            <span>Este es el botón nuevo: <b>Replicar</b>. Un toque y salta al paso 2.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paso 2 -->
+    <div class="step">
+      <div class="step-h"><span class="step-n">2</span><h2>Formulario ya cargado</h2></div>
+      <p class="step-cap">Se abre Facturar con los datos copiados. Solo revisás y emitís.</p>
+      <div class="phone">
+        <div class="phone-top"><div class="t">Nueva factura</div><div class="s">Factura C · Punto de venta 3 · Fecha hoy</div></div>
+        <div class="phone-body">
+          <div class="repl-banner">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></span>
+            <span class="tx">Replicando la factura <b>Nº 00003-0000021</b>. Cambiá lo que necesites y emitila con fecha de hoy.</span>
+          </div>
+
+          <div class="field">
+            <span class="lbl">Producto / Servicio</span>
+            <div class="inp filled">Diseño de logo <span class="prefill">copiado</span></div>
+          </div>
+
+          <div class="two">
+            <div class="field">
+              <span class="lbl">Cantidad</span>
+              <div class="stepper"><button>−</button><span class="v">1</span><button>+</button></div>
+            </div>
+            <div class="field">
+              <span class="lbl">Precio unitario</span>
+              <div class="price"><span class="sig">$</span><span class="v">15.000,00</span></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="lbl">Condición frente al IVA</span>
+            <div class="inp filled">Consumidor Final <span class="chev">▾</span></div>
+          </div>
+
+          <button class="cta">Continuar →</button>
+          <div class="legend"><span class="swatch"></span> Los campos con fondo cálido vienen precargados de la factura original.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notas">
+    <h3>Cómo funcionaría, en concreto</h3>
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Precarga:</b> copia la <b>descripción</b> (producto/servicio) y el <b>importe</b> de la factura original. La <b>fecha es siempre hoy</b> (nueva factura, nuevo CAE).</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Editable:</b> antes de emitir podés cambiar monto, cantidad o descripción — no queda atada a la original.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Es una factura nueva y real:</b> pasa por el mismo paso de "Revisá y confirmá" y se emite en ARCA como cualquier otra. No duplica la vieja.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Solo frontend:</b> reusa tu formulario y tu emisión actuales. No toca el backend ni ARCA — bajo riesgo.</span></li>
+    </ul>
+  </div>
+
+  <footer>YaFact · Maqueta de “Replicar factura” · Fase 1. Nada aplicado aún — para tu revisión.</footer>
+</div>

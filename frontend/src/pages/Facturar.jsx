@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import CalendarioRango from '../components/CalendarioRango'
 
@@ -80,7 +80,10 @@ export default function Facturar() {
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)
   const [error, setError] = useState(null)
+  const [replicandoNumero, setReplicandoNumero] = useState(null)
   const navigate = useNavigate()
+  const location = useLocation()
+  const replicar = location.state?.replicar
 
   useEffect(() => {
     if (!supabase) return
@@ -96,9 +99,25 @@ export default function Facturar() {
         .order('created_at', { ascending: true })
       const nombres = (p ?? []).map((x) => x.nombre)
       setProductos(nombres)
-      setProductoSel(nombres[0] ?? 'otro')
+
+      // Si venimos de "Replicar" (desde el Historial), precargamos el formulario
+      // con los datos de la factura original y saltamos directo al formulario.
+      if (replicar) {
+        if (replicar.producto && nombres.includes(replicar.producto)) {
+          setProductoSel(replicar.producto)
+        } else {
+          setProductoSel('otro')
+          setProductoCustom(replicar.producto || '')
+        }
+        setPrecio(replicar.importe ? money(replicar.importe) : '')
+        setReplicandoNumero(replicar.numero || null)
+        setVista('form')
+      } else {
+        setProductoSel(nombres[0] ?? 'otro')
+      }
       setCargandoInit(false)
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const esServicio = /servicio/i.test(concepto)
@@ -172,6 +191,7 @@ export default function Facturar() {
     setPrecio('')
     setCantidad(1)
     setProductoCustom('')
+    setReplicandoNumero(null)
   }
 
   if (cargandoInit) {
@@ -355,6 +375,16 @@ export default function Facturar() {
         </div>
       </div>
       <div className="card">
+      {replicandoNumero && (
+        <div className="repl-banner">
+          <span className="repl-banner-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" />
+            </svg>
+          </span>
+          <span>Replicando la factura <strong>Nº {replicandoNumero}</strong>. Cambiá lo que necesites y emitila con fecha de hoy.</span>
+        </div>
+      )}
       <form onSubmit={irAPreview} className="form">
         <label className="campo">
           <span>Fecha</span>
