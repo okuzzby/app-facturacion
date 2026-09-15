@@ -495,6 +495,22 @@ app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
     // Fuente exacta: el panel "Facturación electrónica" del portal del Monotributo.
     const r = await montoFacturadoMonotributo(cred.cuit, cred.clave)
     if (!r.ok || r.montoFacturado == null) {
+      // Diagnóstico: subimos las capturas y logueamos un link firmado para verlas.
+      try {
+        const caps = r.capturas || []
+        for (let i = 0; i < caps.length; i++) {
+          if (!caps[i]?.png) continue
+          const path = `diag/mono-${req.user.id}-${Date.now()}-${i}.png`
+          await supabaseAdmin.storage.from('facturas').upload(path, Buffer.from(caps[i].png, 'base64'), {
+            contentType: 'image/png',
+            upsert: true,
+          })
+          const { data: signed } = await supabaseAdmin.storage.from('facturas').createSignedUrl(path, 1800)
+          console.log('[MONO-DIAG]', i, caps[i].url, '->', signed?.signedUrl || 'sin-url')
+        }
+      } catch (e) {
+        console.log('[MONO-DIAG] error subiendo capturas:', String((e && e.message) || e))
+      }
       return res.status(502).json({ error: r.error || 'No se pudo leer tu facturación del portal de ARCA' })
     }
 
