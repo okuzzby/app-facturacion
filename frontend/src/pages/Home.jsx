@@ -171,14 +171,14 @@ export default function Home() {
             </>
           ) : (
             <p className="tope-txt">
-              Facturaste <b>{money(resumen.total)}</b> en los últimos 12 meses.
-              {!resumen.categoria && ' No pudimos leer tu categoría del padrón de ARCA.'}
+              Facturaste <b>{money(resumen.total)}</b>{resumen.periodo ? ` (${resumen.periodo})` : ''}.
+              {!resumen.categoria && ' No pudimos leer tu categoría en ARCA.'}
             </p>
           )}
 
           <div className="tope-foot">
             <span className="tope-upd">
-              {resumen.aproximado ? 'Aproximado · ' : ''}Actualizado {fmtActualizado(resumen.calculadoAt)}
+              {resumen.periodo ? `${resumen.periodo} · ` : ''}Actualizado {fmtActualizado(resumen.calculadoAt)}
             </span>
             <button type="button" className="tope-btn sm" onClick={actualizarResumen} disabled={actualizando}>
               <IconActualizar /> {actualizando ? 'Actualizando…' : 'Actualizar'}

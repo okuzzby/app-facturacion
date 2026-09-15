@@ -830,3 +830,105 @@ export async function probarLoginArca(cuit, clave) {
     if (browser) await browser.close()
   }
 }
+
+// ============================================================
+// Monotributo: lee el "Monto facturado" del portal (fuente exacta de ARCA,
+// incluye TODOS los comprobantes, también los emitidos por el portal).
+// ============================================================
+
+function parseMoneyAR(s) {
+  if (!s) return null
+  const n = Number(String(s).replace(/\./g, '').replace(',', '.'))
+  return isNaN(n) ? null : n
+}
+
+// Desde el login (ya con sesión), abre el portal del Monotributo y devuelve la
+// página parada en Inicio.aspx (la del panel "Facturación electrónica").
+async function entrarAMonotributo(page, pasos) {
+  const context = page.context()
+  // La landing pública tiene el botón de ingreso; con la sesión ya abierta, el
+  // SSO nos deja adentro directo.
+  await page.goto('https://monotributo.afip.gob.ar', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+  await page.waitForTimeout(800)
+  pasos.push('Landing de Monotributo')
+
+  // Si ya estamos en el portal autenticado (Inicio.aspx muestra "Monto facturado"),
+  // no hace falta tocar nada.
+  const yaAdentro = await page.getByText(/Monto facturado/i).first().count().catch(() => 0)
+  if (yaAdentro) {
+    pasos.push('Ya estábamos dentro del portal')
+    return page
+  }
+
+  // Landing pública: tocar "Ingresar al portal con clave fiscal" (abre popup + SSO).
+  const ingresar = page.getByText(/Ingresar al portal con clave fiscal/i).and(page.locator(':visible')).first()
+  await ingresar.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+  const [popup] = await Promise.all([
+    context.waitForEvent('page', { timeout: 25000 }).catch(() => null),
+    ingresar.click({ timeout: 15000 }).catch(() => {}),
+  ])
+  const destino = popup || page
+  await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
+  await destino.waitForTimeout(1000)
+  await destino.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
+  pasos.push('Portal Monotributo abierto')
+  return destino
+}
+
+// Login + lectura del panel de facturación del Monotributo.
+// Devuelve { ok, categoria, montoFacturado, tope, comprobantesMonto, facturas,
+// notasCredito, periodo, actualizacion }.
+export async function montoFacturadoMonotributo(cuit, clave) {
+  const pasos = []
+  let browser
+  let page
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const destino = await entrarAMonotributo(page, pasos)
+
+    await destino
+      .getByText(/Monto facturado/i)
+      .first()
+      .waitFor({ state: 'visible', timeout: 20000 })
+      .catch(() => {})
+
+    const texto = await destino.evaluate(() => document.body.innerText)
+
+    const mCat = texto.match(/Categor[ií]a\s+([A-K])\b/)
+    const mMonto = texto.match(/Monto facturado[\s\S]{0,40}?\$?\s*([\d.]+,\d{2})/i)
+    const mTope = texto.match(/Tope categor[ií]a[\s\S]{0,40}?\$?\s*([\d.]+,\d{2})/i)
+    const mComp = texto.match(/Comprobantes emitidos:?[\s\S]{0,40}?\$?\s*([\d.]+,\d{2})/i)
+    const mFact = texto.match(/(\d+)\s+facturas/i)
+    const mNc = texto.match(/(\d+)\s+notas? de cr[eé]dito/i)
+    const mPer = texto.match(/(\d{2}\/\d{2}\/\d{4})\s*al\s*(\d{2}\/\d{2}\/\d{4})/)
+    const mAct = texto.match(/[Úu]ltima actualizaci[oó]n:?\s*(\d{2}\/\d{2}\/\d{4})/)
+
+    const out = {
+      ok: true,
+      categoria: mCat ? mCat[1] : null,
+      montoFacturado: parseMoneyAR(mMonto && mMonto[1]),
+      tope: parseMoneyAR(mTope && mTope[1]),
+      comprobantesMonto: parseMoneyAR(mComp && mComp[1]),
+      facturas: mFact ? Number(mFact[1]) : null,
+      notasCredito: mNc ? Number(mNc[1]) : null,
+      periodo: mPer ? `${mPer[1]} al ${mPer[2]}` : null,
+      actualizacion: mAct ? mAct[1] : null,
+      pasos,
+    }
+    if (out.montoFacturado == null) {
+      console.log('[MONO-PORTAL] no se pudo leer el monto. url:', destino.url(), 'innerText:', String(texto).slice(0, 1500))
+      out.ok = false
+      out.error = 'No se pudo leer el monto facturado del portal'
+      out.screenshot = await captura(destino)
+    } else {
+      console.log('[MONO-PORTAL] leído:', JSON.stringify({ categoria: out.categoria, monto: out.montoFacturado, tope: out.tope }))
+    }
+    return out
+  } catch (e) {
+    console.log('[MONO-PORTAL] error:', String((e && e.message) || e))
+    return { ok: false, error: String((e && e.message) || e), pasos, screenshot: await captura(page) }
+  } finally {
+    if (browser) await browser.close()
+  }
+}

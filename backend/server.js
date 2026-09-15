@@ -10,6 +10,7 @@ import {
   inspeccionarFactura,
   generarFactura,
   inspeccionarNotaCredito,
+  montoFacturadoMonotributo,
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
 import { emitirFacturaFlow, anularFlow, puntosVentaFlow } from './ws-flow.js'
@@ -483,35 +484,45 @@ app.get('/arca/facturacion-anual', requireAuth, async (req, res) => {
 app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
   try {
-    const { data: cred } = await supabaseAdmin
-      .from('credenciales_arca')
-      .select('cuit')
-      .eq('user_id', req.user.id)
-      .maybeSingle()
-    if (!cred?.cuit) return res.status(400).json({ error: 'No tenés configuración ARCA cargada' })
+    // Necesitamos la Clave Fiscal para entrar al portal del Monotributo.
+    const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+    if (error) return res.status(500).json({ error: error.message })
+    const cred = Array.isArray(data) ? data[0] : data
+    if (!cred?.cuit || !cred?.clave) {
+      return res.status(400).json({ error: 'No tenés la Clave Fiscal cargada para leer tu facturación en ARCA' })
+    }
 
-    const categoria = await categoriaDeUsuario(cred.cuit)
-    const resumen = await resumenFacturacionFlow({ supabaseAdmin, userId: req.user.id, meses: 12 })
-    const tope = topeDeCategoria(categoria)
+    // Fuente exacta: el panel "Facturación electrónica" del portal del Monotributo.
+    const r = await montoFacturadoMonotributo(cred.cuit, cred.clave)
+    if (!r.ok || r.montoFacturado == null) {
+      return res.status(502).json({ error: r.error || 'No se pudo leer tu facturación del portal de ARCA' })
+    }
+
+    // Categoría y tope: preferimos lo que dice el portal; si falta, caemos al padrón/escala.
+    let categoria = r.categoria
+    if (!categoria) categoria = await categoriaDeUsuario(cred.cuit)
+    const tope = r.tope || topeDeCategoria(categoria)
     const calculado_at = new Date().toISOString()
 
     await supabaseAdmin.from('facturacion_resumen').upsert({
       user_id: req.user.id,
       categoria: categoria || null,
       tope: tope || null,
-      total_12m: resumen.total,
-      aproximado: resumen.aproximado,
-      comprobantes: resumen.comprobantes,
-      puntos: resumen.puntos,
+      total_12m: r.montoFacturado,
+      aproximado: false,
+      comprobantes: r.facturas || 0,
+      puntos: 0,
       calculado_at,
     })
 
     res.json({
       categoria: categoria || null,
       tope: tope || null,
-      total: resumen.total,
-      aproximado: resumen.aproximado,
-      comprobantes: resumen.comprobantes,
+      total: r.montoFacturado,
+      aproximado: false,
+      comprobantes: r.facturas || 0,
+      notasCredito: r.notasCredito || 0,
+      periodo: r.periodo || null,
       calculadoAt: calculado_at,
       vigencia: ESCALA_MONOTRIBUTO.vigencia,
     })
