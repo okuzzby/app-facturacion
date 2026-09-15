@@ -1,0 +1,1879 @@
+import express from 'express'
+import cors from 'cors'
+import { chromium } from 'playwright'
+import { createClient } from '@supabase/supabase-js'
+import {
+  probarLoginArca,
+  listarEmpresasArca,
+  abrirFormularioFactura,
+  leerOpcionesComprobante,
+  inspeccionarFactura,
+  generarFactura,
+  inspeccionarNotaCredito,
+} from './arca.js'
+import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
+import { emitirFacturaFlow, anularFlow, puntosVentaFlow } from './ws-flow.js'
+import { puntosVentaWS } from './arca-ws.js'
+import {
+  inspeccionarWSASS,
+  crearCertificado,
+  inspeccionarRelaciones,
+  configurarWsfe,
+  inspeccionarPuntosVenta,
+  crearPuntoVentaWS,
+  autorizarServicio,
+  capturarPantallaAdminRel,
+} from './arca-setup.js'
+import { cifrar, descifrar } from './crypto-ws.js'
+import { datosPadron } from './arca-padron.js'
+import { resumenFacturacionFlow, topeDeCategoria, ESCALA_MONOTRIBUTO } from './arca-facturacion.js'
+import { regenerarFacturasUsuario, regenerarTodas } from './regenerar-facturas.js'
+import { validarFactura, esUUID } from './validaciones.js'
+import {
+  proConfigurado,
+  PRO_PRECIO,
+  crearPreapproval,
+  obtenerPreapproval,
+  cancelarPreapproval,
+} from './mp-pro.js'
+import {
+  mpConfigurado,
+  firmarState,
+  verificarState,
+  urlAutorizacion,
+  intercambiarCodigo,
+  guardarConexion,
+  accessTokenValido,
+  buscarPagos,
+  buscarPagosTodos,
+  obtenerPago,
+  obtenerUsuario,
+  guardarCobrosNuevos,
+} from './mp.js'
+
+// Documento (CUIT/DNI) del titular de la cuenta de MP conectada, solo dígitos.
+async function docTitular(accessToken) {
+  try {
+    const me = await obtenerUsuario(accessToken)
+    return String(me?.identification?.number || '').replace(/\D/g, '')
+  } catch {
+    return ''
+  }
+}
+
+const app = express()
+
+// CORS: solo el dominio de la app (y previews de Vercel) + desarrollo local.
+// Podés agregar dominios extra por env CORS_ORIGINS (separados por coma).
+const ORIGENES_OK = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+function origenPermitido(origin) {
+  if (!origin) return true // curl / apps / server-to-server (sin cabecera Origin)
+  if (ORIGENES_OK.includes(origin)) return true
+  try {
+    const h = new URL(origin).hostname
+    if (h === 'localhost' || h === '127.0.0.1') return true
+    if (h.endsWith('.vercel.app')) return true
+  } catch {
+    /* origin inválido → se rechaza abajo */
+  }
+  return false
+}
+app.use(cors({ origin: (origin, cb) => cb(null, origenPermitido(origin)) }))
+
+// Límite de tamaño del body: las peticiones legítimas son chicas.
+app.use(express.json({ limit: '256kb' }))
+
+// Cabeceras de seguridad básicas en todas las respuestas.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none')
+  next()
+})
+
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+// Cliente para validar el token del usuario (clave pública)
+const supabaseAuth =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } })
+    : null
+
+// Cliente con permisos de servicio (lee la credencial descifrada de Vault)
+const supabaseAdmin =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+    : null
+
+// Middleware: valida el token de Supabase y adjunta req.user
+async function requireAuth(req, res, next) {
+  if (!supabaseAuth) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_URL / SUPABASE_ANON_KEY' })
+  }
+  const header = req.headers.authorization || ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null
+  if (!token) return res.status(401).json({ error: 'Falta el token de sesión' })
+
+  const { data, error } = await supabaseAuth.auth.getUser(token)
+  if (error || !data?.user) {
+    return res.status(401).json({ error: 'Token inválido o expirado' })
+  }
+  req.user = data.user
+  next()
+}
+
+// Correos autorizados como admin. Por defecto la cuenta de YaFact; se puede
+// ampliar con la env ADMIN_EMAILS (separados por coma). La verificación es acá,
+// en el backend: el cliente no puede autoascenderse.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'yafact.ar@gmail.com')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+function esAdmin(user) {
+  return !!user?.email && ADMIN_EMAILS.includes(String(user.email).toLowerCase())
+}
+// Middleware: exige que el usuario autenticado sea admin.
+function requireAdmin(req, res, next) {
+  if (!esAdmin(req.user)) return res.status(403).json({ error: 'No autorizado' })
+  next()
+}
+
+// Devuelve el plan vigente del usuario. "pro" solo si el plan es pro y no venció.
+async function planDe(userId) {
+  if (!supabaseAdmin) return { plan: 'gratis', proVigente: false }
+  const { data } = await supabaseAdmin
+    .from('suscripciones')
+    .select('plan, vence')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const pro = data?.plan === 'pro' && (!data.vence || new Date(data.vence).getTime() > Date.now())
+  return { plan: pro ? 'pro' : 'gratis', proVigente: pro }
+}
+// Middleware: exige plan Pro vigente. Responde 402 si no lo tiene.
+async function requirePro(req, res, next) {
+  try {
+    const p = await planDe(req.user.id)
+    if (!p.proVigente) {
+      return res.status(402).json({ error: 'PLAN_PRO_REQUERIDO', mensaje: 'Esta función es del plan Pro.' })
+    }
+    next()
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+}
+
+// ---------------- Endpoints públicos ----------------
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'app-facturacion-backend', phase: '3C' })
+})
+
+// TEMPORAL — Fase 0/2: prueba de emisión por Web Service en HOMOLOGACIÓN.
+// Protegido con SPIKE_SECRET. Se elimina cuando termine el spike.
+// Montado en dos rutas (una de nivel superior para poder alcanzarlo).
+async function handlerSpike(req, res) {
+  if (!process.env.SPIKE_SECRET || req.query.key !== process.env.SPIKE_SECRET) {
+    return res.status(403).json({ error: 'no autorizado' })
+  }
+  try {
+    const out = await emitirSpike(req.query)
+    console.log('[WSTEST]', JSON.stringify(out))
+    res.json(out)
+  } catch (e) {
+    console.log('[WSTEST-ERR]', String((e && e.message) || e))
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+}
+app.get('/arca/ws-spike', handlerSpike)
+app.get('/wscheck', handlerSpike)
+
+// --- Emisión por Web Service (flujo real: emite + PDF + Storage + base) ---
+app.post('/arca/ws/factura-generar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  // Revalidamos los datos (nunca confiar en el cliente). Datos malos → 400.
+  let datos
+  try {
+    datos = validarFactura(req.body || {})
+  } catch (e) {
+    return res.status(400).json({ error: String((e && e.message) || 'Datos inválidos') })
+  }
+  try {
+    const out = await emitirFacturaFlow({ supabaseAdmin, userId: req.user.id, body: datos })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// --- Onboarding automático (Opción A): inspección de WSASS/certificados ---
+app.post('/arca/setup-inspeccionar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const out = await inspeccionarWSASS(cred.cuit, cred.clave, req.query.t || 'Certificados')
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// TEMPORAL — inspección del Administrador de Relaciones (para autorizar wsfe).
+app.post('/arca/setup-relaciones', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const out = await inspeccionarRelaciones(cred.cuit, cred.clave)
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// TEMPORAL — crea un certificado de prueba (no devuelve la clave privada).
+app.post('/arca/setup-crear-cert', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const aliasAuto = 'app' + String(Date.now()).slice(-8)
+    const out = await crearCertificado(cred.cuit, cred.clave, req.query.alias || aliasAuto)
+    const { privateKeyPem, ...safe } = out // no exponemos la clave privada al frontend
+    res.json(safe)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Onboarding wsfe (REAL): crea un certificado nuevo para el CUIT del usuario, lo
+// autoriza al web service wsfe y guarda cert + clave privada CIFRADA + alias en
+// su fila de credenciales_arca. Nunca devuelve la clave privada al frontend.
+app.post('/arca/setup-wsfe', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const out = await configurarWsfe(cred.cuit, cred.clave, req.query.alias || null)
+
+    // Si se creó y capturó el certificado, lo guardamos (clave privada cifrada).
+    if (out.certPem && out.privateKeyPem) {
+      try {
+        const keyEnc = cifrar(out.privateKeyPem)
+        const { error: upErr } = await supabaseAdmin
+          .from('credenciales_arca')
+          .update({
+            ws_cert_pem: out.certPem,
+            ws_cert_key_enc: keyEnc,
+            ws_cert_alias: out.alias,
+          })
+          .eq('user_id', req.user.id)
+        out.guardado = !upErr
+        if (upErr) out.guardadoError = upErr.message
+      } catch (e) {
+        out.guardado = false
+        out.guardadoError = String((e && e.message) || e)
+      }
+    } else {
+      out.guardado = false
+    }
+
+    // Auto-detectar el punto de venta de Web Service y setearlo (mejor esfuerzo).
+    // Los PV de "Comprobantes en línea" no sirven por WS; acá tomamos el primero
+    // habilitado (no bloqueado, sin baja) que reporta FEParamGetPtosVenta.
+    if (out.autorizado && out.certPem && out.privateKeyPem) {
+      try {
+        const pv = await puntosVentaWS({
+          cuit: cred.cuit,
+          certPem: out.certPem,
+          keyPem: out.privateKeyPem,
+        })
+        const habil = (pv.puntos || []).filter(
+          (p) =>
+            String(p.Bloqueado).toUpperCase() !== 'S' &&
+            (p.FchBaja == null || String(p.FchBaja).toUpperCase() === 'NULL')
+        )
+        out.puntosVentaWS = habil.map((p) => ({ nro: p.Nro, tipo: p.EmisionTipo }))
+        if (habil.length > 0) {
+          const nro = String(habil[0].Nro)
+          const { error: pvErr } = await supabaseAdmin
+            .from('credenciales_arca')
+            .update({ punto_venta_ws: nro })
+            .eq('user_id', req.user.id)
+          out.puntoVentaWsSeteado = pvErr ? null : nro
+          if (pvErr) out.puntoVentaWsError = pvErr.message
+        } else {
+          out.puntoVentaWsSeteado = null
+          out.faltaPuntoVentaWS = true
+        }
+      } catch (e) {
+        // Un cert recién autorizado puede tardar en propagar: no rompemos el setup.
+        out.puntoVentaWsError = String((e && e.message) || e)
+      }
+    }
+
+    // Nunca exponemos la clave privada (ni el blob cifrado) al frontend.
+    const { privateKeyPem, ...safe } = out
+    res.json(safe)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// --- Onboarding automático wsfe en SEGUNDO PLANO ---
+// El usuario solo guarda su credencial; esto crea el cert, lo autoriza al wsfe,
+// lo guarda cifrado y detecta/usa el punto de venta — todo por detrás. El avance
+// se escribe en credenciales_arca (ws_setup_*) y el frontend lo lee en vivo.
+const ESTADOS_EN_PROGRESO = [
+  'iniciando',
+  'creando_cert',
+  'autorizando',
+  'guardando',
+  'detectando_pv',
+  'creando_pv',
+  'capturando_datos',
+]
+
+async function marcarSetup(userId, estado, paso, error) {
+  try {
+    await supabaseAdmin
+      .from('credenciales_arca')
+      .update({
+        ws_setup_estado: estado,
+        ws_setup_paso: paso || null,
+        ws_setup_error: error || null,
+        ws_setup_updated: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+  } catch (e) {
+    console.log('[SETUP] no se pudo marcar estado:', String((e && e.message) || e))
+  }
+}
+
+function parseInicioActividades(s) {
+  if (!s) return null
+  const str = String(s).trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10)
+  if (/^\d{8}$/.test(str)) return `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`
+  if (/^\d{6}$/.test(str)) return `${str.slice(0, 4)}-${str.slice(4, 6)}-01`
+  return null
+}
+
+// Certificado "de la app" para consultar el padrón: es el de un usuario cuyo
+// certificado YA está autorizado al servicio de constancia. Con ese consumidor
+// consultamos el padrón de CUALQUIER CUIT, sin autorizar cuenta por cuenta.
+const PADRON_CERT_USER_ID = process.env.PADRON_CERT_USER_ID || 'e23ae5f6-286b-4735-8c03-d9d88c9e0f8f'
+async function certPadronApp() {
+  const { data } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('cuit, ws_cert_pem, ws_cert_key_enc')
+    .eq('user_id', PADRON_CERT_USER_ID)
+    .maybeSingle()
+  if (!data?.ws_cert_pem || !data?.ws_cert_key_enc) return null
+  try {
+    return { cuit: data.cuit, certPem: data.ws_cert_pem, keyPem: descifrar(data.ws_cert_key_enc) }
+  } catch {
+    return null
+  }
+}
+
+// Consulta el padrón del CUIT del usuario usando el certificado de la app y
+// guarda Razón Social / Domicilio / Inicio (y el nombre para el saludo). No
+// autoriza nada por usuario (eso lo resuelve el certificado de la app, ya
+// autorizado). No bloquea: si algo falla, se registra y se sigue.
+async function capturarDatosEmisor(userId, { cuit }) {
+  const SVC = 'ws_sr_constancia_inscripcion'
+  try {
+    const app = await certPadronApp()
+    if (!app) {
+      console.log('[PADRON] no hay certificado de app disponible para consultar el padrón')
+      return { ok: false, error: 'sin certificado de app para padrón' }
+    }
+    const d = await datosPadron({
+      cuit: app.cuit, // consumidor (cert autorizado)
+      idPersona: cuit, // CUIT del usuario a consultar
+      certPem: app.certPem,
+      keyPem: app.keyPem,
+      servicio: SVC,
+    })
+    console.log('[PADRON] datos:', JSON.stringify({ cuit, razonSocial: d.razonSocial, nombre: d.nombre, domicilio: d.domicilio, inicio: d.inicio }))
+    const patch = {}
+    if (d.razonSocial) patch.razon_social = d.razonSocial
+    if (d.domicilio) patch.domicilio = d.domicilio
+    const ini = parseInicioActividades(d.inicio)
+    if (ini) patch.inicio_actividades = ini
+    if (Object.keys(patch).length) {
+      await supabaseAdmin.from('credenciales_arca').update(patch).eq('user_id', userId)
+    }
+    // Guardamos el nombre de pila en el perfil para el saludo "Hola, {nombre}".
+    // Con formato lindo: "ADALBERTO JOSE" → "Adalberto Jose".
+    if (d.nombre) {
+      const nombreLindo = String(d.nombre)
+        .toLowerCase()
+        .replace(/\b\p{L}/gu, (c) => c.toUpperCase())
+      await supabaseAdmin.from('perfiles').update({ nombre: nombreLindo }).eq('id', userId)
+    }
+    return d
+  } catch (e) {
+    console.log('[PADRON] captura falló:', String((e && e.message) || e))
+    return { ok: false, error: String((e && e.message) || e) }
+  }
+}
+
+// --- Barra de "tope de categoría" del Inicio ---
+
+// Categoría de monotributo del usuario, leída del padrón con el certificado de
+// la app (no requiere que el usuario autorice el padrón).
+async function categoriaDeUsuario(cuit) {
+  try {
+    const app = await certPadronApp()
+    if (!app) return null
+    const d = await datosPadron({
+      cuit: app.cuit,
+      idPersona: cuit,
+      certPem: app.certPem,
+      keyPem: app.keyPem,
+      servicio: 'ws_sr_constancia_inscripcion',
+    })
+    if (!d?.categoria && d?.datosMonotributo) {
+      console.log('[FACT-ANUAL] categoria no detectada. datosMonotributo:', JSON.stringify(d.datosMonotributo).slice(0, 2500))
+    }
+    return d?.categoria || null
+  } catch (e) {
+    console.log('[FACT-ANUAL] categoría desde padrón falló:', String((e && e.message) || e))
+    return null
+  }
+}
+
+// Devuelve el resumen ya guardado (sin recalcular). El Inicio lo lee al cargar.
+app.get('/arca/facturacion-anual', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data } = await supabaseAdmin
+    .from('facturacion_resumen')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!data) return res.json({ vacio: true, vigencia: ESCALA_MONOTRIBUTO.vigencia })
+  res.json({
+    categoria: data.categoria,
+    tope: data.tope,
+    total: data.total_12m,
+    aproximado: data.aproximado,
+    comprobantes: data.comprobantes,
+    calculadoAt: data.calculado_at,
+    vigencia: ESCALA_MONOTRIBUTO.vigencia,
+  })
+})
+
+// Recalcula contra ARCA (categoría + suma de los últimos 12 meses) y guarda el
+// resultado. Operación pesada: la dispara el botón "Actualizar" del Inicio.
+app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const { data: cred } = await supabaseAdmin
+      .from('credenciales_arca')
+      .select('cuit')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (!cred?.cuit) return res.status(400).json({ error: 'No tenés configuración ARCA cargada' })
+
+    const categoria = await categoriaDeUsuario(cred.cuit)
+    const resumen = await resumenFacturacionFlow({ supabaseAdmin, userId: req.user.id, meses: 12 })
+    const tope = topeDeCategoria(categoria)
+    const calculado_at = new Date().toISOString()
+
+    await supabaseAdmin.from('facturacion_resumen').upsert({
+      user_id: req.user.id,
+      categoria: categoria || null,
+      tope: tope || null,
+      total_12m: resumen.total,
+      aproximado: resumen.aproximado,
+      comprobantes: resumen.comprobantes,
+      puntos: resumen.puntos,
+      calculado_at,
+    })
+
+    res.json({
+      categoria: categoria || null,
+      tope: tope || null,
+      total: resumen.total,
+      aproximado: resumen.aproximado,
+      comprobantes: resumen.comprobantes,
+      calculadoAt: calculado_at,
+      vigencia: ESCALA_MONOTRIBUTO.vigencia,
+    })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+async function correrOnboardingWsfe(userId, cuit, clave) {
+  try {
+    const cuitDigits = String(cuit).replace(/\D/g, '')
+
+    // ¿Ya hay un certificado guardado para ESTE MISMO CUIT? → reconexión:
+    // reutilizamos el certificado (y el punto de venta) en vez de crear otro.
+    const { data: prev } = await supabaseAdmin
+      .from('credenciales_arca')
+      .select('ws_cert_pem, ws_cert_key_enc, ws_cert_alias, ws_cert_cuit, punto_venta_ws')
+      .eq('user_id', userId)
+      .maybeSingle()
+    const reutiliza =
+      prev &&
+      prev.ws_cert_pem &&
+      prev.ws_cert_key_enc &&
+      prev.ws_cert_alias &&
+      String(prev.ws_cert_cuit || '').replace(/\D/g, '') === cuitDigits
+
+    let certPem, keyPem, alias
+
+    if (reutiliza) {
+      await marcarSetup(userId, 'guardando', 'Reconectando tu cuenta (reutilizando tu certificado)…')
+      certPem = prev.ws_cert_pem
+      keyPem = descifrar(prev.ws_cert_key_enc)
+      alias = prev.ws_cert_alias
+    } else {
+      // Primera vez (o CUIT distinto): crear certificado + autorizar wsfe.
+      const out = await configurarWsfe(cuit, clave, null, (estado, paso) =>
+        marcarSetup(userId, estado, paso)
+      )
+      if (!out || !out.certPem || !out.privateKeyPem) {
+        await marcarSetup(userId, 'error', null, (out && out.error) || 'No se pudo crear el certificado')
+        return
+      }
+      await marcarSetup(userId, 'guardando', 'Guardando tu certificado de forma segura…')
+      await supabaseAdmin
+        .from('credenciales_arca')
+        .update({
+          ws_cert_pem: out.certPem,
+          ws_cert_key_enc: cifrar(out.privateKeyPem),
+          ws_cert_alias: out.alias,
+          ws_cert_cuit: cuitDigits,
+        })
+        .eq('user_id', userId)
+      if (!out.autorizado) {
+        await marcarSetup(userId, 'error', null, 'No se pudo confirmar la autorización del certificado en ARCA')
+        return
+      }
+      certPem = out.certPem
+      keyPem = out.privateKeyPem
+      alias = out.alias
+    }
+
+    // Punto de venta: si reconectamos y ya había uno, lo conservamos.
+    let pvSeteado = reutiliza && prev.punto_venta_ws ? String(prev.punto_venta_ws) : null
+
+    if (!pvSeteado) {
+      await marcarSetup(userId, 'detectando_pv', 'Buscando tu punto de venta…')
+      try {
+        const pv = await puntosVentaWS({ cuit, certPem, keyPem })
+        const habil = (pv.puntos || []).filter(
+          (p) =>
+            String(p.Bloqueado).toUpperCase() !== 'S' &&
+            (p.FchBaja == null || String(p.FchBaja).toUpperCase() === 'NULL')
+        )
+        if (habil.length > 0) {
+          pvSeteado = String(habil[0].Nro)
+          await supabaseAdmin.from('credenciales_arca').update({ punto_venta_ws: pvSeteado }).eq('user_id', userId)
+        }
+      } catch (e) {
+        console.log('[SETUP] detectar PV falló:', String((e && e.message) || e))
+      }
+    }
+
+    // Si no tiene ningún punto de venta WS, se lo creamos automáticamente.
+    if (!pvSeteado) {
+      await marcarSetup(userId, 'creando_pv', 'Creando tu punto de venta…')
+      try {
+        const cre = await crearPuntoVentaWS(cuit, clave, { dryRun: false, nombre: 'Ventas' })
+        if (cre && cre.creado && cre.numero != null) {
+          pvSeteado = String(cre.numero)
+          await supabaseAdmin.from('credenciales_arca').update({ punto_venta_ws: pvSeteado }).eq('user_id', userId)
+        } else {
+          console.log('[SETUP] crear PV no confirmado:', JSON.stringify(cre?.diag || cre?.error || {}))
+        }
+      } catch (e) {
+        console.log('[SETUP] crear PV falló:', String((e && e.message) || e))
+      }
+    }
+
+    // Traer/confirmar los datos del emisor (Razón Social/Domicilio) desde el
+    // padrón para que el PDF salga completo. Marcamos "listo" RECIÉN al final,
+    // así el usuario no puede emitir hasta tener sus datos cargados.
+    await marcarSetup(userId, 'capturando_datos', 'Trayendo tus datos de ARCA (razón social, domicilio)…')
+    try {
+      await capturarDatosEmisor(userId, { cuit, clave, alias, certPem, keyPem })
+    } catch (e) {
+      console.log('[PADRON] captura en onboarding falló:', String((e && e.message) || e))
+    }
+
+    // Regeneración one-time: la PRIMERA vez que el usuario completa el onboarding
+    // (o reconecta) con sus datos de emisor ya cargados, regenera sus facturas
+    // viejas al formato nuevo. Se marca la bandera para no repetirlo nunca más.
+    try {
+      const { data: rr } = await supabaseAdmin
+        .from('credenciales_arca')
+        .select('facturas_regeneradas')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!rr || rr.facturas_regeneradas !== true) {
+        const out = await regenerarFacturasUsuario(supabaseAdmin, userId)
+        console.log('[REGEN] onboarding', userId, JSON.stringify({ ok: out.ok, total: out.total, regeneradas: out.regeneradas }))
+        if (out.ok) {
+          await supabaseAdmin
+            .from('credenciales_arca')
+            .update({ facturas_regeneradas: true })
+            .eq('user_id', userId)
+        }
+      }
+    } catch (e) {
+      console.log('[REGEN] onboarding falló:', String((e && e.message) || e))
+    }
+
+    // Estado final (recién ahora, con los datos del emisor ya cargados).
+    if (pvSeteado) {
+      await marcarSetup(userId, 'listo', 'Todo listo para facturar ✓')
+    } else {
+      await marcarSetup(userId, 'falta_pv', 'No pudimos habilitar un punto de venta automáticamente')
+    }
+  } catch (e) {
+    await marcarSetup(userId, 'error', null, String((e && e.message) || e))
+  }
+}
+
+app.post('/arca/setup-wsfe-async', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  // Evitar dispararlo dos veces si ya está corriendo (salvo ?force=1).
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('ws_setup_estado, ws_setup_updated')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  const enProgreso = row && ESTADOS_EN_PROGRESO.includes(row.ws_setup_estado)
+  const reciente =
+    row?.ws_setup_updated && Date.now() - new Date(row.ws_setup_updated).getTime() < 6 * 60 * 1000
+  if (enProgreso && reciente && req.query.force !== '1') {
+    return res.json({ ok: true, yaEnProgreso: true })
+  }
+
+  await marcarSetup(req.user.id, 'iniciando', 'Iniciando configuración…')
+  // Fire-and-forget: no await, corre en segundo plano.
+  correrOnboardingWsfe(req.user.id, cred.cuit, cred.clave)
+  res.json({ ok: true, iniciado: true })
+})
+
+// TEMPORAL — crear punto de venta WS. Por defecto DRY-RUN (no guarda); con
+// ?real=1 completa y aprieta Aceptar (crea el punto de venta de verdad).
+app.post('/arca/setup-crear-pv', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const dryRun = req.query.real !== '1'
+    const out = await crearPuntoVentaWS(cred.cuit, cred.clave, { dryRun })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// TEMPORAL — inspección del ABM de Puntos de Venta (para el alta automática).
+app.post('/arca/setup-puntos-venta-inspect', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const out = await inspeccionarPuntosVenta(cred.cuit, cred.clave, req.query.t || undefined)
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Diagnóstico WS: lista los puntos de venta habilitados para Web Service.
+app.post('/arca/ws/puntos-venta', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const out = await puntosVentaFlow({ supabaseAdmin, userId: req.user.id })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+app.post('/arca/ws/anular', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const facturaId = req.body?.facturaId
+  if (!facturaId) return res.status(400).json({ error: 'Falta facturaId' })
+  try {
+    const out = await anularFlow({ supabaseAdmin, userId: req.user.id, facturaId })
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+app.get('/playwright-test', async (req, res) => {
+  let browser
+  try {
+    browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] })
+    const page = await browser.newPage()
+    await page.goto('https://example.com', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    const title = await page.title()
+    res.json({ ok: true, chromium: 'funciona', titulo: title })
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) })
+  } finally {
+    if (browser) await browser.close()
+  }
+})
+
+// ---------------- Endpoint protegido ----------------
+// Verifica el puente: identifica al usuario por su token y confirma que el
+// backend puede leer su credencial ARCA (sin devolver la clave).
+app.get('/verificar-credencial', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.json({ tiene_credencial: false })
+
+  // Nunca devolvemos la clave: solo confirmamos que se pudo leer/descifrar.
+  res.json({
+    tiene_credencial: true,
+    cuit: cred.cuit,
+    clave_descifrada_ok: Boolean(cred.clave && cred.clave.length > 0),
+  })
+})
+
+// Prueba de login a ARCA (3C). Lee la credencial del usuario, se loguea y
+// devuelve una captura. No emite ni modifica comprobantes.
+app.post('/arca/login-test', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const resultado = await probarLoginArca(cred.cuit, cred.clave)
+  res.json(resultado)
+})
+
+// Detecta las empresas (representados) del usuario en RCEL. No emite nada.
+app.post('/arca/empresas', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const resultado = await listarEmpresasArca(cred.cuit, cred.clave)
+  res.json(resultado)
+})
+
+// Abre el formulario de factura hasta el paso 1 (sin emitir). Devuelve captura.
+app.post('/arca/factura-preview', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  const empresa = row?.empresa_representada
+  if (!empresa) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  const resultado = await abrirFormularioFactura(cred.cuit, cred.clave, empresa)
+  res.json(resultado)
+})
+
+// Lee los puntos de venta y tipos de comprobante disponibles. No emite nada.
+app.post('/arca/opciones-comprobante', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  const empresa = row?.empresa_representada
+  if (!empresa) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  const resultado = await leerOpcionesComprobante(cred.cuit, cred.clave, empresa)
+  res.json(resultado)
+})
+
+// Inspección del formulario hasta el paso 3 (para armar el llenado). No emite.
+app.post('/arca/inspeccionar-factura', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada, punto_venta, tipo_comprobante')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.empresa_representada) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  const resultado = await inspeccionarFactura(
+    cred.cuit,
+    cred.clave,
+    row.empresa_representada,
+    row.punto_venta,
+    row.tipo_comprobante
+  )
+  res.json(resultado)
+})
+
+// Anula una factura emitiendo una Nota de Crédito C asociada. EMITE de verdad.
+app.post('/arca/anular', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const facturaId = req.body?.facturaId
+  if (!facturaId) return res.status(400).json({ error: 'Falta facturaId' })
+
+  // Credencial + empresa/PV
+  const { data: credData, error: credErr } = await supabaseAdmin.rpc(
+    'get_credencial_arca_interna',
+    { p_user: req.user.id }
+  )
+  if (credErr) return res.status(500).json({ error: credErr.message })
+  const cred = Array.isArray(credData) ? credData[0] : credData
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: crow } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada, punto_venta')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!crow?.empresa_representada) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  // Factura original (propia)
+  const { data: f, error: fErr } = await supabaseAdmin
+    .from('facturas_emitidas')
+    .select('*')
+    .eq('id', facturaId)
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (fErr) return res.status(500).json({ error: fErr.message })
+  if (!f) return res.status(404).json({ error: 'Factura no encontrada' })
+  if (f.estado === 'anulada') return res.status(400).json({ error: 'La factura ya está anulada' })
+  if (/nota de cr/i.test(f.tipo || '')) {
+    return res.status(400).json({ error: 'Una Nota de Crédito no se anula' })
+  }
+
+  // Comprobante asociado: separar PV y número de "00001-00000813".
+  // ARCA exige el formato con ceros: PV a 5 dígitos y número a 8.
+  const partes = String(f.numero || '').split('-')
+  const pvAsoc = partes[0] ? String(parseInt(partes[0], 10)).padStart(5, '0') : ''
+  const nroAsoc = partes[1] ? String(parseInt(partes[1], 10)).padStart(8, '0') : ''
+
+  const datos = {
+    concepto: f.concepto || 'Productos',
+    condicionIva: f.condicion_iva || 'Consumidor Final',
+    condicionesVenta: f.condiciones_venta
+      ? String(f.condiciones_venta).split(',').map((s) => s.trim()).filter(Boolean)
+      : ['Contado'],
+    producto: f.producto,
+    precio: f.precio,
+  }
+
+  const resultado = await generarFactura(
+    cred.cuit,
+    cred.clave,
+    crow.empresa_representada,
+    crow.punto_venta,
+    'Nota de Crédito C',
+    datos,
+    true,
+    {
+      comprobanteAsociado: {
+        tipo: 'Factura C',
+        ptoVta: pvAsoc,
+        nro: nroAsoc,
+        fecha: f.fecha || null,
+      },
+    }
+  )
+
+  if (resultado.ok && resultado.emitida) {
+    try {
+      // Guardar la NC como comprobante propio
+      const { data: ncIns } = await supabaseAdmin
+        .from('facturas_emitidas')
+        .insert({
+          user_id: req.user.id,
+          tipo: 'Nota de Crédito C',
+          punto_venta: crow.punto_venta,
+          numero: resultado.numero,
+          cae: resultado.cae,
+          cae_vto: resultado.caeVto,
+          fecha: resultado.fecha,
+          concepto: datos.concepto,
+          condicion_iva: datos.condicionIva,
+          condiciones_venta: datos.condicionesVenta.join(', '),
+          producto: f.producto,
+          cantidad: 1,
+          precio: f.precio,
+          importe_total: f.importe_total,
+          estado: 'emitida',
+          anula_a: f.id,
+        })
+        .select('id')
+        .single()
+
+      if (ncIns && resultado.pdf) {
+        const path = `${req.user.id}/${ncIns.id}.pdf`
+        const buf = Buffer.from(resultado.pdf, 'base64')
+        const { error: upErr } = await supabaseAdmin.storage
+          .from('facturas')
+          .upload(path, buf, { contentType: 'application/pdf', upsert: true })
+        if (!upErr) {
+          await supabaseAdmin.from('facturas_emitidas').update({ pdf_path: path }).eq('id', ncIns.id)
+        }
+      }
+
+      // Marcar la factura original como anulada
+      await supabaseAdmin
+        .from('facturas_emitidas')
+        .update({ estado: 'anulada', nc_numero: resultado.numero })
+        .eq('id', f.id)
+    } catch (e) {
+      resultado.guardadoError = String((e && e.message) || e)
+    }
+  }
+
+  delete resultado.pdf
+  res.json(resultado)
+})
+
+// Inspección del formulario de Nota de Crédito (para armar la anulación). No emite.
+app.post('/arca/inspeccionar-nc', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada, punto_venta')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.empresa_representada) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+
+  const resultado = await inspeccionarNotaCredito(
+    cred.cuit,
+    cred.clave,
+    row.empresa_representada,
+    row.punto_venta
+  )
+  res.json(resultado)
+})
+
+// Genera la factura. Con confirmar=false llena todo y frena en el Resumen (sin
+// emitir). Con confirmar=true emite la factura real en ARCA.
+app.post('/arca/factura-generar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  }
+  const datos = req.body?.datos || {}
+  const confirmar = req.body?.confirmar === true
+
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', {
+    p_user: req.user.id,
+  })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('empresa_representada, punto_venta, tipo_comprobante')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.empresa_representada) {
+    return res.status(400).json({ error: 'No elegiste una empresa a representar' })
+  }
+  if (!row?.punto_venta) {
+    return res.status(400).json({ error: 'No configuraste el punto de venta' })
+  }
+
+  const resultado = await generarFactura(
+    cred.cuit,
+    cred.clave,
+    row.empresa_representada,
+    row.punto_venta,
+    row.tipo_comprobante,
+    datos,
+    confirmar
+  )
+
+  // Si se emitió de verdad, guardamos el registro y el PDF.
+  if (confirmar && resultado.ok && resultado.emitida) {
+    try {
+      const { data: ins, error: insErr } = await supabaseAdmin
+        .from('facturas_emitidas')
+        .insert({
+          user_id: req.user.id,
+          tipo: row.tipo_comprobante || 'Factura C',
+          punto_venta: row.punto_venta,
+          numero: resultado.numero,
+          cae: resultado.cae,
+          cae_vto: resultado.caeVto,
+          fecha: resultado.fecha,
+          concepto: datos.concepto,
+          condicion_iva: datos.condicionIva,
+          condiciones_venta: Array.isArray(datos.condicionesVenta)
+            ? datos.condicionesVenta.join(', ')
+            : datos.condicionesVenta,
+          producto: datos.producto,
+          cantidad: 1,
+          precio: Number(datos.precio) || null,
+          importe_total: Number(datos.precio) || null,
+          estado: 'emitida',
+        })
+        .select('id')
+        .single()
+
+      if (insErr) {
+        resultado.guardado = false
+        resultado.guardadoError = insErr.message
+      } else {
+        resultado.facturaId = ins.id
+        resultado.guardado = true
+
+        if (resultado.pdf) {
+          const path = `${req.user.id}/${ins.id}.pdf`
+          const buf = Buffer.from(resultado.pdf, 'base64')
+          const { error: upErr } = await supabaseAdmin.storage
+            .from('facturas')
+            .upload(path, buf, { contentType: 'application/pdf', upsert: true })
+          if (!upErr) {
+            await supabaseAdmin
+              .from('facturas_emitidas')
+              .update({ pdf_path: path })
+              .eq('id', ins.id)
+            resultado.pdfGuardado = true
+          } else {
+            resultado.pdfGuardado = false
+            resultado.pdfGuardadoError = upErr.message
+          }
+        }
+      }
+    } catch (e) {
+      resultado.guardado = false
+      resultado.guardadoError = String((e && e.message) || e)
+    }
+  }
+
+  // No devolvemos el PDF crudo al frontend (se descarga desde Storage).
+  delete resultado.pdf
+  res.json(resultado)
+})
+
+// ============================================================
+//  Mercado Pago — conexión (OAuth), lectura de cobros y facturación
+// ============================================================
+
+// Estado de la conexión (para la pantalla de Integraciones). No expone tokens.
+app.get('/mp/estado', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin
+    .from('mp_cuentas')
+    .select('mp_user_id, auto_facturar, producto_default_id, conectada_at, access_token_enc')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (error) return res.status(500).json({ error: error.message })
+  const { proVigente } = await planDe(req.user.id)
+  res.json({
+    configurado: mpConfigurado(),
+    pro: proVigente,
+    conectada: Boolean(data && data.access_token_enc),
+    auto_facturar: data?.auto_facturar || false,
+    producto_default_id: data?.producto_default_id || null,
+    conectada_at: data?.conectada_at || null,
+  })
+})
+
+// Genera la URL de autorización de Mercado Pago. El frontend redirige ahí.
+app.get('/mp/oauth/url', requireAuth, requirePro, async (req, res) => {
+  if (!mpConfigurado()) return res.status(500).json({ error: 'Falta configurar MP_CLIENT_ID / MP_CLIENT_SECRET' })
+  const origin = String(req.query.origin || '')
+  if (!/^https?:\/\//.test(origin)) return res.status(400).json({ error: 'origin inválido' })
+  const state = firmarState({ u: req.user.id, o: origin })
+  res.json({ url: urlAutorizacion(state) })
+})
+
+// Callback de OAuth: Mercado Pago devuelve el code acá (sin sesión → usamos state).
+app.get('/mp/oauth/callback', async (req, res) => {
+  const volver = (origin, q) => res.redirect(`${origin}/integraciones?${q}`)
+  const st = verificarState(req.query.state)
+  const origin = st?.o
+  if (!st || !origin) return res.status(400).send('State inválido')
+  if (req.query.error) return volver(origin, `mp=error&msg=${encodeURIComponent(String(req.query.error))}`)
+  const code = req.query.code
+  if (!code) return volver(origin, 'mp=error&msg=sin_codigo')
+  if (!supabaseAdmin) return volver(origin, 'mp=error&msg=backend')
+  try {
+    const tok = await intercambiarCodigo(String(code))
+    await guardarConexion(supabaseAdmin, st.u, tok)
+    volver(origin, 'mp=ok')
+  } catch (e) {
+    volver(origin, `mp=error&msg=${encodeURIComponent(String((e && e.message) || e))}`)
+  }
+})
+
+// Cambiar ajustes: facturación automática y/o producto por defecto.
+app.post('/mp/config', requireAuth, requirePro, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const patch = { updated_at: new Date().toISOString() }
+  if (typeof req.body?.auto_facturar === 'boolean') patch.auto_facturar = req.body.auto_facturar
+  if ('producto_default_id' in (req.body || {})) patch.producto_default_id = req.body.producto_default_id || null
+  const { error } = await supabaseAdmin.from('mp_cuentas').update(patch).eq('user_id', req.user.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ ok: true })
+})
+
+// Desconectar la cuenta de Mercado Pago (borra los tokens de nuestra base).
+app.post('/mp/desconectar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { error } = await supabaseAdmin.from('mp_cuentas').delete().eq('user_id', req.user.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ ok: true })
+})
+
+// Traer los últimos cobros de Mercado Pago y guardarlos (sin facturar).
+app.post('/mp/cobros/sync', requireAuth, requirePro, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const tk = await accessTokenValido(supabaseAdmin, req.user.id)
+    if (!tk) return res.status(400).json({ error: 'No tenés Mercado Pago conectado' })
+    const ownerDoc = await docTitular(tk.accessToken)
+    const pagos = await buscarPagosTodos(tk.accessToken)
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, req.user.id, pagos, tk.mpUserId, ownerDoc)
+    res.json({ ok: true, nuevos: nuevos.length })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Resuelve el nombre del producto elegido (o el por defecto de la cuenta).
+async function resolverProducto(userId, productoId) {
+  let id = productoId
+  if (!id) {
+    const { data: cta } = await supabaseAdmin
+      .from('mp_cuentas')
+      .select('producto_default_id')
+      .eq('user_id', userId)
+      .maybeSingle()
+    id = cta?.producto_default_id || null
+  }
+  if (!id) return null
+  const { data: prod } = await supabaseAdmin
+    .from('productos_configurados')
+    .select('nombre')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return prod?.nombre || null
+}
+
+// Emite una Factura C a partir de un cobro y lo marca como facturado.
+async function facturarUnCobro(userId, cobro, productoNombre) {
+  const body = {
+    producto: productoNombre,
+    precio: cobro.monto,
+    cantidad: 1,
+    concepto: 'Productos',
+    condicionIva: 'Consumidor Final',
+    condicionesVenta: ['Contado'],
+  }
+  const out = await emitirFacturaFlow({ supabaseAdmin, userId, body })
+  if (out && out.ok && out.guardado && out.facturaId) {
+    await supabaseAdmin
+      .from('mp_cobros')
+      .update({ facturado: true, factura_id: out.facturaId })
+      .eq('id', cobro.id)
+      .eq('user_id', userId)
+  }
+  return out
+}
+
+// Facturar los cobros seleccionados (manual). Cada cobro = una Factura C.
+app.post('/mp/facturar', requireAuth, requirePro, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  // Solo IDs con formato UUID válido (evita basura llegando a la consulta).
+  const ids = (Array.isArray(req.body?.cobroIds) ? req.body.cobroIds : []).filter(esUUID).slice(0, 200)
+  if (ids.length === 0) return res.status(400).json({ error: 'No elegiste ningún cobro' })
+  const productoId = req.body?.productoId
+  if (!esUUID(productoId)) return res.status(400).json({ error: 'Elegí un producto para facturar' })
+  const productoNombre = await resolverProducto(req.user.id, productoId)
+  if (!productoNombre) return res.status(400).json({ error: 'Elegí un producto para facturar' })
+
+  const { data: cobros, error } = await supabaseAdmin
+    .from('mp_cobros')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .in('id', ids)
+  if (error) return res.status(500).json({ error: error.message })
+
+  const resultados = []
+  for (const c of cobros || []) {
+    if (c.facturado) {
+      resultados.push({ id: c.id, ok: true, yaFacturado: true })
+      continue
+    }
+    try {
+      const out = await facturarUnCobro(req.user.id, c, productoNombre)
+      resultados.push({
+        id: c.id,
+        ok: Boolean(out && out.ok && out.guardado),
+        numero: out?.numero || null,
+        error: out && out.ok ? null : out?.error || 'No se pudo emitir',
+      })
+    } catch (e) {
+      resultados.push({ id: c.id, ok: false, error: String((e && e.message) || e) })
+    }
+  }
+  const emitidas = resultados.filter((r) => r.ok && !r.yaFacturado).length
+  res.json({ ok: true, emitidas, resultados })
+})
+
+// Webhook de Mercado Pago: avisa cuando entra/actualiza un pago. Si el usuario
+// tiene la facturación automática activada, emite la Factura C en el momento.
+app.post('/mp/webhook', async (req, res) => {
+  // Respondemos 200 rápido (MP reintenta si no); procesamos aparte.
+  res.status(200).json({ ok: true })
+  if (!supabaseAdmin) return
+  try {
+    const tipo = req.body?.type || req.query?.topic || req.query?.type
+    if (tipo && !/payment/i.test(String(tipo))) return
+    const paymentId = req.body?.data?.id || req.query?.id || req.query?.['data.id']
+    const mpUserId = req.body?.user_id != null ? String(req.body.user_id) : null
+    if (!paymentId) return
+
+    // ¿De qué usuario nuestro es esta cuenta de MP?
+    let q = supabaseAdmin.from('mp_cuentas').select('user_id, mp_user_id, auto_facturar, producto_default_id')
+    q = mpUserId ? q.eq('mp_user_id', mpUserId) : q
+    const { data: ctas } = await q
+    const cta = (ctas || [])[0]
+    if (!cta) return
+
+    const tk = await accessTokenValido(supabaseAdmin, cta.user_id)
+    if (!tk) return
+    const pago = await obtenerPago(tk.accessToken, paymentId)
+    if (!pago || pago.status !== 'approved') return
+
+    const ownerDoc = await docTitular(tk.accessToken)
+    const nuevos = await guardarCobrosNuevos(supabaseAdmin, cta.user_id, [pago], tk.mpUserId || cta.mp_user_id, ownerDoc)
+
+    // Facturación automática (si está activada, hay producto por defecto y el
+    // usuario tiene Pro vigente — MP es una función del plan Pro).
+    const { proVigente } = await planDe(cta.user_id)
+    if (proVigente && cta.auto_facturar && cta.producto_default_id && nuevos.length > 0) {
+      const productoNombre = await resolverProducto(cta.user_id, cta.producto_default_id)
+      if (productoNombre) {
+        for (const c of nuevos) {
+          try {
+            await facturarUnCobro(cta.user_id, c, productoNombre)
+          } catch (e) {
+            console.log('[MP-AUTO] error facturando cobro:', String((e && e.message) || e))
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[MP-WEBHOOK] error:', String((e && e.message) || e))
+  }
+})
+
+// DEV — prueba de consulta al Padrón de ARCA con el certificado del usuario.
+// Prueba varios servicios y devuelve qué respondió cada uno (o el error).
+app.post('/arca/padron-test', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data: cred, error } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('cuit, ws_cert_pem, ws_cert_key_enc')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (error) return res.status(500).json({ error: error.message })
+  if (!cred || !cred.ws_cert_pem || !cred.ws_cert_key_enc) {
+    return res.status(400).json({ error: 'No tenés certificado wsfe configurado' })
+  }
+  let keyPem
+  try {
+    keyPem = descifrar(cred.ws_cert_key_enc)
+  } catch (e) {
+    return res.status(500).json({ error: 'No se pudo descifrar la clave: ' + String((e && e.message) || e) })
+  }
+  const servicios = req.query.svc
+    ? [String(req.query.svc)]
+    : ['ws_sr_padron_a13', 'ws_sr_constancia_inscripcion', 'ws_sr_padron_a5']
+  const resultados = {}
+  for (const svc of servicios) {
+    try {
+      const out = await datosPadron({ cuit: cred.cuit, certPem: cred.ws_cert_pem, keyPem, servicio: svc })
+      resultados[svc] = { ok: true, razonSocial: out.razonSocial, domicilio: out.domicilio, inicio: out.inicio }
+      console.log('[PADRON]', svc, 'OK', JSON.stringify({ razonSocial: out.razonSocial, domicilio: out.domicilio, inicio: out.inicio }))
+    } catch (e) {
+      const msg = String((e && e.message) || e).slice(0, 300)
+      resultados[svc] = { ok: false, error: msg }
+      console.log('[PADRON]', svc, 'ERROR', msg)
+    }
+  }
+  res.json({ cuit: cred.cuit, resultados })
+})
+
+// DEV — autoriza el certificado del usuario para un servicio de padrón (RPA).
+app.post('/arca/autorizar-padron', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('ws_cert_alias')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.ws_cert_alias) return res.status(400).json({ error: 'No tenés certificado wsfe configurado (falta alias)' })
+  const servicio = String(req.query.svc || 'ws_sr_constancia_inscripcion')
+  try {
+    const out = await autorizarServicio(cred.cuit, cred.clave, row.ws_cert_alias, servicio)
+    console.log('[AUTORIZAR-PADRON]', servicio, out.autorizado ? 'OK' : 'FALLO', JSON.stringify(out.diag || {}))
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Sincroniza los datos del emisor desde el padrón (autoriza + consulta + guarda).
+// Sirve para completar usuarios que ya estaban onboarded sin esos datos.
+app.post('/arca/sincronizar-padron', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  const { data: row } = await supabaseAdmin
+    .from('credenciales_arca')
+    .select('ws_cert_alias, ws_cert_pem, ws_cert_key_enc')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!row?.ws_cert_pem || !row?.ws_cert_key_enc || !row?.ws_cert_alias) {
+    return res.status(400).json({ error: 'No tenés certificado wsfe configurado' })
+  }
+  let keyPem
+  try {
+    keyPem = descifrar(row.ws_cert_key_enc)
+  } catch (e) {
+    return res.status(500).json({ error: 'No se pudo descifrar la clave: ' + String((e && e.message) || e) })
+  }
+  const d = await capturarDatosEmisor(req.user.id, {
+    cuit: cred.cuit,
+    clave: cred.clave,
+    alias: row.ws_cert_alias,
+    certPem: row.ws_cert_pem,
+    keyPem,
+  })
+
+  // Si la captura trajo datos, regeneramos las facturas de una para que queden
+  // completas (viejas y nueva). Así este botón deja todo listo en un solo paso.
+  let regeneradas = null
+  if (d && d.razonSocial) {
+    try {
+      const r = await regenerarFacturasUsuario(supabaseAdmin, req.user.id)
+      regeneradas = { total: r.total, regeneradas: r.regeneradas, ok: r.ok }
+      if (r.ok) {
+        await supabaseAdmin.from('credenciales_arca').update({ facturas_regeneradas: true }).eq('user_id', req.user.id)
+      }
+      console.log('[SINCRONIZAR-PADRON+REGEN]', req.user.id, JSON.stringify(regeneradas))
+    } catch (e) {
+      console.log('[SINCRONIZAR-PADRON] regen falló:', String((e && e.message) || e))
+    }
+  }
+
+  res.json({ ok: d.ok !== false, razonSocial: d.razonSocial, domicilio: d.domicilio, inicio: d.inicio, error: d.error, regeneradas })
+})
+
+// DIAGNÓSTICO (dev): abre "Administrador de Relaciones" en la cuenta del usuario
+// y guarda una captura de pantalla para ver cómo es su portal. No cambia nada.
+app.post('/arca/padron-debug', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data, error } = await supabaseAdmin.rpc('get_credencial_arca_interna', { p_user: req.user.id })
+  if (error) return res.status(500).json({ error: error.message })
+  const cred = Array.isArray(data) ? data[0] : data
+  if (!cred) return res.status(400).json({ error: 'No tenés una credencial ARCA cargada' })
+  try {
+    const r = await capturarPantallaAdminRel(cred.cuit, cred.clave)
+    let shotUrl = null
+    if (r.shot) {
+      const path = `debug/${req.user.id}-adminrel-${Date.now()}.png`
+      const buf = Buffer.from(r.shot, 'base64')
+      const { error: upErr } = await supabaseAdmin.storage
+        .from('facturas')
+        .upload(path, buf, { contentType: 'image/png', upsert: true })
+      if (!upErr) {
+        const { data: signed } = await supabaseAdmin.storage.from('facturas').createSignedUrl(path, 24 * 3600)
+        shotUrl = signed?.signedUrl || null
+      }
+    }
+    console.log('[PADRON-DEBUG]', JSON.stringify({ url: r.url, controles: r.controles, texto: (r.texto || '').slice(0, 250), shotUrl }))
+    res.json({ ok: r.ok, url: r.url, texto: r.texto, controles: r.controles, shotUrl, error: r.error })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Regenera MIS facturas al formato nuevo (calcado de ARCA, 3 copias). Cada
+// usuario regenera solo las suyas. Pisa los PDFs viejos en Storage.
+app.post('/arca/regenerar-mis', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const out = await regenerarFacturasUsuario(supabaseAdmin, req.user.id)
+    // Marca la bandera para no repetir la regeneración automática en el onboarding.
+    if (out.ok) {
+      await supabaseAdmin.from('credenciales_arca').update({ facturas_regeneradas: true }).eq('user_id', req.user.id)
+    }
+    res.json(out)
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Regenera las facturas de TODOS los usuarios. Admin: protegido con SPIKE_SECRET.
+app.post('/arca/regenerar-todas', async (req, res) => {
+  if (!process.env.SPIKE_SECRET || req.query.key !== process.env.SPIKE_SECRET) {
+    return res.status(403).json({ error: 'no autorizado' })
+  }
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const resultados = await regenerarTodas(supabaseAdmin)
+    // Marca la bandera de los que se regeneraron OK.
+    for (const r of resultados) {
+      if (r.ok) await supabaseAdmin.from('credenciales_arca').update({ facturas_regeneradas: true }).eq('user_id', r.userId)
+    }
+    console.log('[REGEN-TODAS]', JSON.stringify(resultados.map((r) => ({ u: r.userId, ok: r.ok, t: r.total, r: r.regeneradas, m: r.motivo }))))
+    res.json({ ok: true, resultados })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// ---- Eliminar cuenta: borra TODOS los datos que YaFact usa + el login ----
+// Las facturas ya emitidas siguen registradas legalmente en ARCA; esto NO las
+// anula ni las borra ante ARCA. Solo elimina los datos locales de la app y la
+// cuenta de acceso (email o Google). Es irreversible.
+app.post('/cuenta/eliminar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const userId = req.user.id
+  const resumen = {}
+  try {
+    // 1) PDF en Storage bajo <userId>/ (bucket "facturas").
+    try {
+      const { data: files } = await supabaseAdmin.storage.from('facturas').list(userId, { limit: 1000 })
+      if (files && files.length) {
+        const paths = files.map((f) => `${userId}/${f.name}`)
+        await supabaseAdmin.storage.from('facturas').remove(paths)
+        resumen.pdfs = paths.length
+      } else {
+        resumen.pdfs = 0
+      }
+    } catch (e) {
+      resumen.pdfsError = String((e && e.message) || e)
+    }
+
+    // 2) Filas por user_id (hijos primero).
+    const tablasUser = [
+      'facturas_emitidas',
+      'facturas',
+      'mp_cobros',
+      'mp_cuentas',
+      'credenciales_arca',
+      'productos_configurados',
+      'suscripciones',
+    ]
+    for (const t of tablasUser) {
+      const { error } = await supabaseAdmin.from(t).delete().eq('user_id', userId)
+      resumen[t] = error ? `error: ${error.message}` : 'ok'
+    }
+
+    // 3) Perfil (su clave es "id", no "user_id").
+    {
+      const { error } = await supabaseAdmin.from('perfiles').delete().eq('id', userId)
+      resumen.perfiles = error ? `error: ${error.message}` : 'ok'
+    }
+
+    // 4) Usuario de autenticación (corta el login de email/Google).
+    const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    if (delErr) {
+      console.log('[CUENTA-ELIMINAR][auth-err]', userId, delErr.message, JSON.stringify(resumen))
+      return res
+        .status(500)
+        .json({ error: 'No se pudo eliminar la cuenta de acceso: ' + delErr.message, resumen })
+    }
+
+    console.log('[CUENTA-ELIMINAR][ok]', userId, JSON.stringify(resumen))
+    res.json({ ok: true, resumen })
+  } catch (e) {
+    console.log('[CUENTA-ELIMINAR][err]', userId, String((e && e.message) || e))
+    res.status(500).json({ error: String((e && e.message) || e), resumen })
+  }
+})
+
+// ---------------- Admin ----------------
+
+// ¿El usuario actual es admin? (para mostrar/ocultar la sección en el front)
+app.get('/admin/soy-admin', requireAuth, (req, res) => {
+  res.json({ admin: esAdmin(req.user) })
+})
+
+// Lista de usuarios con su plan actual.
+app.get('/admin/usuarios', requireAuth, requireAdmin, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const { data: list, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    if (error) throw new Error(error.message)
+    const { data: subs } = await supabaseAdmin
+      .from('suscripciones')
+      .select('user_id, plan, vence, origen, mp_estado')
+    const porId = Object.fromEntries((subs || []).map((s) => [s.user_id, s]))
+    const ahora = Date.now()
+    const usuarios = (list?.users || []).map((u) => {
+      const s = porId[u.id]
+      const vigente = s?.plan === 'pro' && (!s.vence || new Date(s.vence).getTime() > ahora)
+      return {
+        id: u.id,
+        email: u.email,
+        creado: u.created_at,
+        plan: s?.plan || 'gratis',
+        vence: s?.vence || null,
+        origen: s?.origen || null,
+        mpEstado: s?.mp_estado || null,
+        proVigente: !!vigente,
+      }
+    })
+    // Más nuevos primero.
+    usuarios.sort((a, b) => new Date(b.creado) - new Date(a.creado))
+    res.json({ usuarios })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Asigna un plan a un usuario con una duración en meses (0 = sin vencimiento).
+app.post('/admin/plan', requireAuth, requireAdmin, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const userId = req.body?.userId
+  const plan = req.body?.plan
+  const meses = Number(req.body?.meses)
+  if (!esUUID(userId)) return res.status(400).json({ error: 'Usuario inválido' })
+  if (!['gratis', 'pro'].includes(plan)) return res.status(400).json({ error: 'Plan inválido' })
+  if (![0, 1, 3, 6, 12].includes(meses)) return res.status(400).json({ error: 'Duración inválida' })
+
+  let vence = null
+  if (plan === 'pro' && meses > 0) {
+    const d = new Date()
+    d.setMonth(d.getMonth() + meses)
+    vence = d.toISOString()
+  }
+  const { error } = await supabaseAdmin.from('suscripciones').upsert(
+    { user_id: userId, plan, vence, origen: 'admin', actualizado: new Date().toISOString() },
+    { onConflict: 'user_id' }
+  )
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ ok: true, plan, vence })
+})
+
+// ---------------- Suscripción Pro (pago por Mercado Pago) ----------------
+
+// Estado de la suscripción del usuario + si el pago está habilitado y el precio.
+app.get('/pro/estado', requireAuth, async (req, res) => {
+  const { plan, proVigente } = await planDe(req.user.id)
+  let vence = null
+  let mpEstado = null
+  if (supabaseAdmin) {
+    const { data } = await supabaseAdmin
+      .from('suscripciones')
+      .select('vence, mp_estado, origen')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    vence = data?.vence || null
+    mpEstado = data?.mp_estado || null
+  }
+  res.json({ configurado: proConfigurado(), precio: PRO_PRECIO, plan, proVigente, vence, mpEstado })
+})
+
+// Inicia la suscripción con la tarjeta tokenizada en el navegador (Card Brick).
+// Con la tarjeta, la suscripción se autoriza en el momento (sin login ni email).
+app.post('/pro/suscribir', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  if (!proConfigurado()) {
+    return res.status(503).json({ error: 'El pago del plan Pro todavía no está habilitado.' })
+  }
+  const cardToken = typeof req.body?.cardToken === 'string' && req.body.cardToken ? req.body.cardToken : null
+  // Email del pagador (viene del formulario de tarjeta); si no, el de la app.
+  const emailMp =
+    typeof req.body?.payerEmail === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.payerEmail.trim())
+      ? req.body.payerEmail.trim()
+      : req.user.email
+  const origin = String(req.body?.origin || '')
+  const base = /^https?:\/\//.test(origin)
+    ? origin
+    : process.env.PRO_BACK_URL || 'https://app-facturacion-inky.vercel.app'
+  const backUrl = `${base}/configuracion?pro=ok`
+  console.log('[PRO-SUSCRIBIR] intento', req.user.id, 'card:', cardToken ? 'sí' : 'no', 'email:', emailMp)
+  try {
+    const { id, status, initPoint } = await crearPreapproval({
+      email: emailMp,
+      userId: req.user.id,
+      cardToken,
+      backUrl,
+    })
+    console.log('[PRO-SUSCRIBIR] preapproval', id, 'status', status)
+    const now = new Date().toISOString()
+    if (status === 'authorized') {
+      // Cobro OK: activamos Pro ya (el webhook lo mantiene renovado).
+      const d = new Date()
+      d.setMonth(d.getMonth() + 1)
+      d.setDate(d.getDate() + 3)
+      await supabaseAdmin.from('suscripciones').upsert(
+        {
+          user_id: req.user.id,
+          plan: 'pro',
+          vence: d.toISOString(),
+          origen: 'mp',
+          mp_preapproval_id: id,
+          mp_estado: 'authorized',
+          actualizado: now,
+        },
+        { onConflict: 'user_id' }
+      )
+    } else {
+      await supabaseAdmin.from('suscripciones').upsert(
+        { user_id: req.user.id, mp_preapproval_id: id, mp_estado: status || 'pending', origen: 'mp', actualizado: now },
+        { onConflict: 'user_id' }
+      )
+    }
+    res.json({ ok: true, status, initPoint })
+  } catch (e) {
+    console.log('[PRO-SUSCRIBIR][err]', req.user.id, String((e && e.message) || e))
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Cancela la suscripción (deja de renovarse; el Pro sigue hasta el vencimiento).
+app.post('/pro/cancelar', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const { data } = await supabaseAdmin
+      .from('suscripciones')
+      .select('mp_preapproval_id')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (data?.mp_preapproval_id && proConfigurado()) {
+      try {
+        await cancelarPreapproval(data.mp_preapproval_id)
+      } catch (e) {
+        console.log('[PRO] no se pudo cancelar en MP:', String((e && e.message) || e))
+      }
+    }
+    await supabaseAdmin
+      .from('suscripciones')
+      .update({ mp_estado: 'cancelled', actualizado: new Date().toISOString() })
+      .eq('user_id', req.user.id)
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
+
+// Webhook de MP para la suscripción. Verificamos SIEMPRE el estado real contra
+// MP (no confiamos en el cuerpo del webhook).
+app.post('/pro/webhook', async (req, res) => {
+  res.status(200).json({ ok: true })
+  if (!supabaseAdmin || !proConfigurado()) return
+  try {
+    const tipo = String(req.body?.type || req.query?.topic || req.query?.type || '')
+    if (!/preapproval|subscription/i.test(tipo)) return
+    const preapprovalId = String(req.body?.data?.id || req.query?.id || '')
+    if (!preapprovalId) return
+    const { data: fila } = await supabaseAdmin
+      .from('suscripciones')
+      .select('user_id')
+      .eq('mp_preapproval_id', preapprovalId)
+      .maybeSingle()
+    const pre = await obtenerPreapproval(preapprovalId)
+    const userId = fila?.user_id || pre?.external_reference
+    if (!userId) return
+
+    if (pre.status === 'authorized') {
+      // Activa/renueva. El vencimiento es al menos 1 mes desde ahora; si MP
+      // informa una próxima fecha de cobro MÁS LEJANA, usamos esa. Siempre + 3
+      // días de gracia. (Evita que MP devuelva una fecha corta y corte el Pro.)
+      const unMes = new Date()
+      unMes.setMonth(unMes.getMonth() + 1)
+      const prox = pre.next_payment_date ? new Date(pre.next_payment_date) : null
+      let vence = prox && prox > unMes ? prox : unMes
+      vence.setDate(vence.getDate() + 3)
+      await supabaseAdmin.from('suscripciones').upsert(
+        {
+          user_id: userId,
+          plan: 'pro',
+          vence: vence.toISOString(),
+          origen: 'mp',
+          mp_preapproval_id: preapprovalId,
+          mp_estado: 'authorized',
+          actualizado: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      )
+      console.log('[PRO] activada/renovada', userId, vence.toISOString())
+    } else if (['cancelled', 'paused'].includes(pre.status)) {
+      await supabaseAdmin
+        .from('suscripciones')
+        .update({ mp_estado: pre.status, actualizado: new Date().toISOString() })
+        .eq('user_id', userId)
+      console.log('[PRO] estado', pre.status, userId)
+    }
+  } catch (e) {
+    console.log('[PRO-WEBHOOK] error:', String((e && e.message) || e))
+  }
+})
+
+app.get('/', (req, res) => {
+  res.send('app-facturacion backend (Docker + Playwright + Supabase). Ver /health')
+})
+
+// TEMPORAL — Fase 2: auto-test de emisión WS al arrancar, disparado por env.
+// Se controla con WS_SELFTEST (factura|nc) + WS_ST_* y se lee en los logs.
+async function selfTestWS() {
+  const t = process.env.WS_SELFTEST
+  if (!t) return
+  try {
+    // Modo "flow": prueba el flujo completo (emite + PDF + Storage + base).
+    if (/flow/i.test(t)) {
+      const out = await emitirFacturaFlow({
+        supabaseAdmin,
+        userId: process.env.WS_ST_USER,
+        body: {
+          producto: 'Servicio de prueba',
+          precio: process.env.WS_ST_IMP || 2500,
+          concepto: process.env.WS_ST_CONCEPTO || 'Servicios',
+          condicionIva: 'Consumidor Final',
+          condicionesVenta: ['Contado'],
+        },
+      })
+      console.log('[WSTEST]', JSON.stringify(out))
+      return
+    }
+    const esNc = /nc|nota/i.test(t)
+    const q = {
+      key: process.env.SPIKE_SECRET,
+      tipo: esNc ? 'nc' : 'factura',
+      pv: process.env.WS_ST_PV || 1,
+      importe: process.env.WS_ST_IMP || 2500,
+      concepto: process.env.WS_ST_CONCEPTO || 'Servicios',
+    }
+    if (esNc) {
+      q.ncpv = process.env.WS_ST_PV || 1
+      q.ncnro = process.env.WS_ST_NCNRO || 1
+    }
+    const out = await emitirSpike(q)
+    console.log('[WSTEST]', JSON.stringify(out))
+  } catch (e) {
+    console.log('[WSTEST-ERR]', String((e && e.message) || e), (e && e.stack) || '')
+  }
+}
+
+// 404 genérico (rutas no encontradas).
+app.use((req, res) => res.status(404).json({ error: 'No encontrado' }))
+
+// Handler de errores: registra el detalle en el log, pero NO lo expone al cliente.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.log('[ERROR]', err && (err.stack || err.message || err))
+  if (res.headersSent) return
+  res.status(500).json({ error: 'Error interno' })
+})
+
+const port = process.env.PORT || 3000
+app.listen(port, () => {
+  console.log(`Backend escuchando en puerto ${port}`)
+  selfTestWS()
+})
