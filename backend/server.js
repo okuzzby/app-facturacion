@@ -26,6 +26,7 @@ import {
 } from './arca-setup.js'
 import { cifrar, descifrar } from './crypto-ws.js'
 import { datosPadron } from './arca-padron.js'
+import { resumenFacturacionFlow, topeDeCategoria, ESCALA_MONOTRIBUTO } from './arca-facturacion.js'
 import { regenerarFacturasUsuario, regenerarTodas } from './regenerar-facturas.js'
 import { validarFactura, esUUID } from './validaciones.js'
 import {
@@ -431,6 +432,93 @@ async function capturarDatosEmisor(userId, { cuit }) {
     return { ok: false, error: String((e && e.message) || e) }
   }
 }
+
+// --- Barra de "tope de categoría" del Inicio ---
+
+// Categoría de monotributo del usuario, leída del padrón con el certificado de
+// la app (no requiere que el usuario autorice el padrón).
+async function categoriaDeUsuario(cuit) {
+  try {
+    const app = await certPadronApp()
+    if (!app) return null
+    const d = await datosPadron({
+      cuit: app.cuit,
+      idPersona: cuit,
+      certPem: app.certPem,
+      keyPem: app.keyPem,
+      servicio: 'ws_sr_constancia_inscripcion',
+    })
+    if (d?.datosMonotributo) {
+      console.log('[FACT-ANUAL] datosMonotributo:', JSON.stringify(d.datosMonotributo).slice(0, 400))
+    }
+    return d?.categoria || null
+  } catch (e) {
+    console.log('[FACT-ANUAL] categoría desde padrón falló:', String((e && e.message) || e))
+    return null
+  }
+}
+
+// Devuelve el resumen ya guardado (sin recalcular). El Inicio lo lee al cargar.
+app.get('/arca/facturacion-anual', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  const { data } = await supabaseAdmin
+    .from('facturacion_resumen')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+  if (!data) return res.json({ vacio: true, vigencia: ESCALA_MONOTRIBUTO.vigencia })
+  res.json({
+    categoria: data.categoria,
+    tope: data.tope,
+    total: data.total_12m,
+    aproximado: data.aproximado,
+    comprobantes: data.comprobantes,
+    calculadoAt: data.calculado_at,
+    vigencia: ESCALA_MONOTRIBUTO.vigencia,
+  })
+})
+
+// Recalcula contra ARCA (categoría + suma de los últimos 12 meses) y guarda el
+// resultado. Operación pesada: la dispara el botón "Actualizar" del Inicio.
+app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const { data: cred } = await supabaseAdmin
+      .from('credenciales_arca')
+      .select('cuit')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (!cred?.cuit) return res.status(400).json({ error: 'No tenés configuración ARCA cargada' })
+
+    const categoria = await categoriaDeUsuario(cred.cuit)
+    const resumen = await resumenFacturacionFlow({ supabaseAdmin, userId: req.user.id, meses: 12 })
+    const tope = topeDeCategoria(categoria)
+    const calculado_at = new Date().toISOString()
+
+    await supabaseAdmin.from('facturacion_resumen').upsert({
+      user_id: req.user.id,
+      categoria: categoria || null,
+      tope: tope || null,
+      total_12m: resumen.total,
+      aproximado: resumen.aproximado,
+      comprobantes: resumen.comprobantes,
+      puntos: resumen.puntos,
+      calculado_at,
+    })
+
+    res.json({
+      categoria: categoria || null,
+      tope: tope || null,
+      total: resumen.total,
+      aproximado: resumen.aproximado,
+      comprobantes: resumen.comprobantes,
+      calculadoAt: calculado_at,
+      vigencia: ESCALA_MONOTRIBUTO.vigencia,
+    })
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) })
+  }
+})
 
 async function correrOnboardingWsfe(userId, cuit, clave) {
   try {

@@ -32,6 +32,15 @@ function tokenWsaa({ certPem, keyPem, cuit, servicio }) {
   return engine.getTokens(servicio)
 }
 
+// De un valor cualquiera del padrón devuelve la letra de categoría de monotributo
+// (A..K) si la encuentra. Acepta "C", "Categoria C", "MONOTRIBUTO C", etc.
+function normalizarCategoria(v) {
+  if (v == null) return null
+  const s = String(v).toUpperCase()
+  const m = s.match(/(?:^|[^A-Z])([A-K])(?:$|[^A-Z])/)
+  return m ? m[1] : null
+}
+
 // Extrae los campos que nos interesan de la respuesta (persona física o jurídica).
 function parsePersona(persona) {
   if (!persona) return {}
@@ -59,7 +68,14 @@ function parsePersona(persona) {
   const fechas = arr.map((a) => a.periodo || a.fechaInicio || a.nomenclador).filter(Boolean)
   if (dg.fechaInscripcion) inicio = dg.fechaInscripcion
   else if (fechas.length) inicio = String(fechas.sort()[0])
-  return { razonSocial, nombre, domicilio, inicio }
+
+  // Categoría de monotributo (si el contribuyente es monotributista).
+  const dm = persona.datosMonotributo || dg.datosMonotributo || {}
+  const categoria = normalizarCategoria(
+    dm.categoriaMonotributo || dm.categoria || dm.descripcionCategoria || dm.idCategoria
+  )
+
+  return { razonSocial, nombre, domicilio, inicio, categoria, datosMonotributo: dm }
 }
 
 // Devuelve { ok, razonSocial, domicilio, inicio } o { ok:false, error }.

@@ -257,6 +257,31 @@ button.peligro:hover { background: var(--red-soft); color: var(--red); }
 .mes-card .mes-sub { color: #9AA0AB; font-size: 13.5px; margin-top: 8px; font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .mes-card .mes-v { font-size: 40px; } }
 
+/* --- Barra de tope de categoría (Inicio) --- */
+.tope-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow-sm); }
+.tope-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.tope-q { font-family: "Manrope"; font-weight: 800; font-size: 15px; color: var(--ink); max-width: 22ch; line-height: 1.3; }
+.cat-badge { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: var(--orange-2); background: var(--orange-soft); border: 1px solid var(--naranja-linea, #f4c79e); padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
+.tope-bar { height: 13px; border-radius: 8px; background: #EEE6DC; overflow: hidden; }
+.tope-bar > span { display: block; height: 100%; border-radius: 8px; background: var(--orange); transition: width .5s ease; }
+.tope-bar.warn > span { background: #D98A1F; }
+.tope-bar.crit > span { background: #D64545; }
+.tope-ends { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tope-ends b { color: var(--ink); font-weight: 800; }
+.tope-queda { margin-top: 11px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.tope-queda b { color: var(--orange-2); }
+.tope-queda.warn b { color: #B9791B; }
+.tope-queda.crit { color: #D64545; font-weight: 700; }
+.tope-txt { color: var(--ink-2); font-size: 13.5px; line-height: 1.5; margin: 4px 0 14px; }
+.tope-txt b { color: var(--ink); }
+.tope-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+.tope-upd { font-size: 12.5px; color: var(--ink-2); }
+.tope-btn { display: inline-flex; align-items: center; gap: 7px; background: var(--orange); color: #fff; border: none; border-radius: 12px; padding: 11px 16px; font-family: "Manrope"; font-weight: 800; font-size: 14px; cursor: pointer; }
+.tope-btn:hover { background: var(--orange-2); }
+.tope-btn:disabled { opacity: .7; cursor: default; }
+.tope-btn.sm { padding: 7px 12px; font-size: 13px; background: var(--orange-soft); color: var(--orange-2); border: 1px solid var(--naranja-linea, #f4c79e); }
+.tope-btn.sm svg { width: 15px; height: 15px; }
+
 /* ============================================================
    Tarjetas y secciones
    ============================================================ */

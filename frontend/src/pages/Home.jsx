@@ -23,12 +23,30 @@ const primerNombre = (n) => {
   return w ? w.charAt(0).toUpperCase() + w.slice(1) : ''
 }
 
+const fmtActualizado = (iso) => {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+  } catch {
+    return ''
+  }
+}
+const IconActualizar = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1">
+    <path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" />
+  </svg>
+)
+
 export default function Home() {
   const { perfilNombre } = useAuth()
   const [facturas, setFacturas] = useState([])
   const [cargando, setCargando] = useState(true)
   // IDs de facturas que vienen de un cobro de Mercado Pago (para la etiqueta MP).
   const [mpIds, setMpIds] = useState(() => new Set())
+  // Barra de tope de categoría (se calcula en el backend contra ARCA).
+  const [resumen, setResumen] = useState(null)
+  const [actualizando, setActualizando] = useState(false)
+  const [errorResumen, setErrorResumen] = useState(null)
 
   useEffect(() => {
     if (!supabase) return
@@ -48,6 +66,44 @@ export default function Home() {
     })()
   }, [])
 
+  // Carga el resumen de facturación anual guardado (sin recalcular).
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const backend = import.meta.env.VITE_BACKEND_URL
+        if (!backend || !supabase) return
+        const { data: { session } } = await supabase.auth.getSession()
+        const t = session?.access_token
+        if (!t) return
+        const r = await fetch(`${backend}/arca/facturacion-anual`, { headers: { Authorization: `Bearer ${t}` } })
+        const j = await r.json()
+        if (r.ok) setResumen(j)
+      } catch { /* silencioso: la barra es opcional */ }
+    })()
+  }, [])
+
+  async function actualizarResumen() {
+    setActualizando(true)
+    setErrorResumen(null)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      const { data: { session } } = await supabase.auth.getSession()
+      const t = session?.access_token
+      if (!t) throw new Error('No hay sesión activa')
+      const r = await fetch(`${backend}/arca/facturacion-anual`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${t}` },
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'No se pudo actualizar')
+      setResumen(j)
+    } catch (e) {
+      setErrorResumen(e.message ?? String(e))
+    } finally {
+      setActualizando(false)
+    }
+  }
+
   const ahora = new Date()
   const delMes = facturas.filter((f) => {
     const d = new Date(f.created_at)
@@ -56,6 +112,12 @@ export default function Home() {
   const emitidasMes = delMes.filter((f) => f.estado === 'emitida' && !/nota de cr/i.test(f.tipo || ''))
   const totalMes = emitidasMes.reduce((a, f) => a + (Number(f.importe_total) || 0), 0)
   const ultimas = facturas.slice(0, 4)
+
+  // Derivados de la barra de tope de categoría.
+  const tieneTope = resumen && !resumen.vacio && Number(resumen.tope) > 0
+  const pct = tieneTope ? Math.min(100, Math.round((Number(resumen.total) / Number(resumen.tope)) * 100)) : 0
+  const nivel = pct >= 95 ? 'crit' : pct >= 80 ? 'warn' : 'ok'
+  const queda = tieneTope ? Math.max(0, Number(resumen.tope) - Number(resumen.total)) : 0
 
   return (
     <div className="page">
@@ -73,6 +135,58 @@ export default function Home() {
           {emitidasMes.length} {emitidasMes.length === 1 ? 'comprobante emitido' : 'comprobantes emitidos'}
         </div>
       </div>
+
+      {/* Barra de tope de categoría (facturación de los últimos 12 meses ante ARCA) */}
+      {resumen && (resumen.vacio ? (
+        <div className="tope-card">
+          <div className="tope-q">¿Cuánto podés facturar en tu categoría?</div>
+          <p className="tope-txt">
+            Calculamos tu facturación de los últimos 12 meses ante ARCA y te mostramos cuánto te queda
+            antes de recategorizar.
+          </p>
+          <button type="button" className="tope-btn" onClick={actualizarResumen} disabled={actualizando}>
+            {actualizando ? 'Calculando… (puede tardar)' : 'Calcular'}
+          </button>
+          {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}
+        </div>
+      ) : (
+        <div className="tope-card">
+          <div className="tope-top">
+            <div className="tope-q">¿Cuánto podés facturar en tu categoría?</div>
+            {resumen.categoria && <span className="cat-badge">Categoría {resumen.categoria}</span>}
+          </div>
+
+          {tieneTope ? (
+            <>
+              <div className={`tope-bar ${nivel}`}><span style={{ width: `${pct}%` }} /></div>
+              <div className="tope-ends">
+                <span>Facturaste <b>{money(resumen.total)}</b></span>
+                <span>Tope <b>{money(resumen.tope)}</b></span>
+              </div>
+              <div className={`tope-queda ${nivel}`}>
+                {pct >= 100
+                  ? 'Alcanzaste el tope de tu categoría. Conviene recategorizar.'
+                  : <>Te quedan <b>{money(queda)}</b> antes de pasar de categoría.</>}
+              </div>
+            </>
+          ) : (
+            <p className="tope-txt">
+              Facturaste <b>{money(resumen.total)}</b> en los últimos 12 meses.
+              {!resumen.categoria && ' No pudimos leer tu categoría del padrón de ARCA.'}
+            </p>
+          )}
+
+          <div className="tope-foot">
+            <span className="tope-upd">
+              {resumen.aproximado ? 'Aproximado · ' : ''}Actualizado {fmtActualizado(resumen.calculadoAt)}
+            </span>
+            <button type="button" className="tope-btn sm" onClick={actualizarResumen} disabled={actualizando}>
+              <IconActualizar /> {actualizando ? 'Actualizando…' : 'Actualizar'}
+            </button>
+          </div>
+          {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}
+        </div>
+      ))}
 
       <div className="card">
         <div className="page-head" style={{ marginBottom: 8 }}>

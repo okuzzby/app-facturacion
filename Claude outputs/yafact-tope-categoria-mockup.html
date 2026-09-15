@@ -1,0 +1,170 @@
+<title>Tope de categoría · Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  :root{
+    --accent:#F26A1B; --accent-ink:#C4520D; --accent-soft:#FDEAD9; --accent-line:#F6C9A6;
+    --ground:#F4F1EC; --panel:#FFFFFF; --panel-2:#FBF5EF;
+    --ink:#241C17; --ink-2:#8A7C70; --line:#E9E0D6;
+    --track:#EEE6DC;
+    --good:#1F9D6B; --warn:#D98A1F; --crit:#D64545;
+    --shadow:0 1px 2px rgba(36,28,23,.05),0 10px 26px rgba(36,28,23,.08);
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+      --ground:#171310; --panel:#221B16; --panel-2:#2A211B;
+      --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25; --track:#382D25;
+      --good:#57C48E; --warn:#E5B45A; --crit:#F07A7A;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+    --ground:#171310; --panel:#221B16; --panel-2:#2A211B;
+    --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25; --track:#382D25;
+    --good:#57C48E; --warn:#E5B45A; --crit:#F07A7A;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);font-family:"Manrope",system-ui,-apple-system,sans-serif;line-height:1.5;}
+  .wrap{max-width:860px;margin:0 auto;padding-inline:18px;padding-block:24px 60px;}
+  h1{font-size:clamp(1.4rem,4.5vw,1.9rem);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance;}
+  .lead{color:var(--ink-2);margin:10px 0 0;max-width:60ch;font-size:.98rem;}
+  .mock-tag{display:inline-flex;align-items:center;gap:7px;font-size:.74rem;font-weight:700;color:var(--accent-ink);
+    background:var(--accent-soft);border:1px solid var(--accent-line);padding:5px 11px;border-radius:20px;margin-bottom:14px;}
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:26px;margin-top:26px;align-items:start;}
+  @media(max-width:720px){.grid{grid-template-columns:1fr;}}
+  /* phone */
+  .phone{background:var(--ground);border:1px solid var(--line);border-radius:26px;box-shadow:var(--shadow);
+    overflow:hidden;padding:14px;}
+  .saludo{padding:4px 4px 12px;}
+  .saludo h2{margin:0;font-size:1.25rem;font-weight:800;}
+  .saludo .s{color:var(--ink-2);font-size:.82rem;margin-top:2px;}
+  .mes-card{background:var(--accent);color:#fff;border-radius:18px;padding:16px 18px;margin-bottom:12px;
+    box-shadow:0 8px 20px rgba(242,106,27,.32);}
+  .mes-k{font-size:.78rem;opacity:.92;font-weight:600;}
+  .mes-v{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-top:3px;}
+  .mes-sub{font-size:.76rem;opacity:.9;margin-top:3px;}
+  /* the NEW tope card */
+  .tope{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px 17px;box-shadow:var(--shadow);
+    position:relative;}
+  .tope-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:13px;}
+  .tope-q{font-size:.9rem;font-weight:700;max-width:20ch;line-height:1.3;}
+  .cat-badge{font-size:.72rem;font-weight:800;color:var(--accent-ink);background:var(--accent-soft);
+    border:1px solid var(--accent-line);padding:4px 10px;border-radius:20px;white-space:nowrap;flex:0 0 auto;}
+  .bar{height:13px;border-radius:8px;background:var(--track);overflow:hidden;}
+  .bar > span{display:block;height:100%;border-radius:8px;background:var(--accent);}
+  .bar.warn > span{background:var(--warn);} .bar.crit > span{background:var(--crit);}
+  .bar-ends{display:flex;justify-content:space-between;margin-top:7px;font-size:.74rem;color:var(--ink-2);
+    font-variant-numeric:tabular-nums;}
+  .bar-ends b{color:var(--ink);font-weight:800;}
+  .queda{margin-top:11px;font-size:.86rem;font-weight:600;}
+  .queda b{color:var(--accent-ink);}
+  .queda.warn b{color:var(--warn);} .queda.crit b{color:var(--crit);}
+  .tope-foot{display:flex;align-items:center;justify-content:space-between;margin-top:13px;padding-top:11px;
+    border-top:1px solid var(--line);}
+  .tope-foot .upd{font-size:.72rem;color:var(--ink-2);}
+  .btn-upd{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;color:var(--accent-ink);
+    background:var(--accent-soft);border:1px solid var(--accent-line);padding:6px 12px;border-radius:20px;}
+  .btn-upd svg{width:14px;height:14px;}
+  .mini-list{margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow);}
+  .mini-list .h{font-size:.82rem;font-weight:800;margin-bottom:6px;}
+  .mini-row{display:flex;justify-content:space-between;font-size:.8rem;color:var(--ink-2);padding:5px 0;border-bottom:1px solid var(--line);}
+  .mini-row:last-child{border-bottom:0;}
+  /* right side notes */
+  .side h3{font-size:1.05rem;font-weight:800;margin:0 0 6px;}
+  .side .cap{color:var(--ink-2);font-size:.85rem;margin:0 0 16px;}
+  .states{display:flex;flex-direction:column;gap:12px;}
+  .st{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:var(--shadow);}
+  .st-h{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+  .st-dot{width:10px;height:10px;border-radius:50%;}
+  .st-h b{font-size:.88rem;}
+  .st-h .pct{margin-left:auto;font-size:.78rem;color:var(--ink-2);font-weight:700;}
+  .st .bar{height:10px;}
+  .st p{margin:9px 0 0;font-size:.8rem;color:var(--ink-2);}
+  .notas{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);margin-top:16px;}
+  .notas ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;}
+  .notas li{position:relative;padding-left:23px;font-size:.88rem;}
+  .notas li svg{position:absolute;left:0;top:2px;width:15px;height:15px;color:var(--accent);}
+  .notas li b{color:var(--accent-ink);}
+  footer{margin-top:26px;color:var(--ink-2);font-size:.8rem;text-align:center;}
+</style>
+
+<div class="wrap">
+  <span class="mock-tag">◆ Maqueta — todavía no aplicado</span>
+  <h1>Barra de tope de categoría — en el Inicio</h1>
+  <p class="lead">Una tarjeta nueva debajo de "Facturado este mes": muestra cuánto facturaste ante ARCA en los últimos 12 meses contra el tope de tu categoría, cuánto te queda antes de recategorizar, y un botón para actualizar.</p>
+
+  <div class="grid">
+    <!-- Phone -->
+    <div class="phone">
+      <div class="saludo"><h2>Hola, Adalberto</h2><div class="s">Emití una factura en pocos toques.</div></div>
+
+      <div class="mes-card">
+        <div class="mes-k">Facturado este mes con la App</div>
+        <div class="mes-v">$ 420.000</div>
+        <div class="mes-sub">3 comprobantes emitidos</div>
+      </div>
+
+      <!-- NUEVA tarjeta -->
+      <div class="tope">
+        <div class="tope-top">
+          <div class="tope-q">¿Cuánto podés facturar en tu categoría?</div>
+          <span class="cat-badge">Categoría C</span>
+        </div>
+        <div class="bar"><span style="width:24%"></span></div>
+        <div class="bar-ends">
+          <span>Facturaste <b>$5.881.536</b></span>
+          <span>Tope <b>$24.670.494</b></span>
+        </div>
+        <div class="queda">Te quedan <b>$18.788.958</b> antes de pasar de categoría.</div>
+        <div class="tope-foot">
+          <span class="upd">Actualizado hoy, 15/09</span>
+          <span class="btn-upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg> Actualizar</span>
+        </div>
+      </div>
+
+      <div class="mini-list">
+        <div class="h">Últimas facturas</div>
+        <div class="mini-row"><span>Diseño de logo</span><span>$ 15.000</span></div>
+        <div class="mini-row"><span>Servicio de flete</span><span>$ 8.500</span></div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="side">
+      <h3>Cambia de color según cuánto te queda</h3>
+      <p class="cap">La barra avisa cuando te vas acercando al tope de tu categoría.</p>
+      <div class="states">
+        <div class="st">
+          <div class="st-h"><span class="st-dot" style="background:var(--accent)"></span><b>Tranquilo</b><span class="pct">24% usado</span></div>
+          <div class="bar"><span style="width:24%"></span></div>
+          <p>Naranja normal. Vas cómodo, hay margen de sobra.</p>
+        </div>
+        <div class="st">
+          <div class="st-h"><span class="st-dot" style="background:var(--warn)"></span><b>Ojo</b><span class="pct">82% usado</span></div>
+          <div class="bar warn"><span style="width:82%"></span></div>
+          <p>Ámbar a partir del 80%. Conviene tenerlo de cerca.</p>
+        </div>
+        <div class="st">
+          <div class="st-h"><span class="st-dot" style="background:var(--crit)"></span><b>Al límite</b><span class="pct">100% usado</span></div>
+          <div class="bar crit"><span style="width:100%"></span></div>
+          <p>Rojo al 95%+. Estás por pasar de categoría: hora de recategorizar.</p>
+        </div>
+      </div>
+
+      <div class="notas">
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Últimos 12 meses:</b> suma todas tus Facturas C ante ARCA (todos tus puntos de venta) y resta las Notas de Crédito.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Categoría real:</b> se lee del padrón de ARCA con el certificado de la app. No la tenés que cargar a mano.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Botón Actualizar:</b> recalcula contra ARCA cuando querés; el resto del tiempo muestra el último valor guardado.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Topes agosto 2026:</b> A $12M · C $24,7M · H $81,9M · K $126,6M. Se actualizan cuando ARCA los cambia.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>YaFact · Maqueta de la barra de tope de categoría · Fase 1. Nada aplicado aún — para tu revisión.</footer>
+</div>
