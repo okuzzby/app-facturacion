@@ -41,6 +41,36 @@ function normalizarCategoria(v) {
   return m ? m[1] : null
 }
 
+// Busca recursivamente la categoría de monotributo en la respuesta del padrón.
+// ARCA la devuelve con distinta forma según el servicio: a veces como string
+// ("C"), a veces como objeto ({ descripcionCategoria: "C", idCategoria: ... }).
+// Recorremos las claves que hablan de "categoría" y sacamos la letra A..K.
+function buscarCategoria(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 6) return null
+  for (const [k, v] of Object.entries(obj)) {
+    if (/categor/i.test(k)) {
+      if (typeof v === 'string' || typeof v === 'number') {
+        const c = normalizarCategoria(v)
+        if (c) return c
+      } else if (v && typeof v === 'object') {
+        for (const key of ['descripcionCategoria', 'categoria', 'descripcion', 'nombre', 'desc', 'codigo']) {
+          const c = normalizarCategoria(v[key])
+          if (c) return c
+        }
+        const c = buscarCategoria(v, depth + 1)
+        if (c) return c
+      }
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === 'object') {
+      const c = buscarCategoria(v, depth + 1)
+      if (c) return c
+    }
+  }
+  return null
+}
+
 // Extrae los campos que nos interesan de la respuesta (persona física o jurídica).
 function parsePersona(persona) {
   if (!persona) return {}
@@ -69,11 +99,10 @@ function parsePersona(persona) {
   if (dg.fechaInscripcion) inicio = dg.fechaInscripcion
   else if (fechas.length) inicio = String(fechas.sort()[0])
 
-  // Categoría de monotributo (si el contribuyente es monotributista).
+  // Categoría de monotributo (si el contribuyente es monotributista). La buscamos
+  // en toda la persona porque ARCA la ubica en distintos lugares según el servicio.
   const dm = persona.datosMonotributo || dg.datosMonotributo || {}
-  const categoria = normalizarCategoria(
-    dm.categoriaMonotributo || dm.categoria || dm.descripcionCategoria || dm.idCategoria
-  )
+  const categoria = buscarCategoria(persona)
 
   return { razonSocial, nombre, domicilio, inicio, categoria, datosMonotributo: dm }
 }

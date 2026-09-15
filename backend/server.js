@@ -448,8 +448,8 @@ async function categoriaDeUsuario(cuit) {
       keyPem: app.keyPem,
       servicio: 'ws_sr_constancia_inscripcion',
     })
-    if (d?.datosMonotributo) {
-      console.log('[FACT-ANUAL] datosMonotributo:', JSON.stringify(d.datosMonotributo).slice(0, 400))
+    if (!d?.categoria && d?.datosMonotributo) {
+      console.log('[FACT-ANUAL] categoria no detectada. datosMonotributo:', JSON.stringify(d.datosMonotributo).slice(0, 2500))
     }
     return d?.categoria || null
   } catch (e) {
