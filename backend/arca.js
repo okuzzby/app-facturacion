@@ -842,37 +842,72 @@ function parseMoneyAR(s) {
   return isNaN(n) ? null : n
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// ¿Esta página muestra el panel de facturación del Monotributo?
+async function tienePanelMono(p) {
+  try {
+    return (await p.getByText(/Monto facturado/i).first().count()) > 0
+  } catch {
+    return false
+  }
+}
+
+// Recorre TODAS las pestañas del contexto hasta que una muestre el panel del
+// Monotributo. Igual que RCEL, hay que ir clickeando por el portal (la URL
+// directa no alcanza) y esperar los redirects del SSO. Maneja tres estados:
+//  - el panel ya visible -> lo devuelve;
+//  - la landing pública del monotributo -> toca "Ingresar al portal...";
+//  - el portal general (portalcf) -> abre "Monotributo".
+async function esperarPanelMono(context, timeoutMs, pasos) {
+  const t0 = Date.now()
+  while (Date.now() - t0 < timeoutMs) {
+    for (const p of context.pages()) {
+      try {
+        if (await tienePanelMono(p)) {
+          pasos.push('Panel del Monotributo encontrado: ' + p.url())
+          await p.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {})
+          return p
+        }
+        const url = p.url()
+        const ingresar = p.getByText(/Ingresar al portal con clave fiscal/i).and(p.locator(':visible')).first()
+        if (await ingresar.count().catch(() => 0)) {
+          pasos.push('Landing pública, tocando Ingresar')
+          await Promise.all([
+            context.waitForEvent('page', { timeout: 12000 }).catch(() => null),
+            ingresar.click({ timeout: 10000 }).catch(() => {}),
+          ])
+          await sleep(1500)
+          continue
+        }
+        if (/portalcf\.cloud\.afip\.gob\.ar/i.test(url)) {
+          const mono = p.getByText(/^\s*Monotributo\s*$/i).and(p.locator(':visible')).first()
+          if (await mono.count().catch(() => 0)) {
+            pasos.push('Portal general, abriendo Monotributo')
+            await Promise.all([
+              context.waitForEvent('page', { timeout: 12000 }).catch(() => null),
+              mono.click({ timeout: 10000 }).catch(() => {}),
+            ])
+            await sleep(1500)
+            continue
+          }
+        }
+      } catch { /* seguimos con la próxima pestaña */ }
+    }
+    await sleep(1500)
+  }
+  return null
+}
+
 // Desde el login (ya con sesión), abre el portal del Monotributo y devuelve la
 // página parada en Inicio.aspx (la del panel "Facturación electrónica").
 async function entrarAMonotributo(page, pasos) {
   const context = page.context()
-  // La landing pública tiene el botón de ingreso; con la sesión ya abierta, el
-  // SSO nos deja adentro directo.
   await page.goto('https://monotributo.afip.gob.ar', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
   await page.waitForTimeout(800)
   pasos.push('Landing de Monotributo')
-
-  // Si ya estamos en el portal autenticado (Inicio.aspx muestra "Monto facturado"),
-  // no hace falta tocar nada.
-  const yaAdentro = await page.getByText(/Monto facturado/i).first().count().catch(() => 0)
-  if (yaAdentro) {
-    pasos.push('Ya estábamos dentro del portal')
-    return page
-  }
-
-  // Landing pública: tocar "Ingresar al portal con clave fiscal" (abre popup + SSO).
-  const ingresar = page.getByText(/Ingresar al portal con clave fiscal/i).and(page.locator(':visible')).first()
-  await ingresar.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
-  const [popup] = await Promise.all([
-    context.waitForEvent('page', { timeout: 25000 }).catch(() => null),
-    ingresar.click({ timeout: 15000 }).catch(() => {}),
-  ])
-  const destino = popup || page
-  await destino.waitForLoadState('domcontentloaded', { timeout: 60000 }).catch(() => {})
-  await destino.waitForTimeout(1000)
-  await destino.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
-  pasos.push('Portal Monotributo abierto')
-  return destino
+  const destino = await esperarPanelMono(context, 60000, pasos)
+  return destino || page
 }
 
 // Login + lectura del panel de facturación del Monotributo.
@@ -917,7 +952,7 @@ export async function montoFacturadoMonotributo(cuit, clave) {
       pasos,
     }
     if (out.montoFacturado == null) {
-      console.log('[MONO-PORTAL] no se pudo leer el monto. url:', destino.url(), 'innerText:', String(texto).slice(0, 1500))
+      console.log('[MONO-PORTAL] no se pudo leer el monto. url:', destino.url(), 'pasos:', JSON.stringify(pasos), 'innerText:', String(texto).slice(0, 1200))
       out.ok = false
       out.error = 'No se pudo leer el monto facturado del portal'
       out.screenshot = await captura(destino)
