@@ -80,6 +80,11 @@ export default function Layout() {
           ))}
         </nav>
         <div className="side-foot">
+          <div className="side-legales">
+            <NavLink to="/terminos">Términos</NavLink>
+            <NavLink to="/privacidad">Privacidad</NavLink>
+            <NavLink to="/aviso-legal">Aviso legal</NavLink>
+          </div>
           <div className="side-user">
             <span className="avatar">{inicial}</span>
             <span className="em">{user?.email}</span>
@@ -145,6 +150,13 @@ export default function Layout() {
               </NavLink>
             ))}
             <InstallPWA onClose={cerrar} />
+
+            <div className="menu-legales">
+              <span className="menu-legales-tit">Legales</span>
+              <NavLink to="/terminos" onClick={cerrar}>Términos y Condiciones</NavLink>
+              <NavLink to="/privacidad" onClick={cerrar}>Política de Privacidad</NavLink>
+              <NavLink to="/aviso-legal" onClick={cerrar}>Aviso Legal</NavLink>
+            </div>
           </nav>
 
           <div className="menu-foot">

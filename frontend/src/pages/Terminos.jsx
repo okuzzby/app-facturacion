@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 // Página pública de Términos y Condiciones. El nombre del responsable queda
 // como placeholder para completar más adelante.
@@ -6,10 +6,11 @@ const CONTACTO = 'yafact.ar@gmail.com'
 const ACTUALIZADO = '3 de septiembre de 2026'
 
 export default function Terminos() {
+  const navigate = useNavigate()
   return (
     <div className="legal">
       <div className="legal-card">
-        <Link to="/login" className="legal-volver">← Volver</Link>
+        <button type="button" className="legal-volver" onClick={() => navigate(-1)}>← Volver</button>
         <h1>Términos y Condiciones</h1>
         <p className="legal-fecha">Última actualización: {ACTUALIZADO}</p>
 
@@ -82,7 +83,7 @@ export default function Terminos() {
         </p>
 
         <p className="legal-foot">
-          <Link to="/privacidad">Política de Privacidad</Link> · <Link to="/login">Iniciar sesión</Link>
+          <Link to="/privacidad">Política de Privacidad</Link> · <Link to="/aviso-legal">Aviso Legal</Link>
         </p>
       </div>
     </div>

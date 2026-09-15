@@ -1,0 +1,416 @@
+<title>YaFact · Plan de adaptación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --accent:#F26A1B; --accent-ink:#C4520D; --accent-soft:#FDEAD9; --accent-line:#F6C9A6;
+    --ground:#FBF7F2; --surface:#FFFFFF; --surface-2:#FBF3EC;
+    --ink:#2A2320; --muted:#7C6E62; --faint:#A8998C; --line:#ECE1D6;
+    --ellos:#4B3FBE; --ellos-soft:#ECEAFB; --mint:#0E9E82;
+    --good:#1F9D6B; --good-soft:#E4F5EC; --warn:#B9791B; --warn-soft:#FBEFD9; --crit:#C63B3B;
+    --shadow:0 1px 2px rgba(42,35,32,.05),0 6px 18px rgba(42,35,32,.06);
+    --radius:16px;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+      --ground:#1A1613; --surface:#231D19; --surface-2:#2B231D;
+      --ink:#F3EBE3; --muted:#B6A597; --faint:#8B7B6D; --line:#372E27;
+      --ellos:#A79CFF; --ellos-soft:#282443; --mint:#4FD3B6;
+      --good:#57C48E; --good-soft:#1C3328; --warn:#E5B45A; --warn-soft:#33280F; --crit:#F07A7A;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+    --ground:#1A1613; --surface:#231D19; --surface-2:#2B231D;
+    --ink:#F3EBE3; --muted:#B6A597; --faint:#8B7B6D; --line:#372E27;
+    --ellos:#A79CFF; --ellos-soft:#282443; --mint:#4FD3B6;
+    --good:#57C48E; --good-soft:#1C3328; --warn:#E5B45A; --warn-soft:#33280F; --crit:#F07A7A;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.55;}
+  .wrap{max-width:940px;margin:0 auto;padding-inline:20px;padding-block:0 72px;}
+  h1,h2,h3{font-family:"Poppins",system-ui,sans-serif;text-wrap:balance;margin:0;}
+  a{color:var(--accent-ink);}
+  /* header */
+  header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;
+    background:linear-gradient(180deg,var(--ground) 78%,transparent);
+    padding-block:16px 10px;margin-inline:-20px;padding-inline:20px;}
+  .brand{display:flex;align-items:center;gap:11px;}
+  .logo{width:34px;height:34px;border-radius:9px;background:var(--accent);flex:0 0 auto;
+    display:grid;place-items:center;color:#fff;box-shadow:0 3px 8px rgba(242,106,27,.35);}
+  .logo svg{width:19px;height:19px;}
+  .brand b{font-family:"Poppins";font-weight:700;font-size:1.06rem;letter-spacing:-.01em;}
+  .brand b span{color:var(--accent);}
+  .brand .tag{margin-left:auto;font-size:.72rem;color:var(--muted);border:1px solid var(--line);
+    padding:3px 9px;border-radius:20px;background:var(--surface);}
+  .hero{padding:26px 0 6px;}
+  .hero h1{font-size:clamp(1.7rem,5vw,2.35rem);font-weight:700;letter-spacing:-.02em;line-height:1.1;}
+  .hero p{color:var(--muted);max-width:60ch;margin:12px 0 0;font-size:1.02rem;}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;}
+  .legend span{display:inline-flex;align-items:center;gap:7px;font-size:.82rem;color:var(--muted);
+    background:var(--surface);border:1px solid var(--line);padding:6px 11px;border-radius:20px;}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .d-ellos{background:var(--ellos);} .d-nos{background:var(--accent);}
+  /* section head */
+  .sec-head{display:flex;align-items:baseline;gap:12px;margin:38px 0 4px;}
+  .sec-head .n{font-family:"Poppins";font-weight:700;color:var(--accent);font-size:.92rem;
+    font-variant-numeric:tabular-nums;}
+  .sec-head h2{font-size:1.28rem;font-weight:600;letter-spacing:-.01em;}
+  .sec-sub{color:var(--muted);font-size:.92rem;margin:2px 0 16px;}
+  /* compare card */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:640px){.cmp{grid-template-columns:1fr;}}
+  .col{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 17px;box-shadow:var(--shadow);}
+  .col.nos{border-color:var(--accent-line);background:linear-gradient(180deg,var(--surface),var(--accent-soft) 220%);}
+  .col h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;font-weight:600;
+    display:flex;align-items:center;gap:7px;margin-bottom:11px;}
+  .col.ellos h3{color:var(--ellos);} .col.nos h3{color:var(--accent-ink);}
+  .col ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px;}
+  .col li{position:relative;padding-left:19px;font-size:.9rem;color:var(--ink);}
+  .col li::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;border-radius:2px;}
+  .col.ellos li::before{background:var(--ellos);opacity:.55;}
+  .col.nos li::before{background:var(--accent);}
+  .col li b{font-weight:600;}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px;}
+  .chip{font-size:.71rem;font-weight:600;padding:3px 9px;border-radius:7px;letter-spacing:.01em;}
+  .c-imp{background:var(--good-soft);color:var(--good);}
+  .c-eff{background:var(--warn-soft);color:var(--warn);}
+  .c-new{background:var(--accent-soft);color:var(--accent-ink);}
+  /* callout */
+  .note{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:12px;padding:13px 15px;margin-top:14px;font-size:.9rem;color:var(--ink);}
+  .note b{color:var(--accent-ink);}
+  /* roadmap */
+  .phase{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;box-shadow:var(--shadow);margin-top:14px;}
+  .phase .ph-h{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+  .phase .badge{font-family:"Poppins";font-weight:700;font-size:.78rem;color:#fff;background:var(--accent);
+    padding:4px 11px;border-radius:20px;}
+  .phase.p2 .badge{background:var(--ellos);}
+  .phase.p3 .badge{background:var(--muted);}
+  .phase .ph-h h3{font-size:1.02rem;font-weight:600;}
+  .phase .ph-h .s{margin-left:auto;font-size:.78rem;color:var(--muted);}
+  .phase ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:7px;}
+  .phase li{font-size:.9rem;}
+  .phase li b{font-weight:600;color:var(--accent-ink);}
+  /* IA nav mock */
+  .ia{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px;}
+  @media(max-width:640px){.ia{grid-template-columns:1fr;}}
+  .mock{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:15px 16px;box-shadow:var(--shadow);}
+  .mock h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+    font-weight:600;margin-bottom:12px;}
+  .tabs{display:flex;gap:6px;background:var(--ink);border-radius:13px;padding:9px 8px;justify-content:space-between;}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.62rem;color:#cabbae;flex:1;}
+  .tab.mid{color:#fff;}
+  .tab .ic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;}
+  .tab.mid .ic{background:var(--accent);box-shadow:0 4px 10px rgba(242,106,27,.5);margin-top:-16px;}
+  .tab.mid .ic svg{color:#fff;}
+  .tab .ic svg{width:16px;height:16px;color:#cabbae;}
+  .menu-list{display:flex;flex-direction:column;}
+  .menu-list a{display:flex;align-items:center;gap:11px;padding:9px 4px;border-bottom:1px solid var(--line);
+    color:var(--ink);text-decoration:none;font-size:.92rem;font-weight:500;}
+  .menu-list a:last-child{border-bottom:0;}
+  .menu-list .mi{width:26px;height:26px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);
+    display:grid;place-items:center;flex:0 0 auto;}
+  .menu-list .mi svg{width:15px;height:15px;}
+  .menu-list .new{margin-left:auto;font-size:.66rem;font-weight:700;color:var(--accent-ink);
+    background:var(--accent-soft);padding:2px 7px;border-radius:6px;}
+  /* no-copiar */
+  .nocopy{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;box-shadow:var(--shadow);margin-top:6px;}
+  .nocopy ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;}
+  .nocopy li{padding-left:26px;position:relative;font-size:.92rem;}
+  .nocopy li::before{content:"✕";position:absolute;left:0;top:0;color:var(--crit);font-weight:700;}
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);color:var(--faint);font-size:.82rem;}
+  .intro-strip{background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--radius);
+    padding:14px 16px;margin-top:20px;font-size:.92rem;color:var(--accent-ink);}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></span>
+      <b>Ya<span>Fact</span></b>
+      <span class="tag">Plan interno · borrador</span>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1>Qué le sumamos a YaFact, mirando a Gestorando</h1>
+    <p>Recorrido completo de Gestorando, pantalla por pantalla. Para cada una: qué tiene ellos, y qué hacemos nosotros en YaFact con nuestra identidad naranja. No copiamos — tomamos las ideas que sirven y las adaptamos a nuestra app, que gana siendo simple y directa.</p>
+    <div class="legend">
+      <span><span class="dot d-ellos"></span> Lo que vimos en Gestorando</span>
+      <span><span class="dot d-nos"></span> Lo que haremos en YaFact</span>
+    </div>
+    <div class="intro-strip">Este documento es la hoja de ruta. Nada de esto se aplicó todavía: primero lo revisás vos y recién ahí ejecutamos, de a una.</div>
+  </section>
+
+  <!-- 0 · Estructura -->
+  <div class="sec-head"><span class="n">00</span><h2>Estructura y navegación</h2></div>
+  <p class="sec-sub">El cambio de base: pasar del menú lateral a una barra inferior con botón central de acción, y reordenar el menú para no calcarlos.</p>
+  <div class="ia">
+    <div class="mock">
+      <h3>Barra inferior con botón "Facturar" al centro</h3>
+      <div class="tabs">
+        <div class="tab"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>Inicio</div>
+        <div class="tab"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/></svg></span>Historial</div>
+        <div class="tab mid"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>Facturar</div>
+        <div class="tab"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6M9 13h6"/></svg></span>Config</div>
+        <div class="tab"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>Menú</div>
+      </div>
+      <p style="font-size:.84rem;color:var(--muted);margin:12px 0 0">La acción más importante — emitir una factura — siempre a un toque, sin abrir menús.</p>
+    </div>
+    <div class="mock">
+      <h3>Menú reordenado (tu idea)</h3>
+      <div class="menu-list">
+        <a><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Perfil <span class="new">datos</span></a>
+        <a><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12h6M12 9v6"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg></span>Integraciones</a>
+        <a><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6M9 13h6"/></svg></span>Configuración</a>
+        <a><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h4"/></svg></span>Legales <span class="new">afuera, no dentro de Perfil</span></a>
+        <a><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3 2.4c-.6.2-1 .8-1 1.6"/><path d="M12 17h.01"/></svg></span>Ayuda / Contacto</a>
+      </div>
+    </div>
+  </div>
+  <div class="note">Ellos meten <b>Legales dentro de Perfil</b>. Nosotros lo sacamos al menú, como propusiste: Perfil queda solo para tus datos, y Legales vive aparte. Más ordenado y no idéntico a ellos.</div>
+
+  <!-- 1 · Inicio -->
+  <div class="sec-head"><span class="n">01</span><h2>Inicio (Home)</h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li>Saludo con nombre + avatar de iniciales.</li>
+        <li><b>Card "Facturación de este mes"</b> con el monto grande.</li>
+        <li><b>Barra de progreso: "¿Cuánto podés facturar en tu categoría?"</b> — cuánto margen queda antes de recategorizar.</li>
+        <li>Card de estado ARCA ("no tenés deuda", con fecha de actualización).</li>
+        <li>Carrusel de descuentos + estado de integraciones.</li>
+        <li>Lista "Últimas facturas" con "Ver más".</li>
+        <li>Aclaración "Información obtenida de ARCA".</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li>Saludo simple con nombre.</li>
+        <li><b>Card del mes en naranja</b>: total facturado este mes.</li>
+        <li><b>Barra de tope de categoría</b> — la mejora estrella. El monotributista ve de un vistazo cuánto le queda antes de pasar de categoría.</li>
+        <li>Estado ARCA opcional (si lo tenemos disponible), en tono positivo.</li>
+        <li><b>Sin</b> carrusel de descuentos ni integraciones ajenas: no es nuestro negocio.</li>
+        <li>Preview de últimas facturas → lleva a Historial.</li>
+        <li>Nota de fuente "Datos de ARCA" para dar confianza.</li>
+      </ul>
+      <div class="chips"><span class="chip c-imp">Impacto alto</span><span class="chip c-eff">Esfuerzo medio</span></div>
+    </div>
+  </div>
+
+  <!-- 2 · Emitir -->
+  <div class="sec-head"><span class="n">02</span><h2>Emitir factura</h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li>Pantalla con dos tarjetas: <b>Factura C</b> y <b>Nota de crédito C</b>.</li>
+        <li>Repiten arriba la barra de tope de categoría.</li>
+        <li>Cada tarjeta con ícono + descripción + botón.</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li>Mantener <b>Factura C</b> como acción principal (ya la tenés).</li>
+        <li>Evaluar sumar <b>Nota de crédito C</b> para anular/corregir — hoy no la tenemos como acción propia.</li>
+        <li>Tarjetas en naranja, coherentes con el resto.</li>
+      </ul>
+      <div class="chips"><span class="chip c-new">Nota de crédito = nuevo</span><span class="chip c-eff">Esfuerzo medio</span></div>
+    </div>
+  </div>
+
+  <!-- 3 · Formulario -->
+  <div class="sec-head"><span class="n">03</span><h2>Formulario de emisión</h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li><b>Wizard en 4 pasos</b> con barra de progreso arriba (Paso 1→4).</li>
+        <li>Paso 1: concepto (Productos/Servicios), fecha, <b>período del servicio</b>, <b>fecha de vencimiento del pago</b>, <b>forma de cobro</b>.</li>
+        <li>Paso 2: <b>varios ítems</b> ("Agregar otro ítem"), precio + <b>cantidad con − / +</b>, y <b>"Total a facturar parcial" que se actualiza en vivo</b>.</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li><b>Varios ítems por factura</b> + contador de cantidad − / + (hoy facturás un solo producto).</li>
+        <li><b>Total en vivo</b> mientras cargás.</li>
+        <li>Partir el formulario en pasos si queda largo en el celular (opcional, fase 2).</li>
+        <li>Recordá: el precio ya acepta "." o "," y 2 decimales — eso queda.</li>
+      </ul>
+      <div class="chips"><span class="chip c-imp">Impacto alto</span><span class="chip c-eff">Esfuerzo medio-alto</span></div>
+    </div>
+  </div>
+
+  <!-- 4 · Comprobante -->
+  <div class="sec-head"><span class="n">04</span><h2>Detalle del comprobante</h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li>Tarjeta tipo recibo: razón social, fecha, descripción, total.</li>
+        <li>Botón <b>Descargar</b>.</li>
+        <li><b>Replicar factura</b>: reenviar una nueva al mismo cliente editando monto/descripción/fecha.</li>
+        <li><b>Anular factura</b> (en rojo).</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li>Descargar PDF (ya lo tenés) bien visible.</li>
+        <li><b>Replicar factura</b> — la joyita: para quien factura lo mismo cada mes. Bajo esfuerzo, mucho uso.</li>
+        <li>Anular vía Nota de crédito, accesible desde el detalle.</li>
+      </ul>
+      <div class="chips"><span class="chip c-imp">Impacto alto</span><span class="chip c-eff">Esfuerzo bajo</span></div>
+    </div>
+  </div>
+
+  <!-- 5 · Clientes -->
+  <div class="sec-head"><span class="n">05</span><h2>Clientes guardados</h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li><b>Directorio de contactos</b> con avatar de iniciales, nombre y CUIT/CUIL.</li>
+        <li><b>Buscador</b> "Mis contactos".</li>
+        <li>Botón "Cargar cliente nuevo".</li>
+        <li>Se reutilizan al facturar.</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li>Guardar clientes para <b>no reescribir el CUIT y los datos</b> cada vez.</li>
+        <li>Buscador + "Nuevo cliente".</li>
+        <li>Al emitir, elegir un cliente guardado y autocompletar.</li>
+      </ul>
+      <div class="chips"><span class="chip c-imp">Impacto alto</span><span class="chip c-eff">Esfuerzo medio</span></div>
+    </div>
+  </div>
+
+  <!-- 6 · Perfil -->
+  <div class="sec-head"><span class="n">06</span><h2>Perfil</h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li>Encabezado con avatar + nombre completo.</li>
+        <li>Tarjeta de estado <b>"Tu perfil está completo"</b> con tilde verde.</li>
+        <li>Bloque de datos con <b>editar en línea</b> (CUIT, e-mail, contraseña, teléfono — cada uno con su lápiz).</li>
+        <li>Accesos: Futuras integraciones, Legales, Configuración, Historial de pagos.</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li>Bloque de datos con <b>editar en línea</b> en vez de un formulario plano.</li>
+        <li>Tarjeta tipo <b>"Completá tu perfil"</b> — ej: "Cargá tu Clave Fiscal para poder facturar".</li>
+        <li>Perfil = solo datos. Legales y Configuración salen al menú (no anidados).</li>
+      </ul>
+      <div class="chips"><span class="chip c-imp">Impacto medio</span><span class="chip c-eff">Esfuerzo bajo</span></div>
+    </div>
+  </div>
+
+  <!-- 7 · Legales -->
+  <div class="sec-head"><span class="n">07</span><h2>Legales</h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li>Términos y condiciones.</li>
+        <li>Política de privacidad.</li>
+        <li><b>Seguridad de la información</b> (mencionan ISO 27001).</li>
+        <li><b>Aviso legal — "Sobre Gestorando y ARCA"</b>: aclara que es empresa privada, NO es ARCA ni AFIP.</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li>Términos y Privacidad: ya los tenés (texto propio).</li>
+        <li><b>Aviso legal "No somos ARCA"</b> ⭐ — nuevo. Deja claro que YaFact es una herramienta privada que facilita la facturación, no un organismo oficial. Te protege legalmente.</li>
+        <li><b>Seguridad de la información</b> — nuevo. Contamos algo real: Clave Fiscal cifrada (Vault), datos por HTTPS. Suma confianza.</li>
+      </ul>
+      <div class="chips"><span class="chip c-new">2 páginas nuevas</span><span class="chip c-eff">Esfuerzo bajo</span></div>
+    </div>
+  </div>
+
+  <!-- 8 · Secundarios -->
+  <div class="sec-head"><span class="n">08</span><h2>Métricas e Impuestos <span style="font-weight:400;color:var(--muted);font-size:.9rem">· más adelante</span></h2></div>
+  <div class="cmp">
+    <div class="col ellos">
+      <h3><span class="dot d-ellos"></span>Gestorando</h3>
+      <ul>
+        <li>Facturación: <b>gráfico anual</b>, total anual facturado, <b>"Simular categoría"</b>, Recategorización.</li>
+        <li>Impuestos: desglose de la cuota del monotributo (impuestos, obra social, jubilación) + vencimiento + pagar.</li>
+      </ul>
+    </div>
+    <div class="col nos">
+      <h3><span class="dot d-nos"></span>YaFact</h3>
+      <ul>
+        <li>El gráfico anual y "Simular categoría" son lindos pero <b>secundarios</b>: fase 3.</li>
+        <li>Pagar impuestos es otra escala de negocio — no ahora. Como mucho, un <b>recordatorio de vencimiento</b> de la cuota.</li>
+        <li>Priorizamos que YaFact sea simple y rápida antes que llena de features.</li>
+      </ul>
+      <div class="chips"><span class="chip c-eff">Baja prioridad</span></div>
+    </div>
+  </div>
+
+  <!-- Roadmap -->
+  <div class="sec-head"><span class="n">→</span><h2>Hoja de ruta sugerida</h2></div>
+  <p class="sec-sub">Ordenado por impacto vs. esfuerzo, para ir de a poco sin romper lo que ya funciona.</p>
+
+  <div class="phase p1">
+    <div class="ph-h"><span class="badge">Fase 1</span><h3>Rápido y de alto impacto</h3><span class="s">arranque recomendado</span></div>
+    <ol>
+      <li><b>Barra inferior + botón "Facturar" al centro</b> (y reordenar el menú, Legales afuera).</li>
+      <li><b>Barra de tope de categoría en el Inicio.</b></li>
+      <li><b>Replicar factura</b> en el detalle del comprobante.</li>
+      <li><b>Página "Aviso legal / No somos ARCA".</b></li>
+    </ol>
+  </div>
+  <div class="phase p2">
+    <div class="ph-h"><span class="badge">Fase 2</span><h3>Más sustancia</h3><span class="s">después de la 1</span></div>
+    <ol>
+      <li><b>Varios ítems por factura</b> + cantidad − / + + total en vivo.</li>
+      <li><b>Clientes guardados</b> con buscador, reutilizables al emitir.</li>
+      <li><b>Perfil con editar en línea</b> + tarjeta "completá tu perfil".</li>
+      <li><b>Página "Seguridad de la información".</b></li>
+    </ol>
+  </div>
+  <div class="phase p3">
+    <div class="ph-h"><span class="badge">Fase 3</span><h3>Extras cuando haya tiempo</h3><span class="s">no urgente</span></div>
+    <ol>
+      <li>Nota de crédito C como acción propia.</li>
+      <li>Gráfico anual / total facturado / simular categoría.</li>
+      <li>Recordatorio de vencimiento del monotributo.</li>
+    </ol>
+  </div>
+
+  <!-- No copiar -->
+  <div class="sec-head"><span class="n">✕</span><h2>Lo que NO copiamos</h2></div>
+  <div class="nocopy">
+    <ul>
+      <li>Los <b>textos legales</b> de Términos y Privacidad — son de ellos; YaFact usa los suyos.</li>
+      <li>La <b>paleta menta/violeta</b> — mantenemos tu naranja como identidad propia.</li>
+      <li><b>Beneficios/descuentos</b> e <b>integraciones</b> con Cabify, PedidosYa, etc. — otro negocio, te desenfocan.</li>
+      <li>El <b>pago del monotributo</b> dentro de la app — otra escala, riesgo innecesario por ahora.</li>
+    </ul>
+  </div>
+
+  <footer>
+    YaFact · Plan de adaptación desde el recorrido de Gestorando · borrador de trabajo. Nada aplicado aún — pendiente de tu aprobación.
+  </footer>
+</div>

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 // Página pública de Política de Privacidad (requisito para publicar el login
 // con Google en producción). El nombre del responsable queda como placeholder
@@ -8,10 +8,11 @@ const CONTACTO = 'yafact.ar@gmail.com'
 const ACTUALIZADO = '4 de septiembre de 2026'
 
 export default function Privacidad() {
+  const navigate = useNavigate()
   return (
     <div className="legal">
       <div className="legal-card">
-        <Link to="/login" className="legal-volver">← Volver</Link>
+        <button type="button" className="legal-volver" onClick={() => navigate(-1)}>← Volver</button>
         <h1>Política de Privacidad</h1>
         <p className="legal-fecha">Última actualización: {ACTUALIZADO}</p>
 
@@ -121,7 +122,7 @@ export default function Privacidad() {
         </p>
 
         <p className="legal-foot">
-          <Link to="/terminos">Términos y Condiciones</Link> · <Link to="/login">Iniciar sesión</Link>
+          <Link to="/terminos">Términos y Condiciones</Link> · <Link to="/aviso-legal">Aviso Legal</Link>
         </p>
       </div>
     </div>
