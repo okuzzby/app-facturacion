@@ -168,10 +168,23 @@ function dibujarComprobante(doc, d, ctx) {
   box(LX, recTop, RX - LX, 62)
   B('Doc.:', 21, recTop + 6, { s: 8 })
   N(d.receptor.docNro ? String(d.receptor.docNro) : '-', 43, recTop + 6, { s: 8 })
-  B('Apellido y Nombre / Razón Social:', 222, recTop + 3, { s: 8 })
+  // Apellido y Nombre / Razón Social: etiqueta bold + valor (razón social del cliente)
+  {
+    const lab = 'Apellido y Nombre / Razón Social:'
+    B(lab, 222, recTop + 3, { s: 8 })
+    const lw = doc.font('Helvetica-Bold').fontSize(8).widthOfString(lab)
+    const vx = 222 + lw + 4
+    N(d.receptor.razonSocial || '-', vx, recTop + 3, { s: 8, w: RX - vx - 6 })
+  }
   B('Condición frente al IVA:', 21, recTop + 20, { s: 8 })
   N(d.receptor.condIva || 'Consumidor Final', 130, recTop + 20, { s: 8 })
-  B('Domicilio:', 312, recTop + 20, { s: 8 })
+  // Domicilio: etiqueta bold + valor (domicilio del cliente)
+  {
+    B('Domicilio:', 312, recTop + 20, { s: 8 })
+    const lw = doc.font('Helvetica-Bold').fontSize(8).widthOfString('Domicilio:')
+    const vx = 312 + lw + 4
+    N(d.receptor.domicilio || '-', vx, recTop + 20, { s: 8, w: RX - vx - 6 })
+  }
   B('Condición de venta:', 21, recTop + 40, { s: 8 })
   N(d.receptor.condVenta || 'Contado', 113, recTop + 40, { s: 8 })
   // Comprobante asociado (Nota de Crédito): ARCA lo muestra acá, en la banda del

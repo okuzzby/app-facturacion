@@ -12,6 +12,16 @@ export const IVA_OPCIONES = [
 ]
 export const COND_VENTA = ['Contado', 'Transferencia Bancaria', 'Otra']
 
+// Condiciones frente al IVA que puede tener un RECEPTOR (cliente), con su código
+// oficial CondicionIVAReceptorId (RG 5616) que exige ARCA en WSFEv1.
+export const COND_IVA_RECEPTOR = {
+  'Consumidor Final': 5,
+  'IVA Responsable Inscripto': 1,
+  'Responsable Monotributo': 6,
+  'IVA Sujeto Exento': 4,
+  'IVA No Alcanzado': 15,
+}
+
 const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // Caracteres de control (0x00-0x1F y 0x7F) escritos con escapes ASCII.
 const RE_CONTROL = /[\x00-\x1F\x7F]/g
@@ -69,5 +79,69 @@ export function validarFactura(body = {}) {
   const condicionesVenta = condIn.filter((c) => COND_VENTA.includes(c))
   if (condicionesVenta.length === 0) condicionesVenta.push('Contado')
 
-  return { items, total, concepto, condicionIva, condicionesVenta }
+  // Receptor (Consumidor Final o un cliente con CUIT). Se valida y normaliza acá
+  // para que el flujo de emisión lo reciba ya limpio.
+  const receptor = validarReceptor(body.receptor)
+
+  return { items, total, concepto, condicionIva, condicionesVenta, receptor }
+}
+
+// Deja un CUIT en 11 dígitos (saca guiones, puntos y espacios).
+export function limpiarCUIT(v) {
+  return String(v ?? '').replace(/\D/g, '')
+}
+
+// Valida un CUIT argentino: 11 dígitos y dígito verificador (módulo 11).
+export function esCUITValido(v) {
+  const c = limpiarCUIT(v)
+  if (!/^\d{11}$/.test(c)) return false
+  const mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+  let suma = 0
+  for (let i = 0; i < 10; i++) suma += Number(c[i]) * mult[i]
+  const resto = suma % 11
+  let dv = 11 - resto
+  if (dv === 11) dv = 0
+  if (dv === 10) dv = 9 // caso especial (tipos 23/24): el verificador es 9
+  return dv === Number(c[10])
+}
+
+// Valida y normaliza el receptor de una factura.
+//  - Sin receptor o Consumidor Final sin CUIT  → Consumidor Final (como hoy).
+//  - Con cliente (CUIT)  → DocTipo 80 + CUIT + CondicionIVAReceptorId mapeado.
+// Devuelve siempre un objeto listo para emitirWS y para el PDF/DB.
+export function validarReceptor(receptor) {
+  const CF = {
+    razonSocial: '',
+    cuit: null,
+    condIva: 'Consumidor Final',
+    condIvaReceptorId: 5,
+    docTipo: 99,
+    docNro: 0,
+    domicilio: '',
+  }
+  if (!receptor || typeof receptor !== 'object') return CF
+
+  const condIva = COND_IVA_RECEPTOR[receptor.condIva] ? receptor.condIva : 'Consumidor Final'
+  const condIvaReceptorId = COND_IVA_RECEPTOR[condIva]
+  const cuit = limpiarCUIT(receptor.cuit)
+  const razonSocial = limpiarTexto(receptor.razonSocial ?? receptor.nombre, 120)
+  const domicilio = limpiarTexto(receptor.domicilio, 120)
+
+  // Consumidor Final sin CUIT: comprobante anónimo, igual que hoy.
+  if (condIva === 'Consumidor Final' && !cuit) return CF
+
+  // Cualquier otra condición exige CUIT válido; Consumidor Final con CUIT también
+  // sale identificado (DocTipo 80).
+  if (!esCUITValido(cuit)) throw new Error('El CUIT del cliente no es válido')
+  if (!razonSocial) throw new Error('Falta el nombre o razón social del cliente')
+
+  return {
+    razonSocial,
+    cuit,
+    condIva,
+    condIvaReceptorId,
+    docTipo: 80, // CUIT
+    docNro: Number(cuit),
+    domicilio,
+  }
 }

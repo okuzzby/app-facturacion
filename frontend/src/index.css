@@ -872,3 +872,72 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .legal-card li { margin-bottom: 6px; }
 .legal-card a { color: #009ee3; }
 .legal-foot { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--linea, #e6e8ec); font-size: 13px; color: var(--ink-2); }
+
+/* ===================== CLIENTES ===================== */
+.campo-opt { font-weight: 600; color: var(--muted); letter-spacing: 0; }
+
+/* Selector "Facturar a" (formulario de factura) */
+.fact-a { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+@media (max-width: 460px) { .fact-a { grid-template-columns: 1fr; } }
+.fact-a-op { position: relative; text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px;
+  padding: 12px 13px 12px 34px; cursor: pointer; box-shadow: none; font-family: inherit; }
+.fact-a-op:hover { background: var(--surface); border-color: #F6C4A3; }
+.fact-a-op.on { border-color: var(--orange); background: var(--orange-soft); }
+.fact-a-dot { position: absolute; left: 12px; top: 14px; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #cfd3da; background: var(--surface); }
+.fact-a-op.on .fact-a-dot { border-color: var(--orange);
+  background: radial-gradient(circle at center, var(--orange) 0 4px, transparent 5px); }
+.fact-a-t { font-weight: 800; font-size: 14px; }
+.fact-a-op.on .fact-a-t { color: var(--orange-2); }
+.fact-a-s { font-size: 12px; color: var(--muted); font-weight: 600; }
+
+/* Picker de cliente dentro de Facturar */
+.cli-picker { display: flex; flex-direction: column; gap: 10px; margin-top: 2px; }
+.cli-nuevo-inline { width: 100%; border: 1.5px dashed var(--naranja-linea, #f4c79e); background: var(--orange-soft);
+  color: var(--orange-2); border-radius: 12px; padding: 11px; font-family: "Manrope"; font-weight: 800; font-size: 14px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.cli-nuevo-inline:hover { background: var(--orange-soft); }
+.cli-nuevo-box { border: 1px solid var(--line); border-radius: 14px; padding: 13px; background: var(--panel); }
+.cli-nuevo-tit { font-size: 12.5px; font-weight: 800; color: var(--ink-2); text-transform: uppercase;
+  letter-spacing: .05em; margin-bottom: 10px; }
+.cli-form { display: flex; flex-direction: column; gap: 12px; }
+
+/* Chip del cliente elegido */
+.cli-chip { display: flex; align-items: center; gap: 11px; border: 1px solid var(--naranja-linea, #f4c79e);
+  background: var(--orange-soft); border-radius: 12px; padding: 10px 12px; }
+.cli-chip-x { flex: 0 0 auto; border: 0; background: none; color: var(--orange-2); font-family: "Manrope";
+  font-weight: 800; font-size: 13px; cursor: pointer; padding: 4px 2px; box-shadow: none; }
+.cli-chip-x:hover { background: none; text-decoration: underline; }
+
+/* Avatar + info (compartido chip y filas) */
+.cli-av { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; background: var(--orange); color: #fff;
+  display: grid; place-items: center; font-family: "Manrope"; font-weight: 800; font-size: 13px; }
+.cli-info { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.cli-nm { font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cli-cu { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Página Clientes */
+.cli-nuevo { width: 100%; border: 0; background: var(--orange); color: #fff; border-radius: 12px; padding: 13px;
+  font-family: "Manrope"; font-weight: 800; font-size: 15px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 8px; margin-bottom: 14px; box-shadow: 0 6px 14px rgba(242,106,27,.28); }
+.cli-nuevo:hover { background: var(--orange-2); color: #fff; }
+.cli-nuevo-plus { font-size: 17px; line-height: 1; }
+.cli-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 12px;
+  padding: 4px 12px; background: var(--panel); margin-bottom: 8px; }
+.cli-search svg { width: 17px; height: 17px; color: var(--muted); flex: 0 0 auto; }
+.cli-search input { flex: 1; border: 0; background: none; outline: none; padding: 10px 0; font-size: 15px;
+  font-family: inherit; color: var(--ink); }
+.cli-lista { display: flex; flex-direction: column; }
+.cli-row { width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; padding: 11px 2px;
+  border: 0; border-bottom: 1px solid var(--line); background: none; cursor: pointer; box-shadow: none; }
+.cli-row:hover { background: var(--panel); }
+.cli-row:last-child { border-bottom: 0; }
+.cli-row .cli-av { background: var(--orange-soft); color: var(--orange-2); border: 1px solid var(--naranja-linea, #f4c79e); }
+.cli-go { margin-left: auto; color: var(--muted); font-size: 20px; font-weight: 700; flex: 0 0 auto; }
+.cli-vacio { text-align: center; padding: 18px 6px 6px; }
+.cli-vacio p { margin: 0 0 4px; }
+.cli-borrar { width: 100%; margin-top: 12px; border: 1px solid var(--red-soft); background: var(--surface);
+  color: var(--red); border-radius: 12px; padding: 12px; font-family: "Manrope"; font-weight: 700; font-size: 14px;
+  cursor: pointer; box-shadow: none; }
+.cli-borrar:hover { background: var(--red-soft); color: var(--red); }

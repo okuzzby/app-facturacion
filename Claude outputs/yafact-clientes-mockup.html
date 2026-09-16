@@ -1,0 +1,144 @@
+<title>Clientes · Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  :root{
+    --accent:#F26A1B; --accent-ink:#C4520D; --accent-soft:#FDEAD9; --accent-line:#F6C9A6;
+    --ground:#F4F1EC; --panel:#FFFFFF; --panel-2:#FBF5EF; --ink:#241C17; --ink-2:#8A7C70; --line:#E9E0D6;
+    --shadow:0 1px 2px rgba(36,28,23,.05),0 10px 26px rgba(36,28,23,.08);
+  }
+  :root:not([data-theme="light"]){ @media (prefers-color-scheme: dark){
+    --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+    --ground:#171310; --panel:#221B16; --panel-2:#2A211B; --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+  }}
+  :root[data-theme="dark"]{
+    --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+    --ground:#171310; --panel:#221B16; --panel-2:#2A211B; --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);font-family:"Manrope",system-ui,-apple-system,sans-serif;line-height:1.5;}
+  .wrap{max-width:900px;margin:0 auto;padding-inline:18px;padding-block:24px 60px;}
+  h1{font-size:clamp(1.4rem,4.5vw,1.9rem);font-weight:800;letter-spacing:-.02em;margin:0;}
+  .lead{color:var(--ink-2);margin:9px 0 0;max-width:60ch;font-size:.97rem;}
+  .mock-tag{display:inline-flex;align-items:center;gap:7px;font-size:.74rem;font-weight:700;color:var(--accent-ink);
+    background:var(--accent-soft);border:1px solid var(--accent-line);padding:5px 11px;border-radius:20px;margin-bottom:14px;}
+  .flow{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px;align-items:start;}
+  @media(max-width:760px){.flow{grid-template-columns:1fr;}}
+  .step-h{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+  .step-n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:.8rem;display:grid;place-items:center;}
+  .step-h h2{font-size:1.02rem;font-weight:700;margin:0;}
+  .phone{background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden;}
+  .phone-top{background:var(--accent);color:#fff;padding:15px 16px;}
+  .phone-top .t{font-weight:800;font-size:1.05rem;}
+  .phone-top .s{font-size:.76rem;opacity:.9;margin-top:2px;}
+  .phone-body{padding:14px;}
+  .lbl{font-size:.72rem;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;display:block;}
+  .sel{border:1px solid var(--line);border-radius:11px;padding:12px 13px;background:var(--panel-2);font-size:.95rem;font-weight:600;
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .sel .chev{color:var(--ink-2);}
+  .cli-chip{display:flex;align-items:center;gap:11px;border:1px solid var(--accent-line);background:var(--accent-soft);
+    border-radius:12px;padding:11px 12px;margin-bottom:10px;}
+  .cli-av{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:.82rem;flex:0 0 auto;}
+  .cli-info{min-width:0;flex:1;}
+  .cli-info .nm{font-weight:700;font-size:.92rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cli-info .cu{font-size:.76rem;color:var(--ink-2);}
+  .cli-x{border:0;background:none;color:var(--accent-ink);font-size:.78rem;font-weight:700;cursor:pointer;flex:0 0 auto;}
+  .radio-list{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;}
+  .radio{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:11px;padding:11px 12px;font-size:.9rem;font-weight:600;}
+  .radio.on{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent-ink);}
+  .radio .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto;}
+  .radio.on .dot{border-color:var(--accent);background:radial-gradient(circle at center, var(--accent) 0 5px, transparent 6px);}
+  .search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:var(--panel-2);margin-bottom:12px;}
+  .search svg{width:16px;height:16px;color:var(--ink-2);flex:0 0 auto;}
+  .search span{color:var(--ink-2);font-size:.9rem;}
+  .addbtn{width:100%;border:0;background:var(--accent);color:#fff;border-radius:12px;padding:12px;font-weight:800;font-size:.92rem;
+    display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:14px;box-shadow:0 6px 14px rgba(242,106,27,.32);}
+  .cli-row{display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid var(--line);}
+  .cli-row:last-child{border-bottom:0;}
+  .cli-row .go{margin-left:auto;color:var(--ink-2);}
+  .cli-av.gris{background:var(--panel-2);color:var(--accent-ink);border:1px solid var(--line);}
+  .notas{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);margin-top:26px;}
+  .notas ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;}
+  .notas li{position:relative;padding-left:23px;font-size:.9rem;}
+  .notas li svg{position:absolute;left:0;top:2px;width:15px;height:15px;color:var(--accent);}
+  .notas li b{color:var(--accent-ink);}
+  footer{margin-top:24px;color:var(--ink-2);font-size:.8rem;text-align:center;}
+</style>
+
+<div class="wrap">
+  <span class="mock-tag">◆ Maqueta — todavía no aplicado</span>
+  <h1>Clientes guardados (facturar con CUIT)</h1>
+  <p class="lead">Guardás tus clientes una vez y los reusás al facturar, sin reescribir el CUIT. Y podés emitir a un cliente con CUIT, no solo a Consumidor Final.</p>
+
+  <div class="flow">
+    <!-- Paso 1: al facturar -->
+    <div>
+      <div class="step-h"><span class="step-n">1</span><h2>Al facturar: ¿a quién?</h2></div>
+      <div class="phone">
+        <div class="phone-top"><div class="t">Nueva factura</div><div class="s">Factura C · Punto de venta 10 · Fecha hoy</div></div>
+        <div class="phone-body">
+          <span class="lbl">Facturar a</span>
+          <div class="radio-list">
+            <div class="radio"><span class="dot"></span> Consumidor Final <small style="color:var(--ink-2);font-weight:600;margin-left:auto">sin datos</small></div>
+            <div class="radio on"><span class="dot"></span> Un cliente</div>
+          </div>
+
+          <!-- cliente elegido -->
+          <span class="lbl">Cliente</span>
+          <div class="cli-chip">
+            <span class="cli-av">DC</span>
+            <div class="cli-info"><div class="nm">Distribuidora Cefiro SRL</div><div class="cu">CUIT 30-71234567-8 · Resp. Inscripto</div></div>
+            <button class="cli-x">Cambiar</button>
+          </div>
+          <div class="sel">Elegir otro cliente guardado <span class="chev">▾</span></div>
+          <div class="sel" style="color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-soft)">＋ Cargar un cliente nuevo</div>
+
+          <span class="lbl" style="margin-top:6px">Ítems</span>
+          <div class="sel">Diseño de logo · 1 × $15.000 <span class="chev">▾</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paso 2: directorio -->
+    <div>
+      <div class="step-h"><span class="step-n">2</span><h2>Tus clientes</h2></div>
+      <div class="phone">
+        <div class="phone-top"><div class="t">Clientes</div><div class="s">Guardados para facturar más rápido</div></div>
+        <div class="phone-body">
+          <button class="addbtn"><span style="font-size:1.05rem">＋</span> Nuevo cliente</button>
+          <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg><span>Buscar por nombre o CUIT…</span></div>
+
+          <div class="cli-row">
+            <span class="cli-av gris">DC</span>
+            <div class="cli-info"><div class="nm">Distribuidora Cefiro SRL</div><div class="cu">30-71234567-8 · Resp. Inscripto</div></div>
+            <span class="go">›</span>
+          </div>
+          <div class="cli-row">
+            <span class="cli-av gris">MR</span>
+            <div class="cli-info"><div class="nm">Martín Rodríguez</div><div class="cu">20-30123456-7 · Consumidor Final</div></div>
+            <span class="go">›</span>
+          </div>
+          <div class="cli-row">
+            <span class="cli-av gris">KA</span>
+            <div class="cli-info"><div class="nm">Kiosco América</div><div class="cu">27-28987654-3 · Monotributo</div></div>
+            <span class="go">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notas">
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>Cada cliente guarda: <b>nombre / razón social, CUIT, condición frente al IVA</b> y (opcional) domicilio.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>Al facturar, elegís <b>Consumidor Final</b> (como hoy) o <b>un cliente</b>. Si es un cliente, la factura sale <b>con su CUIT y datos</b>, y aparecen en el PDF.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>Podés <b>cargar un cliente al vuelo</b> mientras facturás y queda guardado para la próxima.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>Directorio con <b>buscador</b>, en el menú. Se puede editar y borrar.</span></li>
+    </ul>
+  </div>
+
+  <footer>YaFact · Maqueta de "Clientes guardados" · Fase 2. Nada aplicado aún — para tu revisión.</footer>
+</div>

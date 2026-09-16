@@ -4,6 +4,13 @@
 import { emitirWS, puntosVentaWS } from './arca-ws.js'
 import { generarPdfComprobante } from './pdf-factura.js'
 import { descifrar } from './crypto-ws.js'
+import { validarReceptor } from './validaciones.js'
+
+// Formatea un CUIT de 11 dígitos como XX-XXXXXXXX-X para mostrarlo en el PDF.
+function formatearCUIT(cuit) {
+  const c = String(cuit || '').replace(/\D/g, '')
+  return c.length === 11 ? `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}` : c
+}
 
 // Cert propio del usuario (producción). Devuelve { certPem, keyPem } listos para
 // emitirWS. La clave privada se descifra en memoria; nunca sale del backend.
@@ -85,6 +92,10 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
   const pv = cred.punto_venta_ws
   const concepto = body.concepto || 'Productos'
 
+  // Receptor: Consumidor Final (default) o un cliente con CUIT. Se valida acá
+  // (CUIT módulo 11 + mapeo de condición IVA) antes de emitir.
+  const receptor = validarReceptor(body.receptor)
+
   // Ítems normalizados por validarFactura: [{ descripcion, precio, cantidad }].
   // Compatibilidad: si viniera el formato viejo, lo envolvemos en un ítem.
   const items =
@@ -102,9 +113,9 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
     tipo: 'Factura C',
     importe,
     concepto,
-    docTipo: 99,
-    docNro: 0,
-    condIvaReceptorId: 5, // Consumidor Final
+    docTipo: receptor.docTipo,
+    docNro: receptor.docNro,
+    condIvaReceptorId: receptor.condIvaReceptorId,
     ...certDeCred(cred), // cert propio del usuario → producción
   })
   if (!res.ok) return { ...res, guardado: false }
@@ -129,9 +140,11 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
     periodo: res.concepto !== 1 ? { desde: res.fecha, hasta: res.fecha, vtoPago: res.fecha } : null,
     emisor: emisorDeCred(cred),
     receptor: {
-      condIva: body.condicionIva || 'Consumidor Final',
-      docTipo: 99,
-      docNro: 0,
+      condIva: receptor.condIva,
+      razonSocial: receptor.razonSocial,
+      docTipo: receptor.docTipo,
+      docNro: receptor.docTipo === 80 ? formatearCUIT(receptor.cuit) : (receptor.docNro || 0),
+      domicilio: receptor.domicilio,
       condVenta,
     },
     items: itemsPdf,
@@ -158,8 +171,12 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
       cae_vto: res.caeVto,
       fecha: res.fecha,
       concepto,
-      condicion_iva: body.condicionIva || 'Consumidor Final',
+      condicion_iva: receptor.condIva,
       condiciones_venta: condVenta,
+      receptor_nombre: receptor.razonSocial || null,
+      receptor_cuit: receptor.cuit || null,
+      receptor_domicilio: receptor.domicilio || null,
+      receptor_doc_tipo: receptor.docTipo,
       producto: resumenProducto,
       // Compatibilidad de columnas viejas: 1 × total (precio*cantidad = importe_total).
       cantidad: 1,
@@ -195,15 +212,23 @@ export async function anularFlow({ supabaseAdmin, userId, facturaId }) {
   const ncNro = partes[1] ? parseInt(partes[1], 10) : 0
   const importe = Number(f.importe_total)
 
+  // La NC va al mismo receptor que la factura original.
+  const recepNC = validarReceptor({
+    condIva: f.condicion_iva,
+    razonSocial: f.receptor_nombre,
+    cuit: f.receptor_cuit,
+    domicilio: f.receptor_domicilio,
+  })
+
   const res = await emitirWS({
     cuit: cred.cuit,
     pv,
     tipo: 'Nota de Crédito C',
     importe,
     concepto: f.concepto || 'Productos',
-    docTipo: 99,
-    docNro: 0,
-    condIvaReceptorId: 5,
+    docTipo: recepNC.docTipo,
+    docNro: recepNC.docNro,
+    condIvaReceptorId: recepNC.condIvaReceptorId,
     comprobanteAsociado: { tipo: 11, ptoVta: ncPv, nro: ncNro },
     ...certDeCred(cred), // cert propio del usuario → producción
   })
@@ -218,9 +243,11 @@ export async function anularFlow({ supabaseAdmin, userId, facturaId }) {
     periodo: res.concepto !== 1 ? { desde: res.fecha, hasta: res.fecha, vtoPago: res.fecha } : null,
     emisor: emisorDeCred(cred),
     receptor: {
-      condIva: f.condicion_iva || 'Consumidor Final',
-      docTipo: 99,
-      docNro: 0,
+      condIva: recepNC.condIva,
+      razonSocial: recepNC.razonSocial,
+      docTipo: recepNC.docTipo,
+      docNro: recepNC.docTipo === 80 ? formatearCUIT(recepNC.cuit) : (recepNC.docNro || 0),
+      domicilio: recepNC.domicilio,
       condVenta: f.condiciones_venta || 'Contado',
     },
     items: [{ descripcion: f.producto || '', cantidad: f.cantidad || 1, precioUnit: f.precio }],
@@ -243,6 +270,10 @@ export async function anularFlow({ supabaseAdmin, userId, facturaId }) {
       concepto: f.concepto || 'Productos',
       condicion_iva: f.condicion_iva || 'Consumidor Final',
       condiciones_venta: f.condiciones_venta || 'Contado',
+      receptor_nombre: f.receptor_nombre || null,
+      receptor_cuit: f.receptor_cuit || null,
+      receptor_domicilio: f.receptor_domicilio || null,
+      receptor_doc_tipo: f.receptor_doc_tipo || recepNC.docTipo,
       producto: f.producto,
       cantidad: f.cantidad || 1,
       precio: f.precio,

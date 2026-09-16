@@ -13,6 +13,9 @@ const IconFacturar = () => (
 const IconHistorial = () => (
   <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10" /></svg>
 )
+const IconClientes = () => (
+  <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" /><path d="M16 5.5a3 3 0 0 1 0 5.6M17.5 20c0-2.2-1-3.9-2.6-5" /></svg>
+)
 const IconConfig = () => (
   <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg>
 )
@@ -29,6 +32,7 @@ const IconAdmin = () => (
 const NAV = [
   { to: '/', end: true, label: 'Inicio', Icon: IconInicio },
   { to: '/facturar', label: 'Facturar', Icon: IconFacturar },
+  { to: '/clientes', label: 'Clientes', Icon: IconClientes },
   { to: '/historial', label: 'Historial', Icon: IconHistorial },
   { to: '/configuracion', label: 'Configuración', Icon: IconConfig },
   { to: '/integraciones', label: 'Integraciones', Icon: IconIntegraciones },

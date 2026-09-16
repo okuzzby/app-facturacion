@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../context/AuthContext'
 import CalendarioRango from '../components/CalendarioRango'
+import ClienteForm from '../components/ClienteForm'
+import { condCorta, formatearCUIT, iniciales } from '../lib/clientes'
 
 const CONCEPTOS = ['Productos', 'Servicios', 'Productos y Servicios']
 const IVA_OPCIONES = [
@@ -58,6 +61,7 @@ function hoyDDMMYYYY() {
 const itemVacio = () => ({ desc: '', precio: '', cantidad: 1 })
 
 export default function Facturar() {
+  const { user } = useAuth()
   const [cred, setCred] = useState(null)
   const [productos, setProductos] = useState([])
   const [cargandoInit, setCargandoInit] = useState(true)
@@ -66,10 +70,19 @@ export default function Facturar() {
   const [periodoDesde, setPeriodoDesde] = useState(hoyDDMMYYYY())
   const [periodoHasta, setPeriodoHasta] = useState(hoyDDMMYYYY())
   const [vtoPago, setVtoPago] = useState(hoyDDMMYYYY())
-  const [condicionIva, setCondicionIva] = useState('Consumidor Final')
   const [condicionesVenta, setCondicionesVenta] = useState(['Contado'])
   const [items, setItems] = useState([itemVacio()])
   const [calAbierto, setCalAbierto] = useState(false)
+
+  // Receptor: Consumidor Final (default) o un cliente guardado con CUIT.
+  const [facturarA, setFacturarA] = useState('cf') // 'cf' | 'cliente'
+  const [clientes, setClientes] = useState([])
+  const [clienteSel, setClienteSel] = useState(null)
+  const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false)
+  const [guardandoCliente, setGuardandoCliente] = useState(false)
+  const [clienteError, setClienteError] = useState(null)
+  // La condición IVA de la factura la define el receptor elegido.
+  const condicionIva = facturarA === 'cliente' && clienteSel ? clienteSel.cond_iva : 'Consumidor Final'
 
   const [vista, setVista] = useState('elegir') // 'elegir' | 'form'
   const [paso, setPaso] = useState('form') // 'form' | 'preview'
@@ -95,6 +108,12 @@ export default function Facturar() {
         .order('created_at', { ascending: true })
       setProductos((p ?? []).map((x) => x.nombre))
 
+      const { data: cl } = await supabase
+        .from('clientes')
+        .select('*')
+        .order('nombre', { ascending: true })
+      setClientes(cl ?? [])
+
       // Si venimos de "Replicar" (desde el Historial), precargamos un ítem.
       if (replicar) {
         setItems([{ desc: replicar.producto || '', precio: replicar.importe ? money(replicar.importe) : '', cantidad: 1 }])
@@ -111,6 +130,38 @@ export default function Facturar() {
 
   function toggleCondVenta(c) {
     setCondicionesVenta((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+  }
+
+  function elegirFacturarA(modo) {
+    setFacturarA(modo)
+    setError(null)
+    if (modo === 'cf') {
+      setClienteSel(null)
+      setMostrarNuevoCliente(false)
+    } else if (!clienteSel && clientes.length === 0) {
+      // Sin clientes guardados: abrimos directo el alta.
+      setMostrarNuevoCliente(true)
+    }
+  }
+
+  async function crearClienteAlVuelo(datos) {
+    setGuardandoCliente(true)
+    setClienteError(null)
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .insert({ ...datos, user_id: user.id })
+        .select('*')
+        .single()
+      if (error) throw error
+      setClientes((prev) => [...prev, data].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')))
+      setClienteSel(data)
+      setMostrarNuevoCliente(false)
+    } catch (e) {
+      setClienteError(e.message || String(e))
+    } finally {
+      setGuardandoCliente(false)
+    }
   }
 
   function setItemDesc(i, v) {
@@ -150,6 +201,7 @@ export default function Facturar() {
     }
     if (total <= 0) return setError('El total de la factura debe ser mayor a 0')
     if (condicionesVenta.length === 0) return setError('Elegí al menos una condición de venta')
+    if (facturarA === 'cliente' && !clienteSel) return setError('Elegí o cargá un cliente, o pasá a Consumidor Final')
     setPaso('preview')
   }
 
@@ -176,6 +228,16 @@ export default function Facturar() {
         condicionesVenta,
       }
 
+      // Si se factura a un cliente, mandamos el receptor (el backend valida CUIT).
+      if (facturarA === 'cliente' && clienteSel) {
+        body.receptor = {
+          razonSocial: clienteSel.nombre,
+          cuit: clienteSel.cuit,
+          condIva: clienteSel.cond_iva,
+          domicilio: clienteSel.domicilio || '',
+        }
+      }
+
       const r = await fetch(`${backend}/arca/ws/factura-generar`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -198,6 +260,9 @@ export default function Facturar() {
     setPaso('form')
     setItems([itemVacio()])
     setReplicandoNumero(null)
+    setFacturarA('cf')
+    setClienteSel(null)
+    setMostrarNuevoCliente(false)
   }
 
   if (cargandoInit) {
@@ -336,6 +401,19 @@ export default function Facturar() {
             <div><dt>Concepto</dt><dd>{concepto}</dd></div>
             {esServicio && <div><dt>Período</dt><dd>{periodoDesde} – {periodoHasta}</dd></div>}
             {esServicio && <div><dt>Vto. para el pago</dt><dd>{vtoPago}</dd></div>}
+            <div>
+              <dt>Cliente</dt>
+              <dd>
+                {facturarA === 'cliente' && clienteSel ? (
+                  <>
+                    {clienteSel.nombre}
+                    {clienteSel.cuit ? ` · CUIT ${formatearCUIT(clienteSel.cuit)}` : ''}
+                  </>
+                ) : (
+                  'Consumidor Final'
+                )}
+              </dd>
+            </div>
             <div><dt>Condición IVA</dt><dd>{condicionIva}</dd></div>
             <div><dt>Condición de venta</dt><dd>{condicionesVenta.join(', ')}</dd></div>
           </dl>
@@ -442,14 +520,91 @@ export default function Facturar() {
           </>
         )}
 
-        <label className="campo">
-          <span>Condición frente al IVA</span>
-          <select value={condicionIva} onChange={(e) => setCondicionIva(e.target.value)}>
-            {IVA_OPCIONES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </label>
+        {/* Facturar a: Consumidor Final (default) o un cliente con CUIT */}
+        <div className="campo">
+          <span>Facturar a</span>
+          <div className="fact-a">
+            <button
+              type="button"
+              className={`fact-a-op ${facturarA === 'cf' ? 'on' : ''}`}
+              onClick={() => elegirFacturarA('cf')}
+            >
+              <span className="fact-a-dot" />
+              <span className="fact-a-t">Consumidor Final</span>
+              <span className="fact-a-s">Sin datos del cliente</span>
+            </button>
+            <button
+              type="button"
+              className={`fact-a-op ${facturarA === 'cliente' ? 'on' : ''}`}
+              onClick={() => elegirFacturarA('cliente')}
+            >
+              <span className="fact-a-dot" />
+              <span className="fact-a-t">Un cliente</span>
+              <span className="fact-a-s">Con CUIT y datos</span>
+            </button>
+          </div>
+        </div>
+
+        {facturarA === 'cliente' && (
+          <div className="cli-picker">
+            {clienteSel && !mostrarNuevoCliente && (
+              <div className="cli-chip">
+                <span className="cli-av">{iniciales(clienteSel.nombre)}</span>
+                <span className="cli-info">
+                  <span className="cli-nm">{clienteSel.nombre}</span>
+                  <span className="cli-cu">
+                    {clienteSel.cuit ? formatearCUIT(clienteSel.cuit) : 'Sin CUIT'} · {condCorta(clienteSel.cond_iva)}
+                  </span>
+                </span>
+                <button type="button" className="cli-chip-x" onClick={() => setClienteSel(null)}>Cambiar</button>
+              </div>
+            )}
+
+            {!clienteSel && !mostrarNuevoCliente && (
+              <>
+                {clientes.length > 0 && (
+                  <label className="campo">
+                    <span>Elegí un cliente guardado</span>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const c = clientes.find((x) => x.id === e.target.value)
+                        if (c) setClienteSel(c)
+                      }}
+                    >
+                      <option value="" disabled>Seleccioná…</option>
+                      {clientes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre} — {c.cuit ? formatearCUIT(c.cuit) : 'Sin CUIT'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <button
+                  type="button"
+                  className="cli-nuevo-inline"
+                  onClick={() => { setClienteError(null); setMostrarNuevoCliente(true) }}
+                >
+                  <span className="cli-nuevo-plus">＋</span> Cargar un cliente nuevo
+                </button>
+              </>
+            )}
+
+            {mostrarNuevoCliente && (
+              <div className="cli-nuevo-box">
+                <div className="cli-nuevo-tit">Nuevo cliente</div>
+                <ClienteForm
+                  onGuardar={crearClienteAlVuelo}
+                  onCancelar={clientes.length > 0 || clienteSel ? () => setMostrarNuevoCliente(false) : null}
+                  guardando={guardandoCliente}
+                  errorExterno={clienteError}
+                  ctaLabel="Guardar y usar"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <label className="campo">
           <span>Condición de venta</span>

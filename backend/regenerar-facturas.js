@@ -28,6 +28,12 @@ const conceptoNum = (c) => {
 
 const codTipoDe = (tipo) => (/nota de cr/i.test(tipo || '') ? 13 : 11)
 
+// 11 dígitos → XX-XXXXXXXX-X para el PDF.
+function fmtCUIT(cuit) {
+  const c = String(cuit || '').replace(/\D/g, '')
+  return c.length === 11 ? `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}` : c
+}
+
 // "00001-00000816" → { pv: 1, nro: 816 }
 function parseNumero(numero, pvFallback) {
   const partes = String(numero || '').split('-')
@@ -119,8 +125,10 @@ export async function regenerarFacturasUsuario(supabaseAdmin, userId) {
         emisor,
         receptor: {
           condIva: f.condicion_iva || 'Consumidor Final',
-          docTipo: 99,
-          docNro: 0,
+          razonSocial: f.receptor_nombre || '',
+          docTipo: f.receptor_doc_tipo || (f.receptor_cuit ? 80 : 99),
+          docNro: f.receptor_cuit ? fmtCUIT(f.receptor_cuit) : 0,
+          domicilio: f.receptor_domicilio || '',
           condVenta: f.condiciones_venta || 'Contado',
         },
         items:
