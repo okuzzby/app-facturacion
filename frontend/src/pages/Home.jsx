@@ -23,19 +23,18 @@ const primerNombre = (n) => {
   return w ? w.charAt(0).toUpperCase() + w.slice(1) : ''
 }
 
-const fmtActualizado = (iso) => {
+// Fecha de Argentina en formato YYYY-MM-DD (para el corte de "una vez por día").
+const hoyAR = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
+const fechaAR = (iso) => {
   if (!iso) return ''
   try {
-    return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+    return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
   } catch {
     return ''
   }
 }
-const IconActualizar = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1">
-    <path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" />
-  </svg>
-)
+// Candado por dispositivo para no re-disparar la actualización automática el mismo día.
+const AUTO_KEY = 'yafact:facturacionAutoDate'
 
 export default function Home() {
   const { perfilNombre } = useAuth()
@@ -77,15 +76,32 @@ export default function Home() {
         if (!t) return setResumen({ vacio: true })
         const r = await fetch(`${backend}/arca/facturacion-anual`, { headers: { Authorization: `Bearer ${t}` } })
         const j = await r.json()
-        setResumen(r.ok ? j : { vacio: true })
+        const dato = r.ok ? j : { vacio: true }
+        setResumen(dato)
+
+        // Auto-actualización 1 vez por día: si el dato guardado es de un día
+        // anterior (hora Argentina) y hoy todavía no lo intentamos en este
+        // dispositivo, refrescamos solo, en segundo plano.
+        if (r.ok && dato && !dato.vacio) {
+          const hoy = hoyAR()
+          let yaHoy = null
+          try { yaHoy = localStorage.getItem(AUTO_KEY) } catch { /* sin storage */ }
+          if (fechaAR(dato.calculadoAt) !== hoy && yaHoy !== hoy) {
+            try { localStorage.setItem(AUTO_KEY, hoy) } catch { /* sin storage */ }
+            actualizarResumen(true)
+          }
+        }
       } catch {
         // Si no pudimos leer el guardado, mostramos la card en modo "calcular".
         setResumen({ vacio: true })
       }
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function actualizarResumen() {
+  // auto = true cuando la dispara la actualización diaria automática (silenciosa:
+  // si falla, no molestamos; reintenta sola al día siguiente).
+  async function actualizarResumen(auto = false) {
     setActualizando(true)
     setErrorResumen(null)
     try {
@@ -101,7 +117,7 @@ export default function Home() {
       if (!r.ok) throw new Error(j.error || 'No se pudo actualizar')
       setResumen(j)
     } catch (e) {
-      setErrorResumen(e.message ?? String(e))
+      if (!auto) setErrorResumen(e.message ?? String(e))
     } finally {
       setActualizando(false)
     }
@@ -182,15 +198,9 @@ export default function Home() {
               </p>
             )}
 
-            <div className="tope-foot">
-              <span className="tope-upd">
-                {resumen.periodo ? `${resumen.periodo} · ` : ''}Actualizado {fmtActualizado(resumen.calculadoAt)}
-              </span>
-              <button type="button" className="tope-btn sm" onClick={actualizarResumen} disabled={actualizando}>
-                <IconActualizar /> {actualizando ? 'Actualizando…' : 'Actualizar'}
-              </button>
-            </div>
-            {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}
+            {actualizando && (
+              <p className="tope-actualizando"><span className="spinner-inline" /> Actualizando con ARCA…</p>
+            )}
           </>
         )}
       </div>
