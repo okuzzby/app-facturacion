@@ -83,9 +83,18 @@ export async function puntosVentaFlow({ supabaseAdmin, userId }) {
 export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
   const cred = await cargarCred(supabaseAdmin, userId)
   const pv = cred.punto_venta_ws
-  const cantidad = Number(body.cantidad || 1)
-  const importe = Number(body.precio) * cantidad
   const concepto = body.concepto || 'Productos'
+
+  // Ítems normalizados por validarFactura: [{ descripcion, precio, cantidad }].
+  // Compatibilidad: si viniera el formato viejo, lo envolvemos en un ítem.
+  const items =
+    Array.isArray(body.items) && body.items.length
+      ? body.items
+      : [{ descripcion: body.producto || '', precio: Number(body.precio), cantidad: Number(body.cantidad || 1) }]
+  const importe =
+    typeof body.total === 'number'
+      ? body.total
+      : Math.round(items.reduce((a, it) => a + Number(it.precio) * Number(it.cantidad), 0) * 100) / 100
 
   const res = await emitirWS({
     cuit: cred.cuit,
@@ -104,6 +113,13 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
     ? body.condicionesVenta.join(', ')
     : body.condicionesVenta || 'Contado'
 
+  // El PDF espera { descripcion, cantidad, precioUnit } por ítem.
+  const itemsPdf = items.map((it) => ({
+    descripcion: it.descripcion,
+    cantidad: it.cantidad,
+    precioUnit: it.precio,
+  }))
+
   const pdf = await generarPdfComprobante({
     codTipo: res.codTipo,
     ptoVta: res.ptoVta,
@@ -118,11 +134,18 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
       docNro: 0,
       condVenta,
     },
-    items: [{ descripcion: body.producto || '', cantidad, precioUnit: body.precio }],
+    items: itemsPdf,
     importeTotal: importe,
     cae: res.cae,
     caeVto: res.caeVto,
   })
+
+  // Resumen para la columna `producto` (lo que se ve en Historial/Inicio).
+  const unidades = items.reduce((a, it) => a + Number(it.cantidad), 0)
+  const resumenProducto =
+    items.length === 1
+      ? items[0].descripcion
+      : `${items[0].descripcion} + ${items.length - 1} ${items.length - 1 === 1 ? 'ítem más' : 'ítems más'}`
 
   const g = await guardarPdfYFila(
     supabaseAdmin,
@@ -137,15 +160,17 @@ export async function emitirFacturaFlow({ supabaseAdmin, userId, body }) {
       concepto,
       condicion_iva: body.condicionIva || 'Consumidor Final',
       condiciones_venta: condVenta,
-      producto: body.producto || '',
-      cantidad,
-      precio: body.precio,
+      producto: resumenProducto,
+      // Compatibilidad de columnas viejas: 1 × total (precio*cantidad = importe_total).
+      cantidad: 1,
+      precio: importe,
       importe_total: importe,
+      items: itemsPdf,
       estado: 'emitida',
     },
     pdf
   )
-  return { ...res, guardado: true, facturaId: g.id, pdf_path: g.pdf_path }
+  return { ...res, guardado: true, facturaId: g.id, pdf_path: g.pdf_path, unidades }
 }
 
 // --- Anular (Nota de Crédito C asociada) por WS ---

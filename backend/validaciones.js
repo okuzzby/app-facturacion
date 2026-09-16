@@ -28,22 +28,36 @@ export function limpiarTexto(v, max = 80) {
   return s.slice(0, max)
 }
 
-// Valida y normaliza los datos de una factura. Lanza Error con mensaje claro
-// si algo no cierra (el endpoint lo devuelve como 400).
-export function validarFactura(body = {}) {
-  const producto = limpiarTexto(body.producto, 80)
-  if (!producto) throw new Error('Producto/servicio inválido')
-
+// Valida un ítem individual (descripción + precio + cantidad).
+function validarItem(raw, i) {
+  const descripcion = limpiarTexto(raw?.producto ?? raw?.descripcion, 80)
+  if (!descripcion) throw new Error(`Ítem ${i + 1}: descripción inválida`)
   // Redondeamos a 2 decimales (centavos): ARCA no acepta más.
-  const precioRaw = Number(body.precio)
-  const precio = Math.round(precioRaw * 100) / 100
+  const precio = Math.round(Number(raw?.precio) * 100) / 100
   if (!Number.isFinite(precio) || precio <= 0 || precio > 100000000) {
-    throw new Error('Precio inválido')
+    throw new Error(`Ítem ${i + 1}: precio inválido`)
   }
-
-  const cantidad = Number(body.cantidad)
+  const cantidad = Number(raw?.cantidad)
   if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 99999) {
-    throw new Error('Cantidad inválida')
+    throw new Error(`Ítem ${i + 1}: cantidad inválida`)
+  }
+  return { descripcion, precio, cantidad }
+}
+
+// Valida y normaliza los datos de una factura. Acepta el formato nuevo con
+// `items: [...]` y también el viejo de un solo producto (compatibilidad).
+// Lanza Error con mensaje claro si algo no cierra (el endpoint lo devuelve 400).
+export function validarFactura(body = {}) {
+  const itemsRaw =
+    Array.isArray(body.items) && body.items.length
+      ? body.items
+      : [{ producto: body.producto, precio: body.precio, cantidad: body.cantidad }]
+  if (itemsRaw.length > 50) throw new Error('Demasiados ítems (máx. 50)')
+
+  const items = itemsRaw.map(validarItem)
+  const total = Math.round(items.reduce((a, it) => a + it.precio * it.cantidad, 0) * 100) / 100
+  if (!Number.isFinite(total) || total <= 0 || total > 100000000) {
+    throw new Error('El total de la factura es inválido')
   }
 
   const concepto = CONCEPTOS.includes(body.concepto) ? body.concepto : 'Productos'
@@ -55,5 +69,5 @@ export function validarFactura(body = {}) {
   const condicionesVenta = condIn.filter((c) => COND_VENTA.includes(c))
   if (condicionesVenta.length === 0) condicionesVenta.push('Contado')
 
-  return { producto, precio, cantidad, concepto, condicionIva, condicionesVenta }
+  return { items, total, concepto, condicionIva, condicionesVenta }
 }

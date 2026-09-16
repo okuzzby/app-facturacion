@@ -25,8 +25,6 @@ const COND_VENTA = [
 function parsePrecio(s) {
   const t = String(s ?? '').trim().replace(/[^\d.,]/g, '')
   if (!t) return 0
-  // Si el último . o , va seguido de 1 o 2 dígitos al final, ese es el separador
-  // decimal; lo que quede antes (otros . o ,) son separadores de miles.
   const m = t.match(/^(.*)[.,](\d{1,2})$/)
   let n
   if (m) {
@@ -40,7 +38,6 @@ function parsePrecio(s) {
 const money = (n) =>
   new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)
 
-// Estados intermedios del onboarding automático de facturación electrónica.
 const SETUP_EN_PROGRESO = [
   'iniciando',
   'creando_cert',
@@ -58,6 +55,8 @@ function hoyDDMMYYYY() {
   return `${dd}/${mm}/${d.getFullYear()}`
 }
 
+const itemVacio = () => ({ desc: '', precio: '', cantidad: 1 })
+
 export default function Facturar() {
   const [cred, setCred] = useState(null)
   const [productos, setProductos] = useState([])
@@ -69,10 +68,7 @@ export default function Facturar() {
   const [vtoPago, setVtoPago] = useState(hoyDDMMYYYY())
   const [condicionIva, setCondicionIva] = useState('Consumidor Final')
   const [condicionesVenta, setCondicionesVenta] = useState(['Contado'])
-  const [productoSel, setProductoSel] = useState('')
-  const [productoCustom, setProductoCustom] = useState('')
-  const [precio, setPrecio] = useState('')
-  const [cantidad, setCantidad] = useState(1)
+  const [items, setItems] = useState([itemVacio()])
   const [calAbierto, setCalAbierto] = useState(false)
 
   const [vista, setVista] = useState('elegir') // 'elegir' | 'form'
@@ -97,23 +93,13 @@ export default function Facturar() {
         .from('productos_configurados')
         .select('nombre')
         .order('created_at', { ascending: true })
-      const nombres = (p ?? []).map((x) => x.nombre)
-      setProductos(nombres)
+      setProductos((p ?? []).map((x) => x.nombre))
 
-      // Si venimos de "Replicar" (desde el Historial), precargamos el formulario
-      // con los datos de la factura original y saltamos directo al formulario.
+      // Si venimos de "Replicar" (desde el Historial), precargamos un ítem.
       if (replicar) {
-        if (replicar.producto && nombres.includes(replicar.producto)) {
-          setProductoSel(replicar.producto)
-        } else {
-          setProductoSel('otro')
-          setProductoCustom(replicar.producto || '')
-        }
-        setPrecio(replicar.importe ? money(replicar.importe) : '')
+        setItems([{ desc: replicar.producto || '', precio: replicar.importe ? money(replicar.importe) : '', cantidad: 1 }])
         setReplicandoNumero(replicar.numero || null)
         setVista('form')
-      } else {
-        setProductoSel(nombres[0] ?? 'otro')
       }
       setCargandoInit(false)
     })()
@@ -121,25 +107,48 @@ export default function Facturar() {
   }, [])
 
   const esServicio = /servicio/i.test(concepto)
-  const productoFinal = productoSel === 'otro' ? productoCustom.trim() : productoSel
-  const precioNum = parsePrecio(precio)
-  const total = precioNum * cantidad
+  const total = items.reduce((a, it) => a + parsePrecio(it.precio) * Number(it.cantidad || 0), 0)
 
   function toggleCondVenta(c) {
-    setCondicionesVenta((prev) =>
-      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
+    setCondicionesVenta((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+  }
+
+  function setItemDesc(i, v) {
+    setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, desc: v.slice(0, 80) } : it)))
+  }
+  function setItemPrecio(i, v) {
+    const limpio = v.replace(/[^\d.,]/g, '').slice(0, 15)
+    setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, precio: limpio } : it)))
+  }
+  function setItemCantidad(i, delta) {
+    setItems((arr) =>
+      arr.map((it, idx) =>
+        idx === i ? { ...it, cantidad: Math.min(99999, Math.max(1, Number(it.cantidad) + delta)) } : it
+      )
     )
+  }
+  function agregarItem() {
+    setItems((arr) => (arr.length >= 50 ? arr : [...arr, itemVacio()]))
+  }
+  function quitarItem(i) {
+    setItems((arr) => (arr.length <= 1 ? arr : arr.filter((_, idx) => idx !== i)))
   }
 
   function irAPreview(e) {
     e.preventDefault()
     setError(null)
-    if (!productoFinal) return setError('Elegí o escribí un producto/servicio')
-    if (productoFinal.length > 80) return setError('La descripción es demasiado larga (máx. 80)')
-    if (precioNum <= 0) return setError('Ingresá un precio válido')
-    if (precioNum > 100000000) return setError('El precio es demasiado alto')
-    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 99999)
-      return setError('Cantidad inválida')
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      const desc = it.desc.trim()
+      if (!desc) return setError(`Ítem ${i + 1}: escribí una descripción`)
+      if (desc.length > 80) return setError(`Ítem ${i + 1}: la descripción es muy larga (máx. 80)`)
+      const precio = parsePrecio(it.precio)
+      if (precio <= 0) return setError(`Ítem ${i + 1}: ingresá un precio válido`)
+      if (precio > 100000000) return setError(`Ítem ${i + 1}: el precio es demasiado alto`)
+      if (!Number.isInteger(Number(it.cantidad)) || it.cantidad < 1 || it.cantidad > 99999)
+        return setError(`Ítem ${i + 1}: cantidad inválida`)
+    }
+    if (total <= 0) return setError('El total de la factura debe ser mayor a 0')
     if (condicionesVenta.length === 0) return setError('Elegí al menos una condición de venta')
     setPaso('preview')
   }
@@ -157,9 +166,11 @@ export default function Facturar() {
       if (!token) throw new Error('No hay sesión activa')
 
       const body = {
-        producto: productoFinal,
-        precio: precioNum,
-        cantidad,
+        items: items.map((it) => ({
+          producto: it.desc.trim(),
+          precio: parsePrecio(it.precio),
+          cantidad: Number(it.cantidad),
+        })),
         concepto,
         condicionIva,
         condicionesVenta,
@@ -167,10 +178,7 @@ export default function Facturar() {
 
       const r = await fetch(`${backend}/arca/ws/factura-generar`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       const j = await r.json()
@@ -188,9 +196,7 @@ export default function Facturar() {
     setResultado(null)
     setError(null)
     setPaso('form')
-    setPrecio('')
-    setCantidad(1)
-    setProductoCustom('')
+    setItems([itemVacio()])
     setReplicandoNumero(null)
   }
 
@@ -202,8 +208,6 @@ export default function Facturar() {
     )
   }
 
-  // Mientras se está configurando NO se puede facturar (para no emitir con datos
-  // incompletos). "Listo" solo cuando terminó el proceso.
   const setupEnProgreso = SETUP_EN_PROGRESO.includes(cred?.ws_setup_estado)
   const setupListo =
     !setupEnProgreso &&
@@ -234,7 +238,7 @@ export default function Facturar() {
     )
   }
 
-  // Elegir tipo de comprobante (Factura C / Nota de crédito C)
+  // Elegir tipo de comprobante
   if (vista === 'elegir' && !resultado) {
     return (
       <div className="page">
@@ -292,7 +296,7 @@ export default function Facturar() {
     )
   }
 
-  // Resultado (factura emitida)
+  // Resultado
   if (resultado) {
     return (
       <div className="page">
@@ -334,13 +338,26 @@ export default function Facturar() {
             {esServicio && <div><dt>Vto. para el pago</dt><dd>{vtoPago}</dd></div>}
             <div><dt>Condición IVA</dt><dd>{condicionIva}</dd></div>
             <div><dt>Condición de venta</dt><dd>{condicionesVenta.join(', ')}</dd></div>
-            <div><dt>Producto</dt><dd>{productoFinal}</dd></div>
-            <div><dt>Precio unitario</dt><dd>$ {money(precioNum)}</dd></div>
           </dl>
+
+          <div className="prev-items">
+            <div className="prev-items-tit">Detalle</div>
+            {items.map((it, i) => {
+              const sub = parsePrecio(it.precio) * Number(it.cantidad)
+              return (
+                <div className="prev-item" key={i}>
+                  <div className="prev-item-d">
+                    {it.desc.trim()}
+                    <small>{it.cantidad} × $ {money(parsePrecio(it.precio))}</small>
+                  </div>
+                  <div className="prev-item-m">$ {money(sub)}</div>
+                </div>
+              )
+            })}
+          </div>
 
           <div className="total-card">
             <div className="total-top">Total a facturar</div>
-            <div className="total-cant">Cantidad {cantidad}</div>
             <div className="total-monto">
               <span className="tm-sig">$</span>
               <span className="tm-ent">{money(total).split(',')[0]}</span>
@@ -446,52 +463,66 @@ export default function Facturar() {
           </select>
         </label>
 
-        <label className="campo">
-          <span>Producto / Servicio</span>
-          <select value={productoSel} onChange={(e) => setProductoSel(e.target.value)}>
-            {productos.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-            <option value="otro">Otro (escribir)…</option>
-          </select>
-        </label>
+        {/* Ítems */}
+        <div className="campo"><span>Ítems</span></div>
+        <datalist id="productos-guardados">
+          {productos.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
 
-        {productoSel === 'otro' && (
-          <label className="campo">
-            <span>Descripción</span>
+        {items.map((it, i) => (
+          <div className="fact-item" key={i}>
+            <div className="fact-item-head">
+              <span className="fact-item-n">Ítem {i + 1}</span>
+              {items.length > 1 && (
+                <button type="button" className="fact-item-x" onClick={() => quitarItem(i)} aria-label="Quitar ítem">✕</button>
+              )}
+            </div>
             <input
               type="text"
-              value={productoCustom}
-              onChange={(e) => setProductoCustom(e.target.value)}
-              placeholder="Ej: Servicio de flete"
+              className="fact-desc"
+              list="productos-guardados"
+              value={it.desc}
+              onChange={(e) => setItemDesc(i, e.target.value)}
+              placeholder="Producto o servicio"
               maxLength={80}
             />
-          </label>
-        )}
+            <div className="cant-precio">
+              <div className="campo">
+                <span>Cantidad</span>
+                <div className="stepper">
+                  <button type="button" onClick={() => setItemCantidad(i, -1)} aria-label="Menos">−</button>
+                  <span className="stepper-val">{it.cantidad}</span>
+                  <button type="button" onClick={() => setItemCantidad(i, +1)} aria-label="Más">+</button>
+                </div>
+              </div>
+              <div className="campo">
+                <span>Precio unitario</span>
+                <div className="precio-field">
+                  <span className="precio-sig">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={it.precio}
+                    onChange={(e) => setItemPrecio(i, e.target.value)}
+                    maxLength={15}
+                    placeholder="0,00"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="fact-item-sub">Subtotal: <b>$ {money(parsePrecio(it.precio) * Number(it.cantidad))}</b></div>
+          </div>
+        ))}
 
-        <div className="cant-precio">
-          <div className="campo">
-            <span>Cantidad</span>
-            <div className="stepper">
-              <button type="button" onClick={() => setCantidad((c) => Math.max(1, c - 1))} aria-label="Menos">−</button>
-              <span className="stepper-val">{cantidad}</span>
-              <button type="button" onClick={() => setCantidad((c) => Math.min(99999, c + 1))} aria-label="Más">+</button>
-            </div>
-          </div>
-          <div className="campo">
-            <span>Precio unitario</span>
-            <div className="precio-field">
-              <span className="precio-sig">$</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={precio}
-                onChange={(e) => setPrecio(e.target.value.replace(/[^\d.,]/g, '').slice(0, 15))}
-                maxLength={15}
-                placeholder="0,00"
-              />
-            </div>
-          </div>
+        <button type="button" className="fact-add" onClick={agregarItem} disabled={items.length >= 50}>
+          <span className="fact-add-plus">＋</span> Agregar otro ítem
+        </button>
+
+        <div className="fact-total">
+          <span className="fact-total-k">Total a facturar</span>
+          <span className="fact-total-v">$ {money(total)}</span>
         </div>
 
         <button type="submit">Continuar →</button>

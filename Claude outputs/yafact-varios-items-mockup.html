@@ -1,0 +1,148 @@
+<title>Varios ítems · Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  :root{
+    --accent:#F26A1B; --accent-ink:#C4520D; --accent-soft:#FDEAD9; --accent-line:#F6C9A6;
+    --ground:#F4F1EC; --panel:#FFFFFF; --panel-2:#FBF5EF;
+    --ink:#241C17; --ink-2:#8A7C70; --line:#E9E0D6; --track:#EEE6DC;
+    --shadow:0 1px 2px rgba(36,28,23,.05),0 10px 26px rgba(36,28,23,.08);
+  }
+  :root:not([data-theme="light"]){ @media (prefers-color-scheme: dark){
+    --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+    --ground:#171310; --panel:#221B16; --panel-2:#2A211B;
+    --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25; --track:#382D25;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+  }}
+  :root[data-theme="dark"]{
+    --accent:#FF8642; --accent-ink:#FFB483; --accent-soft:#3A2314; --accent-line:#5A3A20;
+    --ground:#171310; --panel:#221B16; --panel-2:#2A211B;
+    --ink:#F3EBE3; --ink-2:#AE9E90; --line:#362C25; --track:#382D25;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 26px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);font-family:"Manrope",system-ui,-apple-system,sans-serif;line-height:1.5;}
+  .wrap{max-width:900px;margin:0 auto;padding-inline:18px;padding-block:24px 60px;}
+  h1{font-size:clamp(1.4rem,4.5vw,1.9rem);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance;}
+  .lead{color:var(--ink-2);margin:10px 0 0;max-width:60ch;font-size:.98rem;}
+  .mock-tag{display:inline-flex;align-items:center;gap:7px;font-size:.74rem;font-weight:700;color:var(--accent-ink);
+    background:var(--accent-soft);border:1px solid var(--accent-line);padding:5px 11px;border-radius:20px;margin-bottom:14px;}
+  .flow{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px;align-items:start;}
+  @media(max-width:760px){.flow{grid-template-columns:1fr;}}
+  .step-h{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+  .step-n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:.8rem;display:grid;place-items:center;}
+  .step-h h2{font-size:1.02rem;font-weight:700;margin:0;}
+  .phone{background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden;}
+  .phone-top{background:var(--accent);color:#fff;padding:15px 16px;}
+  .phone-top .t{font-weight:800;font-size:1.05rem;}
+  .phone-top .s{font-size:.76rem;opacity:.9;margin-top:2px;}
+  .phone-body{padding:14px;}
+  .lbl{font-size:.72rem;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;display:block;}
+  .item{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:var(--panel-2);position:relative;}
+  .item-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .item-h .n{font-size:.74rem;font-weight:800;color:var(--accent-ink);}
+  .item-x{border:0;background:none;color:var(--ink-2);font-size:1.1rem;line-height:1;cursor:pointer;}
+  .inp{border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--panel);font-size:.9rem;font-weight:600;}
+  .desc{width:100%;margin-bottom:8px;color:var(--ink);}
+  .two{display:grid;grid-template-columns:1fr 1.1fr;gap:8px;}
+  .stepper{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden;}
+  .stepper button{border:0;background:transparent;color:var(--accent-ink);font-size:1.05rem;font-weight:800;width:34px;height:40px;}
+  .stepper .v{font-weight:800;}
+  .price{display:flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:0 11px;height:42px;}
+  .price .sig{color:var(--ink-2);font-weight:800;}
+  .price .v{font-weight:800;}
+  .item-sub{margin-top:7px;text-align:right;font-size:.78rem;color:var(--ink-2);}
+  .item-sub b{color:var(--ink);}
+  .add{width:100%;border:1.5px dashed var(--accent-line);background:var(--accent-soft);color:var(--accent-ink);
+    border-radius:12px;padding:11px;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:14px;}
+  .total{background:var(--ink);color:#fff;border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;}
+  .total .k{font-size:.78rem;opacity:.85;font-weight:600;}
+  .total .v{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;}
+  .cta{margin-top:12px;background:var(--accent);color:#fff;border:0;border-radius:12px;padding:13px;width:100%;font-weight:800;font-size:.95rem;box-shadow:0 6px 14px rgba(242,106,27,.35);}
+  /* preview */
+  .rowline{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:.88rem;}
+  .rowline:last-of-type{border-bottom:0;}
+  .rowline .d{color:var(--ink);}
+  .rowline .d small{display:block;color:var(--ink-2);font-size:.76rem;font-weight:600;}
+  .rowline .m{font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .prev-total{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:2px solid var(--line);}
+  .prev-total .k{font-weight:700;}
+  .prev-total .v{font-size:1.3rem;font-weight:800;color:var(--accent-ink);}
+  .notas{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);margin-top:26px;}
+  .notas ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;}
+  .notas li{position:relative;padding-left:23px;font-size:.9rem;}
+  .notas li svg{position:absolute;left:0;top:2px;width:15px;height:15px;color:var(--accent);}
+  .notas li b{color:var(--accent-ink);}
+  footer{margin-top:24px;color:var(--ink-2);font-size:.8rem;text-align:center;}
+</style>
+
+<div class="wrap">
+  <span class="mock-tag">◆ Maqueta — todavía no aplicado</span>
+  <h1>Varios ítems en una factura</h1>
+  <p class="lead">Cargás más de un producto/servicio en la misma Factura C, cada uno con su cantidad y precio, y el total se va sumando solo. Con tu estilo naranja y tu mismo formulario.</p>
+
+  <div class="flow">
+    <!-- Paso 1: formulario -->
+    <div>
+      <div class="step-h"><span class="step-n">1</span><h2>Cargás los ítems</h2></div>
+      <div class="phone">
+        <div class="phone-top"><div class="t">Nueva factura</div><div class="s">Factura C · Punto de venta 10 · Fecha hoy</div></div>
+        <div class="phone-body">
+          <span class="lbl">Ítems</span>
+
+          <div class="item">
+            <div class="item-h"><span class="n">Ítem 1</span><button class="item-x" title="Quitar">✕</button></div>
+            <input class="inp desc" value="Diseño de logo" />
+            <div class="two">
+              <div><span class="lbl">Cantidad</span><div class="stepper"><button>−</button><span class="v">1</span><button>+</button></div></div>
+              <div><span class="lbl">Precio unit.</span><div class="price"><span class="sig">$</span><span class="v">15.000,00</span></div></div>
+            </div>
+            <div class="item-sub">Subtotal: <b>$15.000,00</b></div>
+          </div>
+
+          <div class="item">
+            <div class="item-h"><span class="n">Ítem 2</span><button class="item-x" title="Quitar">✕</button></div>
+            <input class="inp desc" value="Manual de marca" />
+            <div class="two">
+              <div><span class="lbl">Cantidad</span><div class="stepper"><button>−</button><span class="v">2</span><button>+</button></div></div>
+              <div><span class="lbl">Precio unit.</span><div class="price"><span class="sig">$</span><span class="v">8.000,00</span></div></div>
+            </div>
+            <div class="item-sub">Subtotal: <b>$16.000,00</b></div>
+          </div>
+
+          <button class="add"><span style="font-size:1.1rem">＋</span> Agregar otro ítem</button>
+
+          <div class="total"><span class="k">Total a facturar</span><span class="v">$31.000,00</span></div>
+          <button class="cta">Continuar →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paso 2: preview -->
+    <div>
+      <div class="step-h"><span class="step-n">2</span><h2>Revisás antes de emitir</h2></div>
+      <div class="phone">
+        <div class="phone-top"><div class="t">Revisá la factura</div><div class="s">Confirmá los datos antes de emitir</div></div>
+        <div class="phone-body">
+          <span class="lbl">Detalle</span>
+          <div class="rowline"><span class="d">Diseño de logo <small>1 × $15.000,00</small></span><span class="m">$15.000,00</span></div>
+          <div class="rowline"><span class="d">Manual de marca <small>2 × $8.000,00</small></span><span class="m">$16.000,00</span></div>
+          <div class="prev-total"><span class="k">Total</span><span class="v">$31.000,00</span></div>
+          <button class="cta">Confirmar y emitir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notas">
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span><b>Cada ítem</b> tiene su descripción, cantidad (− / +) y precio unitario; el <b>total se suma en vivo</b>.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>Podés <b>agregar y quitar</b> ítems. Con un solo ítem, funciona igual que hoy.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>En ARCA la Factura C viaja con el <b>total</b> (el Web Service no pide el detalle línea por línea); el <b>detalle de ítems aparece en el PDF</b> del comprobante.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>El precio sigue aceptando "." o "," y 2 decimales, como ahora.</span></li>
+    </ul>
+  </div>
+
+  <footer>YaFact · Maqueta de "varios ítems por factura" · Fase 2. Nada aplicado aún — para tu revisión.</footer>
+</div>

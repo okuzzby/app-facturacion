@@ -123,7 +123,10 @@ export async function regenerarFacturasUsuario(supabaseAdmin, userId) {
           docNro: 0,
           condVenta: f.condiciones_venta || 'Contado',
         },
-        items: [{ descripcion: f.producto || '', cantidad: f.cantidad || 1, precioUnit: f.precio }],
+        items:
+          Array.isArray(f.items) && f.items.length
+            ? f.items
+            : [{ descripcion: f.producto || '', cantidad: f.cantidad || 1, precioUnit: f.precio }],
         importeTotal: f.importe_total,
         cae,
         caeVto,
