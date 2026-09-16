@@ -870,6 +870,18 @@ async function esperarPanelMono(context, timeoutMs, pasos) {
           return p
         }
         const url = p.url()
+        // El portal del Monotributo cierra la sesión sola a los pocos minutos:
+        // "Tu sesión expiró" -> "INGRESAR DE NUEVO" (reingresa por auth.afip.gov.ar).
+        const deNuevo = p.getByText(/Ingresar de nuevo/i).and(p.locator(':visible')).first()
+        if (await deNuevo.count().catch(() => 0)) {
+          pasos.push('Sesión del Monotributo expirada, reingresando')
+          await Promise.all([
+            context.waitForEvent('page', { timeout: 12000 }).catch(() => null),
+            deNuevo.click({ timeout: 10000 }).catch(() => {}),
+          ])
+          await sleep(2000)
+          continue
+        }
         const ingresar = p.getByText(/Ingresar al portal con clave fiscal/i).and(p.locator(':visible')).first()
         if (await ingresar.count().catch(() => 0)) {
           pasos.push('Landing pública, tocando Ingresar')
@@ -901,12 +913,37 @@ async function esperarPanelMono(context, timeoutMs, pasos) {
 
 // Desde el login (ya con sesión), abre el portal del Monotributo y devuelve la
 // página parada en Inicio.aspx (la del panel "Facturación electrónica").
+// IMPORTANTE: hay que entrar por el SERVICIO del portal (como RCEL), no por la
+// landing pública: el servicio hace el lanzamiento con token y el SSO del
+// Monotributo (auth.afip.gov.ar) redirige solo al panel.
 async function entrarAMonotributo(page, pasos) {
   const context = page.context()
-  await page.goto('https://monotributo.afip.gob.ar', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
-  await page.waitForTimeout(800)
-  pasos.push('Landing de Monotributo')
-  const destino = await esperarPanelMono(context, 60000, pasos)
+  if (!page.url().includes('portalcf')) {
+    await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+  }
+  await page.waitForTimeout(1000)
+  pasos.push('En el portal de ARCA')
+
+  // Clic en el servicio "Monotributo" (en "Más utilizados" o en el buscador).
+  let svc = page.getByText(/^\s*Monotributo\s*$/i).and(page.locator(':visible')).first()
+  if (!(await svc.count().catch(() => 0))) {
+    const buscador = page
+      .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+      .first()
+    await buscador.fill('Monotributo', { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(1000)
+    svc = page.getByText(/^\s*Monotributo\s*$/i).and(page.locator(':visible')).first()
+  }
+  await svc.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+  await svc.scrollIntoViewIfNeeded().catch(() => {})
+  await Promise.all([
+    context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+    svc.click({ timeout: 15000 }).catch(() => {}),
+  ])
+  await page.waitForTimeout(1500)
+  pasos.push('Servicio Monotributo abierto')
+
+  const destino = await esperarPanelMono(context, 70000, pasos)
   return destino || page
 }
 
