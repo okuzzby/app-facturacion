@@ -16,7 +16,7 @@ const SETUP_EN_PROGRESO = [
 ]
 
 export default function Configuracion() {
-  const { user, refrescarPerfil, refrescarPlan, signOut, esPro } = useAuth()
+  const { user, perfilNombre, refrescarPerfil, refrescarPlan, signOut, esPro } = useAuth()
 
   // ---- plan / suscripción Pro ----
   const [proEstado, setProEstado] = useState(null)
@@ -38,6 +38,11 @@ export default function Configuracion() {
     user?.app_metadata?.provider === 'email'
 
   // ---- perfil (nombre para el saludo) ----
+  const [editNombre, setEditNombre] = useState(false)
+  const [nombreBorrador, setNombreBorrador] = useState('')
+  const [guardandoNombre, setGuardandoNombre] = useState(false)
+  const [nombreError, setNombreError] = useState(null)
+  const [mpConectado, setMpConectado] = useState(false)
 
   // ---- credencial ARCA ----
   const [credencial, setCredencial] = useState(null) // {cuit, updated_at} o null
@@ -128,10 +133,41 @@ export default function Configuracion() {
     setProductos((data ?? []).map((p) => ({ ...p, borrador: p.nombre })))
   }
 
+  // Guarda el nombre del perfil (editable en línea).
+  function abrirEditNombre() {
+    setNombreBorrador(perfilNombre || '')
+    setNombreError(null)
+    setEditNombre(true)
+  }
+  async function guardarNombre() {
+    setNombreError(null)
+    const limpio = nombreBorrador.trim().slice(0, 60)
+    if (!limpio) {
+      setNombreError('Escribí tu nombre')
+      return
+    }
+    setGuardandoNombre(true)
+    try {
+      const { error } = await supabase.from('perfiles').update({ nombre: limpio }).eq('id', user.id)
+      if (error) throw error
+      await refrescarPerfil()
+      setEditNombre(false)
+    } catch (e) {
+      setNombreError(e.message ?? String(e))
+    } finally {
+      setGuardandoNombre(false)
+    }
+  }
+
   useEffect(() => {
     if (!supabase) return
     cargarCredencial()
     cargarProductos()
+    // ¿Tiene Mercado Pago conectado? (para la tarjeta "Completá tu perfil")
+    ;(async () => {
+      const { data } = await supabase.from('mp_cuentas').select('user_id').maybeSingle()
+      setMpConectado(!!data)
+    })()
   }, [])
 
 
@@ -1136,6 +1172,121 @@ export default function Configuracion() {
       <div className="page-head">
         <div><h1>Configuración</h1><div className="sub">Tu conexión con ARCA y tus productos</div></div>
       </div>
+
+      {/* ---------------- Tu perfil ---------------- */}
+      <section className="seccion">
+        <h2>Tu perfil</h2>
+        <div className="perfil-lista">
+          {/* Nombre — editable en línea */}
+          <div className="perfil-row">
+            <span className="perfil-ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>
+            </span>
+            {editNombre ? (
+              <div className="perfil-body">
+                <div className="perfil-k">Nombre</div>
+                <div className="perfil-edit">
+                  <input
+                    type="text"
+                    value={nombreBorrador}
+                    onChange={(e) => setNombreBorrador(e.target.value.slice(0, 60))}
+                    maxLength={60}
+                    placeholder="Tu nombre"
+                    autoFocus
+                  />
+                  <button type="button" className="perfil-save" onClick={guardarNombre} disabled={guardandoNombre}>
+                    {guardandoNombre ? '…' : 'Guardar'}
+                  </button>
+                  <button type="button" className="perfil-cancel" onClick={() => setEditNombre(false)} aria-label="Cancelar">✕</button>
+                </div>
+                {nombreError && <p className="error" style={{ margin: '6px 0 0' }}>{nombreError}</p>}
+              </div>
+            ) : (
+              <>
+                <div className="perfil-body">
+                  <div className="perfil-k">Nombre</div>
+                  <div className="perfil-v">
+                    {perfilNombre || <span className="perfil-vacio">Sin cargar</span>}
+                  </div>
+                </div>
+                <button type="button" className="perfil-pencil" onClick={abrirEditNombre} aria-label="Editar nombre">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Correo — solo lectura */}
+          <div className="perfil-row">
+            <span className="perfil-ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+            </span>
+            <div className="perfil-body">
+              <div className="perfil-k">Correo de acceso</div>
+              <div className="perfil-v">{user?.email}</div>
+            </div>
+            <span className="perfil-lock" title="No editable">🔒</span>
+          </div>
+
+          {/* CUIT — solo lectura (de la conexión con ARCA) */}
+          {credencial?.cuit && (
+            <div className="perfil-row">
+              <span className="perfil-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9h10M7 13h6" /></svg>
+              </span>
+              <div className="perfil-body">
+                <div className="perfil-k">CUIT</div>
+                <div className="perfil-v">{credencial.cuit} <small>· de tu conexión con ARCA</small></div>
+              </div>
+              <span className="perfil-lock" title="No editable">🔒</span>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ---------------- Completá tu perfil ---------------- */}
+      <section className="seccion">
+        <h2>Completá tu perfil</h2>
+        <div className="perfil-chk-lista">
+          <div className={`perfil-chk ${cListo ? 'ok' : 'pend'}`}>
+            <span className="perfil-chk-dot">
+              {cListo
+                ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5" /></svg>
+                : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg>}
+            </span>
+            <div className="perfil-chk-t">
+              <b>Facturación electrónica lista</b>
+              <small>{cListo ? 'Ya podés emitir Facturas C.' : 'Conectá tu Clave Fiscal para empezar.'}</small>
+            </div>
+          </div>
+
+          <div className={`perfil-chk ${perfilNombre ? 'ok' : 'pend'}`}>
+            <span className="perfil-chk-dot">
+              {perfilNombre
+                ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5" /></svg>
+                : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg>}
+            </span>
+            <div className="perfil-chk-t">
+              <b>Tu nombre cargado</b>
+              <small>Para el saludo y tus comprobantes.</small>
+            </div>
+            {!perfilNombre && <button type="button" className="perfil-chk-go" onClick={abrirEditNombre}>Cargar →</button>}
+          </div>
+
+          <div className={`perfil-chk ${mpConectado ? 'ok' : 'pend'}`}>
+            <span className="perfil-chk-dot">
+              {mpConectado
+                ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6 9 17l-5-5" /></svg>
+                : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg>}
+            </span>
+            <div className="perfil-chk-t">
+              <b>Mercado Pago conectado</b>
+              <small>Para facturar tus cobros (opcional).</small>
+            </div>
+            {!mpConectado && <Link to="/integraciones" className="perfil-chk-go">Conectar →</Link>}
+          </div>
+        </div>
+      </section>
 
       {/* ---------------- Plan ---------------- */}
       <section className="seccion">

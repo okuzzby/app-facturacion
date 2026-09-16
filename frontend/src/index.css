@@ -308,6 +308,41 @@ button.peligro:hover { background: var(--red-soft); color: var(--red); }
 .prev-item-d { font-size: 14px; color: var(--ink); }
 .prev-item-d small { display: block; color: var(--ink-2); font-size: 12px; font-weight: 600; margin-top: 1px; }
 .prev-item-m { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* --- Tu perfil (Configuración) --- */
+.perfil-lista { display: flex; flex-direction: column; }
+.perfil-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.perfil-row:last-child { border-bottom: 0; }
+.perfil-ic { width: 34px; height: 34px; border-radius: 9px; background: var(--orange-soft); color: var(--orange-2); display: grid; place-items: center; flex: 0 0 auto; }
+.perfil-ic svg { width: 17px; height: 17px; }
+.perfil-body { min-width: 0; flex: 1; }
+.perfil-k { font-size: 12px; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.perfil-v { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 1px; word-break: break-word; }
+.perfil-v small { font-weight: 600; color: var(--ink-2); font-size: 12.5px; }
+.perfil-vacio { color: var(--ink-2); font-weight: 600; font-style: italic; }
+.perfil-pencil { width: 34px; height: 34px; padding: 0; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); display: grid; place-items: center; flex: 0 0 auto; cursor: pointer; box-shadow: none; }
+.perfil-pencil:hover { color: var(--orange-2); border-color: #F6C4A3; background: var(--orange-soft); }
+.perfil-pencil svg { width: 15px; height: 15px; }
+.perfil-lock { flex: 0 0 auto; font-size: 13px; opacity: .7; }
+.perfil-edit { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.perfil-edit input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid #F6C4A3; border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 15px; font-family: inherit; }
+.perfil-edit input:focus { outline: none; border-color: var(--orange); }
+.perfil-save { background: var(--orange); color: #fff; border: 0; border-radius: 9px; padding: 9px 14px; font-family: "Manrope"; font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: none; flex: 0 0 auto; }
+.perfil-save:hover { background: var(--orange-2); }
+.perfil-cancel { background: none; border: 0; color: var(--ink-2); font-size: 18px; cursor: pointer; padding: 0 4px; box-shadow: none; flex: 0 0 auto; }
+.perfil-cancel:hover { background: none; color: var(--ink); }
+/* Completá tu perfil */
+.perfil-chk-lista { display: flex; flex-direction: column; gap: 2px; }
+.perfil-chk { display: flex; align-items: center; gap: 11px; padding: 9px 0; }
+.perfil-chk-dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; }
+.perfil-chk-dot svg { width: 13px; height: 13px; }
+.perfil-chk.ok .perfil-chk-dot { background: #E4F5EC; color: #1F9D6B; }
+.perfil-chk.pend .perfil-chk-dot { background: var(--orange-soft); color: var(--orange-2); }
+.perfil-chk-t { min-width: 0; }
+.perfil-chk-t b { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+.perfil-chk-t small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.perfil-chk-go { margin-left: auto; font-size: 13px; font-weight: 800; color: var(--orange-2); white-space: nowrap; background: none; border: 0; cursor: pointer; text-decoration: none; padding: 4px 6px; box-shadow: none; }
+.perfil-chk-go:hover { text-decoration: underline; background: none; color: var(--orange-2); }
 .tope-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
 .tope-upd { font-size: 12.5px; color: var(--ink-2); }
 .tope-btn { display: inline-flex; align-items: center; gap: 7px; background: var(--orange); color: #fff; border: none; border-radius: 12px; padding: 11px 16px; font-family: "Manrope"; font-weight: 800; font-size: 14px; cursor: pointer; }
