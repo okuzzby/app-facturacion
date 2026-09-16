@@ -71,14 +71,17 @@ export default function Home() {
     ;(async () => {
       try {
         const backend = import.meta.env.VITE_BACKEND_URL
-        if (!backend || !supabase) return
+        if (!backend || !supabase) return setResumen({ vacio: true })
         const { data: { session } } = await supabase.auth.getSession()
         const t = session?.access_token
-        if (!t) return
+        if (!t) return setResumen({ vacio: true })
         const r = await fetch(`${backend}/arca/facturacion-anual`, { headers: { Authorization: `Bearer ${t}` } })
         const j = await r.json()
-        if (r.ok) setResumen(j)
-      } catch { /* silencioso: la barra es opcional */ }
+        setResumen(r.ok ? j : { vacio: true })
+      } catch {
+        // Si no pudimos leer el guardado, mostramos la card en modo "calcular".
+        setResumen({ vacio: true })
+      }
     })()
   }, [])
 
@@ -136,57 +139,61 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Barra de tope de categoría (facturación de los últimos 12 meses ante ARCA) */}
-      {resumen && (resumen.vacio ? (
-        <div className="tope-card">
-          <div className="tope-q">¿Cuánto podés facturar en tu categoría?</div>
-          <p className="tope-txt">
-            Calculamos tu facturación de los últimos 12 meses ante ARCA y te mostramos cuánto te queda
-            antes de recategorizar.
-          </p>
-          <button type="button" className="tope-btn" onClick={actualizarResumen} disabled={actualizando}>
-            {actualizando ? 'Calculando… (puede tardar)' : 'Calcular'}
-          </button>
-          {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}
+      {/* Tu facturación anual vs. el tope de tu categoría (dato de ARCA).
+          La card está SIEMPRE presente; si todavía no cargó, avisa. */}
+      <div className="tope-card">
+        <div className="tope-top">
+          <div className="tope-q">Tu facturación anual</div>
+          {resumen?.categoria && <span className="cat-badge">Categoría {resumen.categoria}</span>}
         </div>
-      ) : (
-        <div className="tope-card">
-          <div className="tope-top">
-            <div className="tope-q">¿Cuánto podés facturar en tu categoría?</div>
-            {resumen.categoria && <span className="cat-badge">Categoría {resumen.categoria}</span>}
-          </div>
 
-          {tieneTope ? (
-            <>
-              <div className={`tope-bar ${nivel}`}><span style={{ width: `${pct}%` }} /></div>
-              <div className="tope-ends">
-                <span>Facturaste <b>{money(resumen.total)}</b></span>
-                <span>Tope <b>{money(resumen.tope)}</b></span>
-              </div>
-              <div className={`tope-queda ${nivel}`}>
-                {pct >= 100
-                  ? 'Alcanzaste el tope de tu categoría. Conviene recategorizar.'
-                  : <>Te quedan <b>{money(queda)}</b> antes de pasar de categoría.</>}
-              </div>
-            </>
-          ) : (
+        {!resumen ? (
+          <p className="tope-txt tope-cargando"><span className="spinner-inline" /> Actualizando datos…</p>
+        ) : resumen.vacio ? (
+          <>
             <p className="tope-txt">
-              Facturaste <b>{money(resumen.total)}</b>{resumen.periodo ? ` (${resumen.periodo})` : ''}.
-              {!resumen.categoria && ' No pudimos leer tu categoría en ARCA.'}
+              Traemos de ARCA cuánto llevás facturado en el año y te mostramos cuánto te queda antes de
+              recategorizar.
             </p>
-          )}
-
-          <div className="tope-foot">
-            <span className="tope-upd">
-              {resumen.periodo ? `${resumen.periodo} · ` : ''}Actualizado {fmtActualizado(resumen.calculadoAt)}
-            </span>
-            <button type="button" className="tope-btn sm" onClick={actualizarResumen} disabled={actualizando}>
-              <IconActualizar /> {actualizando ? 'Actualizando…' : 'Actualizar'}
+            <button type="button" className="tope-btn" onClick={actualizarResumen} disabled={actualizando}>
+              {actualizando ? 'Calculando… (puede tardar)' : 'Calcular ahora'}
             </button>
-          </div>
-          {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}
-        </div>
-      ))}
+            {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}
+          </>
+        ) : (
+          <>
+            {tieneTope ? (
+              <>
+                <div className={`tope-bar ${nivel}`}><span style={{ width: `${pct}%` }} /></div>
+                <div className="tope-ends">
+                  <span>Facturaste <b>{money(resumen.total)}</b></span>
+                  <span>Tope <b>{money(resumen.tope)}</b></span>
+                </div>
+                <div className={`tope-queda ${nivel}`}>
+                  {pct >= 100
+                    ? 'Alcanzaste el tope de tu categoría. Conviene recategorizar.'
+                    : <>Te quedan <b>{money(queda)}</b> antes de pasar de categoría.</>}
+                </div>
+              </>
+            ) : (
+              <p className="tope-txt">
+                Facturaste <b>{money(resumen.total)}</b>{resumen.periodo ? ` (${resumen.periodo})` : ''}.
+                {!resumen.categoria && ' No pudimos leer tu categoría en ARCA.'}
+              </p>
+            )}
+
+            <div className="tope-foot">
+              <span className="tope-upd">
+                {resumen.periodo ? `${resumen.periodo} · ` : ''}Actualizado {fmtActualizado(resumen.calculadoAt)}
+              </span>
+              <button type="button" className="tope-btn sm" onClick={actualizarResumen} disabled={actualizando}>
+                <IconActualizar /> {actualizando ? 'Actualizando…' : 'Actualizar'}
+              </button>
+            </div>
+            {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}
+          </>
+        )}
+      </div>
 
       <div className="card">
         <div className="page-head" style={{ marginBottom: 8 }}>

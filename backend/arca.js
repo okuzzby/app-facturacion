@@ -996,26 +996,16 @@ export async function montoFacturadoMonotributo(cuit, clave) {
       pasos,
     }
     if (out.montoFacturado == null) {
-      console.log('[MONO-PORTAL] no se pudo leer el monto. url:', destino.url(), 'pasos:', JSON.stringify(pasos), 'innerText:', String(texto).slice(0, 1200))
+      console.log('[MONO-PORTAL] no se pudo leer el monto. url:', destino.url(), 'pasos:', JSON.stringify(pasos))
       out.ok = false
       out.error = 'No se pudo leer el monto facturado del portal'
-      // Fotos de TODAS las pestañas para diagnóstico visual.
-      out.capturas = []
-      try {
-        const pages = destino.context().pages()
-        for (let i = 0; i < pages.length; i++) {
-          out.capturas.push({ url: pages[i].url(), png: await captura(pages[i]) })
-        }
-      } catch { /* nada */ }
     } else {
       console.log('[MONO-PORTAL] leído:', JSON.stringify({ categoria: out.categoria, monto: out.montoFacturado, tope: out.tope }))
     }
     return out
   } catch (e) {
     console.log('[MONO-PORTAL] error:', String((e && e.message) || e))
-    const capturas = []
-    try { if (page) capturas.push({ url: page.url(), png: await captura(page) }) } catch { /* nada */ }
-    return { ok: false, error: String((e && e.message) || e), pasos, capturas }
+    return { ok: false, error: String((e && e.message) || e), pasos }
   } finally {
     if (browser) await browser.close()
   }
