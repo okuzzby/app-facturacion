@@ -967,10 +967,17 @@ export async function montoFacturadoMonotributo(cuit, clave) {
 
     const texto = await destino.evaluate(() => document.body.innerText)
 
+    // En el panel de ARCA el número va ANTES de la etiqueta
+    // ("$942.622,48  Monto facturado"). Probamos ese orden primero y, por las
+    // dudas, el inverso como respaldo.
     const mCat = texto.match(/Categor[ií]a\s+([A-K])\b/)
-    const mMonto = texto.match(/Monto facturado[\s\S]{0,40}?\$?\s*([\d.]+,\d{2})/i)
-    const mTope = texto.match(/Tope categor[ií]a[\s\S]{0,40}?\$?\s*([\d.]+,\d{2})/i)
-    const mComp = texto.match(/Comprobantes emitidos:?[\s\S]{0,40}?\$?\s*([\d.]+,\d{2})/i)
+    const mMonto =
+      texto.match(/([\d.]+,\d{2})\s*\$?\s*Monto facturado/i) ||
+      texto.match(/Monto facturado\s*\$?\s*([\d.]+,\d{2})/i)
+    const mTope =
+      texto.match(/([\d.]+,\d{2})\s*\$?\s*Tope categor[ií]a/i) ||
+      texto.match(/Tope categor[ií]a\s*[A-K]?\s*\$?\s*([\d.]+,\d{2})/i)
+    const mComp = texto.match(/Comprobantes emitidos:?\s*\$?\s*([\d.]+,\d{2})/i)
     const mFact = texto.match(/(\d+)\s+facturas/i)
     const mNc = texto.match(/(\d+)\s+notas? de cr[eé]dito/i)
     const mPer = texto.match(/(\d{2}\/\d{2}\/\d{4})\s*al\s*(\d{2}\/\d{2}\/\d{4})/)
