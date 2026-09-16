@@ -29,7 +29,7 @@ import { cifrar, descifrar } from './crypto-ws.js'
 import { datosPadron } from './arca-padron.js'
 import { resumenFacturacionFlow, topeDeCategoria, ESCALA_MONOTRIBUTO } from './arca-facturacion.js'
 import { regenerarFacturasUsuario, regenerarTodas } from './regenerar-facturas.js'
-import { validarFactura, esUUID } from './validaciones.js'
+import { validarFactura, esUUID, esCUITValido, limpiarCUIT } from './validaciones.js'
 import { generarDuplicadoZip } from './duplicado-electronico.js'
 import {
   proConfigurado,
@@ -1445,6 +1445,47 @@ app.post('/arca/padron-test', requireAuth, async (req, res) => {
     }
   }
   res.json({ cuit: cred.cuit, resultados })
+})
+
+// Busca un cliente por CUIT en el padrón de ARCA (con el certificado de la app) y
+// devuelve razón social, domicilio y condición frente al IVA para autocompletar el
+// alta de cliente. Solo lectura: no guarda nada.
+app.post('/arca/padron-cliente', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const cuit = limpiarCUIT(req.body?.cuit)
+    if (!esCUITValido(cuit)) return res.status(400).json({ error: 'El CUIT no es válido' })
+
+    const app = await certPadronApp()
+    if (!app) return res.status(503).json({ error: 'No se pudo consultar ARCA en este momento' })
+
+    let d
+    try {
+      d = await datosPadron({
+        cuit: app.cuit, // consumidor (certificado autorizado al padrón)
+        idPersona: cuit, // CUIT del cliente a consultar
+        certPem: app.certPem,
+        keyPem: app.keyPem,
+        servicio: 'ws_sr_constancia_inscripcion',
+      })
+    } catch (e) {
+      console.log('[PADRON-CLIENTE] error', String((e && e.message) || e).slice(0, 200))
+      return res.status(502).json({ error: 'No se pudo leer el padrón de ARCA. Probá de nuevo.' })
+    }
+
+    if (!d || !d.razonSocial) {
+      return res.status(404).json({ error: 'No encontramos datos para ese CUIT en ARCA.' })
+    }
+    return res.json({
+      ok: true,
+      cuit,
+      razonSocial: d.razonSocial,
+      domicilio: d.domicilio || '',
+      condIva: d.condIva || null,
+    })
+  } catch (e) {
+    return res.status(500).json({ error: String((e && e.message) || e) })
+  }
 })
 
 // DEV — autoriza el certificado del usuario para un servicio de padrón (RPA).

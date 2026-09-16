@@ -71,6 +71,33 @@ function buscarCategoria(obj, depth = 0) {
   return null
 }
 
+// Junta recursivamente los textos de impuestos/regímenes/actividades declarados
+// en la constancia, para poder inferir la condición frente al IVA.
+function textosImpositivos(obj, out = [], depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 7) return out
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === 'string' && /(impuesto|descripcion|regimen|actividad)/i.test(k)) {
+      out.push(v)
+    } else if (v && typeof v === 'object') {
+      textosImpositivos(v, out, depth + 1)
+    }
+  }
+  return out
+}
+
+// Infiere la condición frente al IVA desde la constancia. Devuelve una etiqueta
+// compatible con COND_IVA_RECEPTOR (validaciones.js) o null si no se pudo deducir.
+function inferirCondicionIva(persona) {
+  const dg = persona?.datosGenerales || persona
+  const dm = persona?.datosMonotributo || dg?.datosMonotributo
+  const esMono = dm && typeof dm === 'object' && Object.keys(dm).length > 0
+  const textos = textosImpositivos(persona).join(' | ').toUpperCase()
+  if (esMono || /MONOTRIBUT/.test(textos)) return 'Responsable Monotributo'
+  if (/EXENTO/.test(textos)) return 'IVA Sujeto Exento'
+  if (/\bIVA\b/.test(textos)) return 'IVA Responsable Inscripto'
+  return null
+}
+
 // Extrae los campos que nos interesan de la respuesta (persona física o jurídica).
 function parsePersona(persona) {
   if (!persona) return {}
@@ -103,8 +130,9 @@ function parsePersona(persona) {
   // en toda la persona porque ARCA la ubica en distintos lugares según el servicio.
   const dm = persona.datosMonotributo || dg.datosMonotributo || {}
   const categoria = buscarCategoria(persona)
+  const condIva = inferirCondicionIva(persona)
 
-  return { razonSocial, nombre, domicilio, inicio, categoria, datosMonotributo: dm }
+  return { razonSocial, nombre, domicilio, inicio, categoria, condIva, datosMonotributo: dm }
 }
 
 // Devuelve { ok, razonSocial, domicilio, inicio } o { ok:false, error }.
