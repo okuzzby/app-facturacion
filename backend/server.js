@@ -30,6 +30,7 @@ import { datosPadron } from './arca-padron.js'
 import { resumenFacturacionFlow, topeDeCategoria, ESCALA_MONOTRIBUTO } from './arca-facturacion.js'
 import { regenerarFacturasUsuario, regenerarTodas } from './regenerar-facturas.js'
 import { validarFactura, esUUID } from './validaciones.js'
+import { generarDuplicadoZip } from './duplicado-electronico.js'
 import {
   proConfigurado,
   PRO_PRECIO,
@@ -477,6 +478,42 @@ app.get('/arca/facturacion-anual', requireAuth, async (req, res) => {
     calculadoAt: data.calculado_at,
     vigencia: ESCALA_MONOTRIBUTO.vigencia,
   })
+})
+
+// Descarga el "Duplicado Electrónico" (ZIP con CABECERA.txt + DETALLE.txt) de un
+// comprobante ya emitido, en el formato exacto de ARCA. Se arma con los datos que
+// ya guardamos: no vuelve a entrar a ARCA.
+app.get('/arca/duplicado/:facturaId', requireAuth, async (req, res) => {
+  if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
+  try {
+    const { facturaId } = req.params
+    if (!esUUID(facturaId)) return res.status(400).json({ error: 'Factura inválida' })
+
+    const { data: factura, error: fErr } = await supabaseAdmin
+      .from('facturas_emitidas')
+      .select('*')
+      .eq('id', facturaId)
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (fErr) return res.status(500).json({ error: fErr.message })
+    if (!factura) return res.status(404).json({ error: 'Comprobante no encontrado' })
+
+    const { data: cred, error: cErr } = await supabaseAdmin
+      .from('credenciales_arca')
+      .select('cuit')
+      .eq('user_id', req.user.id)
+      .maybeSingle()
+    if (cErr) return res.status(500).json({ error: cErr.message })
+    if (!cred?.cuit) return res.status(400).json({ error: 'No tenés tu CUIT configurado' })
+
+    const { filename, buffer } = generarDuplicadoZip({ factura, cred })
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Length', buffer.length)
+    return res.send(buffer)
+  } catch (e) {
+    return res.status(500).json({ error: String((e && e.message) || e) })
+  }
 })
 
 // Recalcula contra ARCA (categoría + suma de los últimos 12 meses) y guarda el

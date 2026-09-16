@@ -29,6 +29,11 @@ const IconReplicar = () => (
     <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" />
   </svg>
 )
+const IconZip = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+    <path d="M6 2h9l3 3v17H6z" /><path d="M11 3v3M13 5v3M11 8v2M13 10v2M11 12h2v3h-2z" />
+  </svg>
+)
 
 export default function Historial() {
   const [facturas, setFacturas] = useState([])
@@ -38,6 +43,7 @@ export default function Historial() {
   const [anulando, setAnulando] = useState(null)
   const [msg, setMsg] = useState(null)
   const [errorShot, setErrorShot] = useState(null)
+  const [descDup, setDescDup] = useState(null)
   // IDs de facturas que provienen de un cobro de Mercado Pago (para la etiqueta MP).
   const [mpIds, setMpIds] = useState(() => new Set())
   const [params] = useSearchParams()
@@ -179,6 +185,59 @@ export default function Historial() {
     }
   }
 
+  // Descarga el duplicado electrónico (ZIP con formato de ARCA) de una factura.
+  async function descargarDuplicado(f) {
+    setError(null)
+    setDescDup(f.id)
+    try {
+      const backend = import.meta.env.VITE_BACKEND_URL
+      if (!backend) throw new Error('Falta VITE_BACKEND_URL')
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('No hay sesión activa')
+
+      const r = await fetch(`${backend}/arca/duplicado/${f.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!r.ok) {
+        let msg = 'No se pudo generar el duplicado'
+        try { msg = (await r.json()).error || msg } catch { /* respuesta no-JSON */ }
+        throw new Error(msg)
+      }
+      const blob = await r.blob()
+      const nombre =
+        (r.headers.get('Content-Disposition') || '').match(/filename="?([^"]+)"?/)?.[1] ||
+        `duplicado-${String(f.numero || f.id).replace(/[^\dA-Za-z-]/g, '')}.zip`
+
+      // En celular, ofrecer el menú nativo para compartir el archivo.
+      try {
+        const file = new File([blob], nombre, { type: 'application/zip' })
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: `Duplicado ${f.numero || ''}` })
+          return
+        }
+      } catch (e) {
+        if (e && e.name === 'AbortError') return
+      }
+
+      // Descarga clásica.
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = nombre
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch (e) {
+      setError(e.message ?? String(e))
+    } finally {
+      setDescDup(null)
+    }
+  }
+
   const esFactura = (f) => !/nota de cr/i.test(f.tipo || '')
 
   return (
@@ -246,6 +305,19 @@ export default function Historial() {
                     >
                       <IconCompartir />
                     </button>
+
+                    {!modoAnular && esFactura(f) && (
+                      <button
+                        type="button"
+                        className="icon-btn sm"
+                        onClick={() => descargarDuplicado(f)}
+                        disabled={descDup === f.id || anulando != null}
+                        title="Descargar duplicado electrónico (ZIP)"
+                        aria-label="Descargar duplicado (ZIP)"
+                      >
+                        {descDup === f.id ? <span className="spinner-inline" /> : <IconZip />}
+                      </button>
+                    )}
 
                     {!modoAnular && esFactura(f) && (
                       <button
