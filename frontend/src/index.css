@@ -191,7 +191,10 @@ button, .boton-link {
   box-shadow: 0 6px 16px rgba(242,106,27,.26);
   transition: background .15s ease, border-color .15s ease;
 }
-button:hover, .boton-link:hover { background: var(--orange-2); text-decoration: none; color: #fff; }
+/* Ojo: no forzamos color acá. Los botones naranjas ya son blancos por su base;
+   los de fondo claro (íconos, stepper − / +, secundarios) conservan su texto
+   oscuro y no quedan blancos e ilegibles al pasar el mouse o tocar. */
+button:hover, .boton-link:hover { background: var(--orange-2); text-decoration: none; }
 button:disabled { opacity: .6; cursor: default; box-shadow: none; }
 
 button.secundario, .secundario-link, .boton-link.secundario-link {
