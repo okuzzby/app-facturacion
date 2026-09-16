@@ -83,6 +83,7 @@ export default function Layout() {
           <div className="side-legales">
             <NavLink to="/terminos">Términos</NavLink>
             <NavLink to="/privacidad">Privacidad</NavLink>
+            <NavLink to="/seguridad">Seguridad</NavLink>
             <NavLink to="/aviso-legal">Aviso legal</NavLink>
           </div>
           <div className="side-user">
@@ -155,6 +156,7 @@ export default function Layout() {
               <span className="menu-legales-tit">Legales</span>
               <NavLink to="/terminos" onClick={cerrar}>Términos y Condiciones</NavLink>
               <NavLink to="/privacidad" onClick={cerrar}>Política de Privacidad</NavLink>
+              <NavLink to="/seguridad" onClick={cerrar}>Seguridad de la información</NavLink>
               <NavLink to="/aviso-legal" onClick={cerrar}>Aviso Legal</NavLink>
             </div>
           </nav>

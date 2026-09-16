@@ -13,6 +13,7 @@ import MercadoPago from './pages/MercadoPago'
 import Privacidad from './pages/Privacidad'
 import Terminos from './pages/Terminos'
 import AvisoLegal from './pages/AvisoLegal'
+import Seguridad from './pages/Seguridad'
 
 // Puerta de la raíz "/" y del resto de las páginas de la app.
 //  - Sin sesión: en "/" mostramos la landing pública; en cualquier ruta más
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/privacidad" element={<Privacidad />} />
       <Route path="/terminos" element={<Terminos />} />
       <Route path="/aviso-legal" element={<AvisoLegal />} />
+      <Route path="/seguridad" element={<Seguridad />} />
 
       {/* Raíz: landing pública si no hay sesión, app si la hay.
           Las páginas autenticadas cuelgan de acá y comparten el Layout. */}
