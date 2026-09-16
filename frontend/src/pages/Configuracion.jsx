@@ -163,10 +163,23 @@ export default function Configuracion() {
     if (!supabase) return
     cargarCredencial()
     cargarProductos()
-    // ¿Tiene Mercado Pago conectado? (para la tarjeta "Completá tu perfil")
+    // ¿Tiene Mercado Pago conectado? (para la tarjeta "Completá tu perfil").
+    // La tabla mp_cuentas está cerrada por RLS (guarda el token cifrado), así que
+    // el estado lo pedimos al backend, igual que la pantalla de Integraciones.
     ;(async () => {
-      const { data } = await supabase.from('mp_cuentas').select('user_id').maybeSingle()
-      setMpConectado(!!data)
+      try {
+        const backend = import.meta.env.VITE_BACKEND_URL
+        if (!backend) return
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        const r = await fetch(`${backend}/mp/estado`, { headers: { Authorization: `Bearer ${token}` } })
+        if (!r.ok) return
+        const est = await r.json()
+        setMpConectado(Boolean(est?.conectada))
+      } catch {
+        // Si no pudimos consultar, dejamos el ítem como pendiente (no bloquea nada).
+      }
     })()
   }, [])
 
