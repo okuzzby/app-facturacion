@@ -48,15 +48,18 @@ export default function ClienteForm({ inicial, onGuardar, onCancelar, guardando,
   }
 
   function submit(e) {
-    e.preventDefault()
+    e?.preventDefault?.()
     setError(null)
     const r = validarClienteForm({ nombre, cuit, condIva, domicilio })
     if (!r.ok) return setError(r.error)
     onGuardar(r.datos)
   }
 
+  // Usamos un <div>, no un <form>: este componente se muestra dentro del
+  // formulario de Facturar (al vuelo), y anidar <form> hace que Enter recargue
+  // la página. El guardado va por el botón; Enter en el CUIT dispara la búsqueda.
   return (
-    <form className="cli-form" onSubmit={submit}>
+    <div className="cli-form">
       <label className="campo">
         <span>Nombre o razón social</span>
         <input
@@ -86,6 +89,7 @@ export default function ClienteForm({ inicial, onGuardar, onCancelar, guardando,
             inputMode="numeric"
             value={cuit}
             onChange={(e) => { setCuit(formatearCUIT(e.target.value)); setOkMsg(null) }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (cuitValido && !buscando) buscarEnArca() } }}
             placeholder="XX-XXXXXXXX-X"
             maxLength={13}
           />
@@ -122,10 +126,10 @@ export default function ClienteForm({ inicial, onGuardar, onCancelar, guardando,
             Cancelar
           </button>
         )}
-        <button type="submit" disabled={guardando}>
+        <button type="button" onClick={submit} disabled={guardando}>
           {guardando ? 'Guardando…' : ctaLabel || 'Guardar cliente'}
         </button>
       </div>
-    </form>
+    </div>
   )
 }

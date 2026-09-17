@@ -1469,7 +1469,12 @@ app.post('/arca/padron-cliente', requireAuth, async (req, res) => {
         servicio: 'ws_sr_constancia_inscripcion',
       })
     } catch (e) {
-      console.log('[PADRON-CLIENTE] error', String((e && e.message) || e).slice(0, 200))
+      const msg = String((e && e.message) || e)
+      console.log('[PADRON-CLIENTE] error', msg.slice(0, 200))
+      // ARCA devuelve un fault cuando el CUIT no existe / no está inscripto.
+      if (/no existe persona|SRValidationException|no encontr/i.test(msg)) {
+        return res.status(404).json({ error: 'No encontramos ese CUIT en ARCA. Revisá que esté bien escrito.' })
+      }
       return res.status(502).json({ error: 'No se pudo leer el padrón de ARCA. Probá de nuevo.' })
     }
 
