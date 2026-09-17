@@ -36,6 +36,41 @@ const fechaAR = (iso) => {
 // Candado por dispositivo para no re-disparar la actualización automática el mismo día.
 const AUTO_KEY = 'yafact:facturacionAutoDate'
 
+// Feriados nacionales de Argentina 2026 (para correr el vencimiento al día hábil
+// siguiente). Actualizar esta lista cuando cambie el año.
+const FERIADOS_AR = new Set([
+  '2026-01-01', '2026-02-16', '2026-02-17', '2026-03-24', '2026-04-02', '2026-04-03',
+  '2026-05-01', '2026-05-25', '2026-06-15', '2026-06-20', '2026-07-09', '2026-08-17',
+  '2026-10-12', '2026-11-23', '2026-12-08', '2026-12-25',
+])
+const isoUTC = (d) =>
+  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+// Día 20 del mes; si cae sábado, domingo o feriado, se corre al hábil siguiente.
+const vencimientoDelMes = (y, m1) => {
+  const d = new Date(Date.UTC(y, m1 - 1, 20))
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6 || FERIADOS_AR.has(isoUTC(d))) {
+    d.setUTCDate(d.getUTCDate() + 1)
+  }
+  return d
+}
+// Próximo vencimiento del monotributo y cuántos días faltan (según hora AR).
+// Si venció hace 5 días o menos, seguimos mostrando el de este mes (como vencido).
+const proximoVencimiento = () => {
+  const [y, m, day] = hoyAR().split('-').map(Number)
+  const hoy = new Date(Date.UTC(y, m - 1, day))
+  let v = vencimientoDelMes(y, m)
+  let dias = Math.round((v - hoy) / 86400000)
+  if (dias < -5) {
+    const ny = m === 12 ? y + 1 : y
+    const nm = m === 12 ? 1 : m + 1
+    v = vencimientoDelMes(ny, nm)
+    dias = Math.round((v - hoy) / 86400000)
+  }
+  return { fecha: v, dias }
+}
+const fmtVenc = (d) =>
+  new Intl.DateTimeFormat('es-AR', { timeZone: 'UTC', weekday: 'long', day: '2-digit', month: '2-digit' }).format(d)
+
 export default function Home() {
   const { perfilNombre } = useAuth()
   const [facturas, setFacturas] = useState([])
@@ -138,6 +173,18 @@ export default function Home() {
   const nivel = pct >= 95 ? 'crit' : pct >= 80 ? 'warn' : 'ok'
   const queda = tieneTope ? Math.max(0, Number(resumen.tope) - Number(resumen.total)) : 0
 
+  // Recordatorio de vencimiento de la cuota del monotributo. Se muestra solo
+  // cuando faltan 10 días o menos (y hasta 5 días después si venció).
+  const venc = proximoVencimiento()
+  const mostrarVenc = venc.dias <= 10 && venc.dias >= -5
+  const nivelVenc = venc.dias < 0 ? 'venc' : venc.dias <= 5 ? 'warn' : 'ok'
+  const [vDia, vMes] = [String(venc.fecha.getUTCDate()).padStart(2, '0'), String(venc.fecha.getUTCMonth() + 1).padStart(2, '0')]
+  const vencTexto =
+    venc.dias > 1 ? `Vence el ${fmtVenc(venc.fecha)} · faltan ${venc.dias} días`
+      : venc.dias === 1 ? `Vence mañana (${vDia}/${vMes})`
+      : venc.dias === 0 ? `Vence hoy (${vDia}/${vMes})`
+      : `Venció el ${vDia}/${vMes} · hace ${Math.abs(venc.dias)} ${Math.abs(venc.dias) === 1 ? 'día' : 'días'}`
+
   return (
     <div className="page">
       <div className="page-head saludo-page">
@@ -204,6 +251,23 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* Recordatorio de vencimiento de la cuota del monotributo (solo cuando se
+          acerca la fecha). No maneja pagos: es informativo. */}
+      {mostrarVenc && (
+        <div className={`venc-card ${nivelVenc}`}>
+          <span className="venc-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="3" y="4.5" width="18" height="16" rx="2.5" /><path d="M3 9h18M8 2.5v4M16 2.5v4" />
+            </svg>
+          </span>
+          <div className="venc-body">
+            <div className="venc-t">Cuota de monotributo</div>
+            <div className="venc-s">{vencTexto}</div>
+            {venc.dias < 0 && <div className="venc-nota">Si ya la pagaste, ignorá este aviso.</div>}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="page-head" style={{ marginBottom: 8 }}>
