@@ -11,6 +11,7 @@ import {
   generarFactura,
   inspeccionarNotaCredito,
   montoFacturadoMonotributo,
+  comprobantesMensuales,
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
 import { emitirFacturaFlow, anularFlow, puntosVentaFlow } from './ws-flow.js'
@@ -468,7 +469,8 @@ app.get('/arca/facturacion-anual', requireAuth, async (req, res) => {
     .select('*')
     .eq('user_id', req.user.id)
     .maybeSingle()
-  if (!data) return res.json({ vacio: true, vigencia: ESCALA_MONOTRIBUTO.vigencia })
+  const escala = Object.entries(ESCALA_MONOTRIBUTO.topes).map(([cat, t]) => ({ cat, tope: t }))
+  if (!data) return res.json({ vacio: true, escala, vigencia: ESCALA_MONOTRIBUTO.vigencia })
   res.json({
     categoria: data.categoria,
     tope: data.tope,
@@ -476,6 +478,8 @@ app.get('/arca/facturacion-anual', requireAuth, async (req, res) => {
     aproximado: data.aproximado,
     comprobantes: data.comprobantes,
     calculadoAt: data.calculado_at,
+    mensual: data.mensual || null,
+    escala,
     vigencia: ESCALA_MONOTRIBUTO.vigencia,
   })
 })
@@ -541,6 +545,16 @@ app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
     const tope = r.tope || topeDeCategoria(categoria)
     const calculado_at = new Date().toISOString()
 
+    // Desglose mes a mes (Mis Comprobantes). Best-effort: si falla, no rompe el
+    // total anual, solo se queda sin gráfico hasta el próximo intento.
+    let mensual = null
+    try {
+      const mc = await comprobantesMensuales(cred.cuit, cred.clave)
+      if (mc.ok && Array.isArray(mc.mensual)) mensual = mc.mensual
+    } catch (e) {
+      console.log('[FACT-ANUAL] mensual falló:', String((e && e.message) || e))
+    }
+
     await supabaseAdmin.from('facturacion_resumen').upsert({
       user_id: req.user.id,
       categoria: categoria || null,
@@ -550,6 +564,7 @@ app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
       comprobantes: r.facturas || 0,
       puntos: 0,
       calculado_at,
+      ...(mensual ? { mensual } : {}),
     })
 
     res.json({
@@ -561,6 +576,8 @@ app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
       notasCredito: r.notasCredito || 0,
       periodo: r.periodo || null,
       calculadoAt: calculado_at,
+      mensual: mensual || null,
+      escala: Object.entries(ESCALA_MONOTRIBUTO.topes).map(([cat, t]) => ({ cat, tope: t })),
       vigencia: ESCALA_MONOTRIBUTO.vigencia,
     })
   } catch (e) {

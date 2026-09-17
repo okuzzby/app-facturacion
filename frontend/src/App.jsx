@@ -8,6 +8,7 @@ import Home from './pages/Home'
 import Configuracion from './pages/Configuracion'
 import Facturar from './pages/Facturar'
 import Clientes from './pages/Clientes'
+import MiFacturacion from './pages/MiFacturacion'
 import Historial from './pages/Historial'
 import Integraciones from './pages/Integraciones'
 import MercadoPago from './pages/MercadoPago'
@@ -57,6 +58,7 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="facturar" element={<Facturar />} />
         <Route path="clientes" element={<Clientes />} />
+        <Route path="facturacion" element={<MiFacturacion />} />
         <Route path="historial" element={<Historial />} />
         <Route path="configuracion" element={<Configuracion />} />
         <Route path="integraciones" element={<Integraciones />} />

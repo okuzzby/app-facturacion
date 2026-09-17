@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi facturación · Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --ink:#1B1E24; --ink-2:#3A3F49; --muted:#727884;
+    --line:#E6E8EC; --orange:#F26A1B; --orange-2:#D9550C; --orange-soft:#FDECE0; --linea:#F4C79E;
+    --green:#188A54; --red:#C2413B; --shadow-sm:0 1px 2px rgba(20,24,31,.06);
+    --shadow:0 1px 2px rgba(20,24,31,.06),0 12px 30px rgba(20,24,31,.10); --r:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 18px 60px;}
+  h1{font-family:"Manrope";font-weight:800;font-size:clamp(1.4rem,4.5vw,1.85rem);letter-spacing:-.02em;margin:0;}
+  .lead{color:var(--muted);margin:8px 0 0;font-size:.96rem;max-width:60ch;}
+  .mock-tag{display:inline-flex;align-items:center;gap:7px;font-size:.72rem;font-weight:800;color:var(--orange-2);
+    background:var(--orange-soft);border:1px solid var(--linea);padding:5px 11px;border-radius:20px;margin-bottom:14px;font-family:"Manrope";}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-sm);padding:18px;margin-top:18px;}
+  .card-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+  .card-t{font-family:"Manrope";font-weight:800;font-size:1.05rem;}
+  .card-s{color:var(--muted);font-size:.8rem;}
+  /* ---- Gráfico ---- */
+  .chart{margin-top:16px;}
+  .chart-grid{position:relative;height:200px;border-bottom:1.5px solid var(--line);}
+  .gridline{position:absolute;left:0;right:0;border-top:1px dashed #EEF0F3;}
+  .gridline span{position:absolute;left:0;top:-8px;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .bars{position:absolute;inset:0;display:flex;align-items:flex-end;gap:2.5%;padding:0 2px;}
+  .bar-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;position:relative;}
+  .bar{width:64%;max-width:26px;border-radius:5px 5px 0 0;background:var(--orange);transition:filter .15s;cursor:default;}
+  .bar-col.cur .bar{background:var(--orange-2);}
+  .bar-col:hover .bar{filter:brightness(1.08);}
+  .bar-tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    font-size:11px;font-weight:700;padding:3px 7px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;font-variant-numeric:tabular-nums;}
+  .bar-col:hover .bar-tip{opacity:1;}
+  .xlabels{display:flex;gap:2.5%;padding:6px 2px 0;}
+  .xlabels span{flex:1;text-align:center;font-size:10.5px;color:var(--muted);text-transform:capitalize;}
+  .xlabels span.cur{color:var(--orange-2);font-weight:800;}
+  .chart-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:.82rem;}
+  .chart-foot b{font-family:"Manrope";}
+  /* ---- Simulador ---- */
+  .sim-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:14px;}
+  .sim-lbl{font-size:.82rem;color:var(--ink-2);font-weight:600;}
+  .sim-val{font-family:"Manrope";font-weight:800;font-size:1.15rem;font-variant-numeric:tabular-nums;}
+  input[type=range]{width:100%;margin:14px 0 4px;accent-color:var(--orange);}
+  .sim-anual{display:flex;align-items:center;gap:10px;background:var(--orange-soft);border:1px solid var(--linea);
+    border-radius:12px;padding:12px 14px;margin-top:8px;}
+  .sim-anual .k{font-size:.8rem;color:var(--orange-2);font-weight:700;}
+  .sim-anual .v{margin-left:auto;font-family:"Manrope";font-weight:800;font-size:1.15rem;color:var(--orange-2);font-variant-numeric:tabular-nums;}
+  .cat-res{display:flex;align-items:center;gap:12px;margin-top:14px;}
+  .cat-badge{flex:0 0 auto;width:52px;height:52px;border-radius:14px;background:var(--orange);color:#fff;display:grid;place-items:center;
+    font-family:"Manrope";font-weight:800;font-size:1.5rem;box-shadow:0 6px 14px rgba(242,106,27,.3);}
+  .cat-badge.over{background:var(--red);box-shadow:0 6px 14px rgba(194,65,59,.3);font-size:1rem;}
+  .cat-txt{font-size:.9rem;}
+  .cat-txt b{font-family:"Manrope";}
+  .cat-txt small{display:block;color:var(--muted);font-size:.8rem;margin-top:1px;}
+  /* escala A..K */
+  .escala{display:flex;gap:3px;margin-top:16px;}
+  .esc-seg{flex:1;height:8px;border-radius:3px;background:#EEF0F3;position:relative;}
+  .esc-seg.on{background:var(--orange);}
+  .esc-seg.cur{background:var(--orange-2);}
+  .esc-lbls{display:flex;gap:3px;margin-top:4px;}
+  .esc-lbls span{flex:1;text-align:center;font-size:9px;color:var(--muted);font-weight:700;}
+  .esc-lbls span.cur{color:var(--orange-2);}
+  .notas{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-top:18px;box-shadow:var(--shadow-sm);}
+  .notas ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px;}
+  .notas li{position:relative;padding-left:22px;font-size:.88rem;color:var(--ink-2);}
+  .notas li svg{position:absolute;left:0;top:2px;width:15px;height:15px;color:var(--orange);}
+  .notas li b{color:var(--ink);}
+  .aviso{background:#FFF8F2;border:1px solid var(--linea);border-radius:12px;padding:12px 14px;margin-top:12px;font-size:.84rem;color:var(--ink-2);}
+  .aviso b{color:var(--orange-2);}
+  footer{margin-top:22px;color:var(--muted);font-size:.78rem;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="mock-tag">◆ Maqueta — todavía no aplicado</span>
+  <h1>Mi facturación</h1>
+  <p class="lead">Cuánto facturaste mes a mes, y un simulador para ver en qué categoría de monotributo caés según lo que facturás. Pantalla nueva, entrarías desde un enlace en la card de facturación anual del Inicio.</p>
+
+  <!-- GRÁFICO ANUAL -->
+  <div class="card">
+    <div class="card-h">
+      <div class="card-t">Facturación mes a mes</div>
+      <div class="card-s">Últimos 12 meses · facturado con la app</div>
+    </div>
+    <div class="chart">
+      <div class="chart-grid" id="grid">
+        <div class="bars" id="bars"></div>
+      </div>
+      <div class="xlabels" id="xlabels"></div>
+    </div>
+    <div class="chart-foot">
+      <span>Total 12 meses: <b id="total12">—</b></span>
+      <span>Promedio mensual: <b id="prom">—</b></span>
+    </div>
+  </div>
+
+  <!-- SIMULADOR -->
+  <div class="card">
+    <div class="card-h">
+      <div class="card-t">Simulá tu categoría</div>
+      <div class="card-s">¿Cuánto facturás por mes?</div>
+    </div>
+
+    <div class="sim-row">
+      <span class="sim-lbl">Facturación mensual estimada</span>
+      <span class="sim-val" id="mesVal">$ 300.000</span>
+    </div>
+    <input type="range" id="slider" min="50000" max="12000000" step="50000" value="300000">
+
+    <div class="sim-anual">
+      <span class="k">Proyección anual (× 12)</span>
+      <span class="v" id="anualVal">$ 3.600.000</span>
+    </div>
+
+    <div class="cat-res">
+      <span class="cat-badge" id="catBadge">C</span>
+      <div class="cat-txt">
+        <b id="catTxt">Quedarías en Categoría C</b>
+        <small id="catSub">Tope anual $ 24.670.494 · te quedaría margen</small>
+      </div>
+    </div>
+
+    <div class="escala" id="escala"></div>
+    <div class="esc-lbls" id="escLbls"></div>
+  </div>
+
+  <!-- NOTAS -->
+  <div class="notas">
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>El <b>gráfico</b> usa tus facturas emitidas en la app, agrupadas por mes. Bien claro: es lo facturado <b>con YaFact</b>.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>El <b>simulador</b> usa la escala de topes vigente de ARCA (la misma de la barra de categoría). Movés el monto y ves la categoría en vivo.</span></li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg><span>La categoría del mes en curso se resalta en <b>naranja fuerte</b> para diferenciarla.</span></li>
+    </ul>
+    <div class="aviso"><b>Ojo, un detalle a decidir:</b> el gráfico suma lo que facturás por la app. Tu tope real en ARCA puede incluir facturas hechas por fuera. Por eso el gráfico dice “facturado con la app” y el total real sigue saliendo de la card de arriba (dato de ARCA). Si querés, podemos hacer que el total del gráfico se ajuste al de ARCA.</div>
+  </div>
+
+  <footer>YaFact · Maqueta de “Mi facturación” (gráfico anual + simular categoría) · Fase 3. Nada aplicado aún — para tu revisión.</footer>
+</div>
+
+<script>
+  const money0 = (n) => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(n||0);
+  // Datos de ejemplo (12 meses). En la app real salen de facturas_emitidas.
+  const MESES = [
+    ['oct',250000],['nov',315000],['dic',480000],['ene',225000],['feb',270000],['mar',300000],
+    ['abr',345000],['may',290000],['jun',360000],['jul',415000],['ago',380000],['sep',215000]
+  ];
+  const CUR = 11; // índice del mes en curso (sep)
+  // Escala monotributo (topes anuales vigentes ago-2026).
+  const ESCALA = [['A',12009410],['B',17595182],['C',24670494],['D',30628651],['E',36028231],
+    ['F',45151659],['G',53995798],['H',81924660],['I',91699761],['J',105012519],['K',126610830]];
+
+  // ---- Gráfico ----
+  const max = Math.max(...MESES.map(m=>m[1]));
+  const escalaY = Math.ceil(max/100000)*100000;
+  const grid = document.getElementById('grid');
+  [0,0.5,1].forEach(f=>{
+    const g=document.createElement('div'); g.className='gridline'; g.style.top=(100-f*100)+'%';
+    g.innerHTML='<span>'+ (f? money0(escalaY*f).replace('ARS','').trim() : '0') +'</span>'; grid.appendChild(g);
+  });
+  const bars=document.getElementById('bars'), xl=document.getElementById('xlabels');
+  MESES.forEach((m,i)=>{
+    const col=document.createElement('div'); col.className='bar-col'+(i===CUR?' cur':'');
+    const h=Math.round(m[1]/escalaY*100);
+    col.innerHTML='<div class="bar-tip">'+money0(m[1])+'</div><div class="bar" style="height:'+h+'%"></div>';
+    bars.appendChild(col);
+    const s=document.createElement('span'); if(i===CUR)s.className='cur'; s.textContent=m[0]; xl.appendChild(s);
+  });
+  const total=MESES.reduce((a,m)=>a+m[1],0);
+  document.getElementById('total12').textContent=money0(total);
+  document.getElementById('prom').textContent=money0(Math.round(total/12));
+
+  // ---- Simulador ----
+  const slider=document.getElementById('slider');
+  function catDe(anual){ for(const [c,t] of ESCALA){ if(anual<=t) return [c,t]; } return ['—',null]; }
+  function render(){
+    const mes=+slider.value, anual=mes*12;
+    document.getElementById('mesVal').textContent=money0(mes);
+    document.getElementById('anualVal').textContent=money0(anual);
+    const [cat,tope]=catDe(anual);
+    const badge=document.getElementById('catBadge'), txt=document.getElementById('catTxt'), sub=document.getElementById('catSub');
+    if(!tope){ badge.textContent='!'; badge.classList.add('over'); txt.textContent='Excede el monotributo';
+      sub.textContent='Con esa facturación anual pasarías al Régimen General.'; }
+    else { badge.textContent=cat; badge.classList.remove('over'); txt.textContent='Quedarías en Categoría '+cat;
+      const margen=tope-anual; sub.textContent='Tope anual '+money0(tope)+' · te quedan '+money0(margen)+' de margen'; }
+    // escala visual
+    const esc=document.getElementById('escala'), lbls=document.getElementById('escLbls');
+    esc.innerHTML=''; lbls.innerHTML='';
+    ESCALA.forEach(([c,t])=>{
+      const on = anual<=t ? (c===cat?'cur':'') : 'on';
+      const seg=document.createElement('div'); seg.className='esc-seg '+ (anual>t?'on':(c===cat?'cur':'')); esc.appendChild(seg);
+      const l=document.createElement('span'); if(c===cat)l.className='cur'; l.textContent=c; lbls.appendChild(l);
+    });
+  }
+  slider.addEventListener('input',render); render();
+</script>
+</body>
+</html>

@@ -1010,3 +1010,163 @@ export async function montoFacturadoMonotributo(cuit, clave) {
     if (browser) await browser.close()
   }
 }
+
+// ============================================================
+// Mis Comprobantes: lee los comprobantes emitidos de los últimos 12 meses y los
+// agrupa por mes (Facturas suman, Notas de Crédito restan). Fuente real de ARCA
+// (incluye web service y portal). Reusa el mismo login que el monto facturado.
+// ============================================================
+
+// Desde el portal (ya con sesión), abre el servicio "Mis Comprobantes" y devuelve
+// la página parada en la consulta de Comprobantes Emitidos.
+async function entrarAMisComprobantes(page, pasos) {
+  const context = page.context()
+  if (!page.url().includes('portalcf')) {
+    await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+  }
+  await page.waitForTimeout(1000)
+  pasos.push('En el portal, buscando Mis Comprobantes')
+
+  let svc = page.getByText(/^\s*Mis Comprobantes\s*$/i).and(page.locator(':visible')).first()
+  if (!(await svc.count().catch(() => 0))) {
+    const buscador = page
+      .locator('#buscadorInput, input[placeholder*="Busc"], input[placeholder*="busc"], input[type="search"]')
+      .first()
+    await buscador.fill('Mis Comprobantes', { timeout: 12000 }).catch(() => {})
+    await page.waitForTimeout(1000)
+    svc = page.getByText(/^\s*Mis Comprobantes\s*$/i).and(page.locator(':visible')).first()
+  }
+  await svc.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
+  await svc.scrollIntoViewIfNeeded().catch(() => {})
+  const [nueva] = await Promise.all([
+    context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
+    svc.click({ timeout: 15000 }).catch(() => {}),
+  ])
+  await page.waitForTimeout(1500)
+  pasos.push('Servicio Mis Comprobantes abierto')
+
+  // La página del servicio ya tiene la sesión de fes.afip.gob.ar: vamos directo
+  // a la consulta de emitidos.
+  const comp = nueva || page
+  await comp.goto('https://fes.afip.gob.ar/mcmp/jsp/comprobantesEmitidos.do', {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  }).catch(() => {})
+  await comp.waitForTimeout(1500)
+  return comp
+}
+
+// Login + lectura de comprobantes emitidos de los últimos 12 meses, agrupados por
+// mes. Devuelve { ok, mensual:[{periodo:'YYYY-MM', neto, comprobantes}], total }.
+export async function comprobantesMensuales(cuit, clave) {
+  const pasos = []
+  let browser
+  let page
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const comp = await entrarAMisComprobantes(page, pasos)
+
+    // Rango: desde el 1° de hace 11 meses hasta hoy (12 meses calendario, < 365 días).
+    const now = new Date()
+    const desdeD = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+    const fmt = (d) =>
+      `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+    const desde = fmt(desdeD)
+    const hasta = fmt(now)
+
+    // Cargar el rango en el daterangepicker.
+    await comp.waitForSelector('#fechaEmision', { timeout: 20000 }).catch(() => {})
+    await comp.evaluate(
+      ({ desde, hasta }) => {
+        try {
+          const $ = window.jQuery
+          const el = $('#fechaEmision')
+          const drp = el.data('daterangepicker')
+          if (drp && window.moment) {
+            drp.setStartDate(window.moment(desde, 'DD/MM/YYYY'))
+            drp.setEndDate(window.moment(hasta, 'DD/MM/YYYY'))
+          }
+          el.val(desde + ' - ' + hasta).trigger('change')
+        } catch (e) {}
+      },
+      { desde, hasta }
+    )
+    pasos.push('Rango cargado: ' + desde + ' - ' + hasta)
+
+    // Buscar.
+    await comp.click('#buscarComprobantes', { timeout: 15000 }).catch(() => {})
+    // Esperar a que la tabla de resultados se llene (o a que quede claro que no hay).
+    await comp
+      .waitForFunction(
+        () => {
+          try {
+            const $ = window.jQuery
+            return Array.from(document.querySelectorAll('table')).some(
+              (tb) => $.fn.dataTable.isDataTable(tb) && $(tb).DataTable().rows().count() > 0
+            )
+          } catch (e) {
+            return false
+          }
+        },
+        { timeout: 30000 }
+      )
+      .catch(() => {})
+    await comp.waitForTimeout(1000)
+
+    // Agrupar por mes leyendo las celdas renderizadas (fecha, tipo, importe).
+    const { meses, total } = await comp.evaluate(() => {
+      const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim()
+      const t = Array.from(document.querySelectorAll('table')).find((tb) => {
+        try {
+          return window.jQuery && jQuery.fn.dataTable.isDataTable(tb) && jQuery(tb).DataTable().rows().count() > 0
+        } catch (e) {
+          return false
+        }
+      })
+      if (!t) return { meses: {}, total: 0 }
+      try {
+        jQuery(t).DataTable().page.len(-1).draw(false)
+      } catch (e) {}
+      const parseMoney = (s) => {
+        const n = String(s).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')
+        return parseFloat(n) || 0
+      }
+      const meses = {}
+      let total = 0
+      t.querySelectorAll('tbody tr').forEach((tr) => {
+        const td = tr.querySelectorAll('td')
+        if (td.length < 5) return
+        const fecha = clean(td[0].textContent)
+        const tipo = clean(td[1].textContent)
+        const imp = clean(td[4].textContent)
+        const mm = fecha.slice(3) // MM/YYYY
+        const esNC = /nota de cr|^13\b/i.test(tipo)
+        const val = parseMoney(imp)
+        if (!meses[mm]) meses[mm] = { neto: 0, n: 0 }
+        meses[mm].neto += esNC ? -val : val
+        meses[mm].n++
+        total++
+      })
+      return { meses, total }
+    })
+
+    // Armar los 12 meses (aunque algún mes venga en cero).
+    const mensual = []
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const mmYYYY = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+      const periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const g = meses[mmYYYY] || { neto: 0, n: 0 }
+      mensual.push({ periodo, neto: Math.round((g.neto || 0) * 100) / 100, comprobantes: g.n || 0 })
+    }
+
+    console.log('[MIS-COMP] total filas:', total, 'meses:', JSON.stringify(mensual.map((m) => [m.periodo, m.neto])))
+    return { ok: true, mensual, total, pasos }
+  } catch (e) {
+    console.log('[MIS-COMP] error:', String((e && e.message) || e))
+    return { ok: false, error: String((e && e.message) || e), pasos }
+  } finally {
+    if (browser) await browser.close()
+  }
+}

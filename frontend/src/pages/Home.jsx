@@ -248,6 +248,8 @@ export default function Home() {
             {actualizando && (
               <p className="tope-actualizando"><span className="spinner-inline" /> Actualizando con ARCA…</p>
             )}
+
+            <Link to="/facturacion" className="tope-vermas">Ver mi facturación mes a mes →</Link>
           </>
         )}
       </div>
