@@ -1038,21 +1038,41 @@ async function entrarAMisComprobantes(page, pasos) {
   }
   await svc.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
   await svc.scrollIntoViewIfNeeded().catch(() => {})
-  const [nueva] = await Promise.all([
+  await Promise.all([
     context.waitForEvent('page', { timeout: 15000 }).catch(() => null),
     svc.click({ timeout: 15000 }).catch(() => {}),
   ])
-  await page.waitForTimeout(1500)
-  pasos.push('Servicio Mis Comprobantes abierto')
+  pasos.push('Servicio Mis Comprobantes clickeado')
 
-  // La página del servicio ya tiene la sesión de fes.afip.gob.ar: vamos directo
-  // a la consulta de emitidos.
-  const comp = nueva || page
-  await comp.goto('https://fes.afip.gob.ar/mcmp/jsp/comprobantesEmitidos.do', {
-    waitUntil: 'domcontentloaded',
-    timeout: 60000,
-  }).catch(() => {})
-  await comp.waitForTimeout(1500)
+  // Esperar la pestaña real de Mis Comprobantes (fes.afip.gob.ar): es la que tiene
+  // la sesión ya lanzada por el servicio (SSO con token). NO hacemos goto directo
+  // antes de que exista y se asiente, porque sin esa sesión la consulta vuelve vacía.
+  let comp = null
+  const t0 = Date.now()
+  while (Date.now() - t0 < 45000) {
+    for (const p of context.pages()) {
+      if (/fes\.afip\.gob\.ar|mcmp/i.test(p.url())) { comp = p; break }
+    }
+    if (comp) break
+    await sleep(1500)
+  }
+  if (!comp) {
+    pasos.push('No apareció la pestaña de Mis Comprobantes (fes)')
+    return page
+  }
+  await comp.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {})
+  await comp.waitForTimeout(2000)
+  pasos.push('Mis Comprobantes abierto: ' + comp.url())
+
+  // Ir a la consulta de emitidos dentro de la sesión ya establecida.
+  if (!/comprobantesEmitidos/i.test(comp.url())) {
+    await comp.goto('https://fes.afip.gob.ar/mcmp/jsp/comprobantesEmitidos.do', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    }).catch(() => {})
+    await comp.waitForTimeout(1500)
+  }
+  pasos.push('En Comprobantes Emitidos: ' + comp.url())
   return comp
 }
 
@@ -1075,24 +1095,30 @@ export async function comprobantesMensuales(cuit, clave) {
     const desde = fmt(desdeD)
     const hasta = fmt(now)
 
-    // Cargar el rango en el daterangepicker.
+    // Cargar el rango en el daterangepicker. setStartDate/setEndDate aceptan un
+    // string 'DD/MM/YYYY' (lo parsean con el formato del propio picker), así que
+    // no dependemos de window.moment.
     await comp.waitForSelector('#fechaEmision', { timeout: 20000 }).catch(() => {})
-    await comp.evaluate(
-      ({ desde, hasta }) => {
-        try {
-          const $ = window.jQuery
-          const el = $('#fechaEmision')
-          const drp = el.data('daterangepicker')
-          if (drp && window.moment) {
-            drp.setStartDate(window.moment(desde, 'DD/MM/YYYY'))
-            drp.setEndDate(window.moment(hasta, 'DD/MM/YYYY'))
+    const rangoOk = await comp
+      .evaluate(
+        ({ desde, hasta }) => {
+          try {
+            const $ = window.jQuery
+            const el = $('#fechaEmision')
+            const drp = el.data('daterangepicker')
+            if (!drp) return 'sin-drp'
+            drp.setStartDate(desde)
+            drp.setEndDate(hasta)
+            el.val(desde + ' - ' + hasta).trigger('change')
+            return el.val()
+          } catch (e) {
+            return 'err:' + String(e)
           }
-          el.val(desde + ' - ' + hasta).trigger('change')
-        } catch (e) {}
-      },
-      { desde, hasta }
-    )
-    pasos.push('Rango cargado: ' + desde + ' - ' + hasta)
+        },
+        { desde, hasta }
+      )
+      .catch(() => 'evaluate-fallo')
+    pasos.push('Rango cargado (' + desde + ' - ' + hasta + '): ' + rangoOk)
 
     // Buscar.
     await comp.click('#buscarComprobantes', { timeout: 15000 }).catch(() => {})
@@ -1162,6 +1188,7 @@ export async function comprobantesMensuales(cuit, clave) {
     }
 
     console.log('[MIS-COMP] total filas:', total, 'meses:', JSON.stringify(mensual.map((m) => [m.periodo, m.neto])))
+    console.log('[MIS-COMP] pasos:', JSON.stringify(pasos))
     return { ok: true, mensual, total, pasos }
   } catch (e) {
     console.log('[MIS-COMP] error:', String((e && e.message) || e))
