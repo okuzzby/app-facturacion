@@ -1014,12 +1014,23 @@ export async function montoFacturadoMonotributo(cuit, clave) {
 // ============================================================
 // Mis Comprobantes: lee los comprobantes emitidos de los últimos 12 meses y los
 // agrupa por mes (Facturas suman, Notas de Crédito restan). Fuente real de ARCA
-// (incluye web service y portal). Reusa el mismo login que el monto facturado.
+// (incluye web service y portal).
+//
+// Enfoque robusto: en vez de manejar el calendario y la tabla (frágil headless),
+// entramos por el flujo real —elegir persona → Emitidos— y despues llamamos
+// directo a los endpoints internos de datos (ajax.do), que devuelven JSON.
 // ============================================================
 
-// Desde el portal (ya con sesión), abre el servicio "Mis Comprobantes" y devuelve
-// la página parada en la consulta de Comprobantes Emitidos.
-async function entrarAMisComprobantes(page, pasos) {
+// CUIT de 11 dígitos → XX-XXXXXXXX-X (como lo muestra la pantalla de personas).
+function formatearCuit11(cuit) {
+  const c = String(cuit || '').replace(/\D/g, '')
+  return c.length === 11 ? `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}` : c
+}
+
+// Desde el portal, lanza el servicio Mis Comprobantes, ELIGE la persona cuyo CUIT
+// coincide con el emisor (paso clave: sin esto la sesión queda inválida) y entra a
+// "Emitidos". Devuelve la página parada en la consulta, con sesión válida.
+async function entrarAMisComprobantes(page, pasos, cuit) {
   const context = page.context()
   if (!page.url().includes('portalcf')) {
     await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
@@ -1044,9 +1055,7 @@ async function entrarAMisComprobantes(page, pasos) {
   ])
   pasos.push('Servicio Mis Comprobantes clickeado')
 
-  // Esperar la pestaña real de Mis Comprobantes (fes.afip.gob.ar): es la que tiene
-  // la sesión ya lanzada por el servicio (SSO con token). NO hacemos goto directo
-  // antes de que exista y se asiente, porque sin esa sesión la consulta vuelve vacía.
+  // Esperar la pestaña real de Mis Comprobantes (fes.afip.gob.ar).
   let comp = null
   const t0 = Date.now()
   while (Date.now() - t0 < 45000) {
@@ -1056,23 +1065,34 @@ async function entrarAMisComprobantes(page, pasos) {
     if (comp) break
     await sleep(1500)
   }
-  if (!comp) {
-    pasos.push('No apareció la pestaña de Mis Comprobantes (fes)')
-    return page
-  }
+  if (!comp) { pasos.push('No apareció la pestaña de Mis Comprobantes'); return page }
   await comp.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {})
-  await comp.waitForTimeout(2000)
+  await comp.waitForTimeout(1500)
   pasos.push('Mis Comprobantes abierto: ' + comp.url())
 
-  // Ir a la consulta de emitidos dentro de la sesión ya establecida.
-  if (!/comprobantesEmitidos/i.test(comp.url())) {
-    await comp.goto('https://fes.afip.gob.ar/mcmp/jsp/comprobantesEmitidos.do', {
-      waitUntil: 'domcontentloaded',
-      timeout: 60000,
-    }).catch(() => {})
-    await comp.waitForTimeout(1500)
+  // Paso clave: elegir la persona cuyo CUIT coincide con el emisor (si aparece la
+  // pantalla de selección). El CUIT puede representar a varias personas.
+  const cuitFmt = formatearCuit11(cuit)
+  const persona = comp.locator('a.hoverazul', { hasText: cuitFmt }).first()
+  if (await persona.count().catch(() => 0)) {
+    await persona.click({ timeout: 12000 }).catch(() => {})
+    await comp.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {})
+    await comp.waitForTimeout(1200)
+    pasos.push('Persona elegida: ' + cuitFmt)
+  } else {
+    pasos.push('Sin pantalla de selección de persona (o no coincide ' + cuitFmt + ')')
   }
-  pasos.push('En Comprobantes Emitidos: ' + comp.url())
+
+  // Entrar a "Emitidos" (si aparece el menú Emitidos/Recibidos).
+  const emit = comp.getByText(/^\s*Emitidos\s*$/i).and(comp.locator(':visible')).first()
+  if (await emit.count().catch(() => 0)) {
+    await emit.click({ timeout: 12000 }).catch(() => {})
+    await comp.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {})
+    await comp.waitForTimeout(1200)
+    pasos.push('Entró a Emitidos: ' + comp.url())
+  } else {
+    pasos.push('Sin menú Emitidos (posible ya en la consulta): ' + comp.url())
+  }
   return comp
 }
 
@@ -1085,116 +1105,71 @@ export async function comprobantesMensuales(cuit, clave) {
   try {
     ;({ browser, page } = await abrir())
     await loginEnArca(page, cuit, clave, pasos)
-    const comp = await entrarAMisComprobantes(page, pasos)
+    const comp = await entrarAMisComprobantes(page, pasos, cuit)
 
-    // Rango: desde el 1° de hace 11 meses hasta hoy (12 meses calendario, < 365 días).
+    // Rango: desde el 1° de hace 11 meses hasta hoy (12 meses calendario).
     const now = new Date()
     const desdeD = new Date(now.getFullYear(), now.getMonth() - 11, 1)
     const fmt = (d) =>
       `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
     const desde = fmt(desdeD)
     const hasta = fmt(now)
+    const cuitDigits = String(cuit).replace(/\D/g, '')
 
-    // Cargar el rango en el daterangepicker. setStartDate/setEndDate aceptan un
-    // string 'DD/MM/YYYY' (lo parsean con el formato del propio picker), así que
-    // no dependemos de window.moment.
-    await comp.waitForSelector('#fechaEmision', { timeout: 20000 }).catch(() => {})
-    // IMPORTANTE: el input existe en el HTML antes de que jQuery inicialice el
-    // calendario. Esperamos a que jQuery Y el daterangepicker estén listos, si no
-    // el setStartDate falla ("$ is not a function") y busca solo el día de hoy.
-    await comp
-      .waitForFunction(
-        () => {
-          try {
-            return (
-              typeof window.jQuery === 'function' &&
-              window.jQuery('#fechaEmision').length > 0 &&
-              !!window.jQuery('#fechaEmision').data('daterangepicker')
-            )
-          } catch (e) {
-            return false
-          }
-        },
-        { timeout: 25000 }
-      )
-      .catch(() => {})
-    const rangoOk = await comp
-      .evaluate(
-        ({ desde, hasta }) => {
-          try {
-            const $ = window.jQuery
-            const el = $('#fechaEmision')
-            const drp = el.data('daterangepicker')
-            if (!drp) return 'sin-drp'
-            drp.setStartDate(desde)
-            drp.setEndDate(hasta)
-            el.val(desde + ' - ' + hasta).trigger('change')
-            return el.val()
-          } catch (e) {
-            return 'err:' + String(e)
-          }
-        },
-        { desde, hasta }
-      )
-      .catch(() => 'evaluate-fallo')
-    pasos.push('Rango cargado (' + desde + ' - ' + hasta + '): ' + rangoOk)
-
-    // Buscar.
-    await comp.click('#buscarComprobantes', { timeout: 15000 }).catch(() => {})
-    // Esperar a que la tabla de resultados se llene (o a que quede claro que no hay).
-    await comp
-      .waitForFunction(
-        () => {
-          try {
-            const $ = window.jQuery
-            return Array.from(document.querySelectorAll('table')).some(
-              (tb) => $.fn.dataTable.isDataTable(tb) && $(tb).DataTable().rows().count() > 0
-            )
-          } catch (e) {
-            return false
-          }
-        },
-        { timeout: 30000 }
-      )
-      .catch(() => {})
-    await comp.waitForTimeout(1000)
-
-    // Agrupar por mes leyendo las celdas renderizadas (fecha, tipo, importe).
-    const { meses, total } = await comp.evaluate(() => {
-      const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim()
-      const t = Array.from(document.querySelectorAll('table')).find((tb) => {
+    // Todo el pedido de datos se hace por fetch dentro de la sesión de la página:
+    // generarConsulta → (estimarResultados) → listaResultados (JSON con las filas).
+    const res = await comp.evaluate(
+      async ({ desde, hasta, cuit }) => {
+        const base = 'https://fes.afip.gob.ar/mcmp/jsp/ajax.do'
+        const H = { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' }
+        const espera = (ms) => new Promise((r) => setTimeout(r, ms))
+        let g
         try {
-          return window.jQuery && jQuery.fn.dataTable.isDataTable(tb) && jQuery(tb).DataTable().rows().count() > 0
+          g = await (
+            await fetch(
+              base + '?f=generarConsulta&t=E&fechaEmision=' + encodeURIComponent(desde + ' - ' + hasta) +
+                '&tiposComprobantes=&cuitConsultada=' + cuit,
+              H
+            )
+          ).json()
         } catch (e) {
-          return false
+          return { error: 'generarConsulta fetch: ' + String(e) }
         }
-      })
-      if (!t) return { meses: {}, total: 0 }
-      try {
-        jQuery(t).DataTable().page.len(-1).draw(false)
-      } catch (e) {}
-      const parseMoney = (s) => {
-        const n = String(s).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')
-        return parseFloat(n) || 0
-      }
-      const meses = {}
-      let total = 0
-      t.querySelectorAll('tbody tr').forEach((tr) => {
-        const td = tr.querySelectorAll('td')
-        if (td.length < 5) return
-        const fecha = clean(td[0].textContent)
-        const tipo = clean(td[1].textContent)
-        const imp = clean(td[4].textContent)
-        const mm = fecha.slice(3) // MM/YYYY
-        const esNC = /nota de cr|^13\b/i.test(tipo)
-        const val = parseMoney(imp)
-        if (!meses[mm]) meses[mm] = { neto: 0, n: 0 }
-        meses[mm].neto += esNC ? -val : val
-        meses[mm].n++
-        total++
-      })
-      return { meses, total }
-    })
+        if (!g || g.estado !== 'ok' || !g.datos || !g.datos.idConsulta) {
+          return { error: 'generarConsulta: ' + JSON.stringify(g).slice(0, 120) }
+        }
+        const id = g.datos.idConsulta
+        try { await fetch(base + '?f=estimarResultados&id=' + id, H) } catch (e) {}
+        let data = null
+        for (let i = 0; i < 40; i++) {
+          try {
+            const j = await (await fetch(base + '?f=listaResultados&id=' + id + '&_=' + Date.now(), H)).json()
+            if (j && j.estado === 'ok' && j.datos && Array.isArray(j.datos.data)) { data = j.datos.data; break }
+          } catch (e) {}
+          await espera(1500)
+        }
+        if (!data) return { error: 'listaResultados no devolvió filas' }
+        // fila: [0]=fecha DD/MM/YYYY, [1]=tipo, [47]=importe (punto decimal)
+        const meses = {}
+        data.forEach((row) => {
+          const f = String(row[0] || '')
+          const tipo = String(row[1] || '')
+          const imp = parseFloat(String(row[47])) || 0
+          const mm = f.slice(3) // MM/YYYY
+          const esNC = /^(13|113|213|203|53)$/.test(tipo)
+          if (!meses[mm]) meses[mm] = { neto: 0, n: 0 }
+          meses[mm].neto += esNC ? -imp : imp
+          meses[mm].n++
+        })
+        return { meses, total: data.length }
+      },
+      { desde, hasta, cuit: cuitDigits }
+    )
+
+    if (!res || res.error) {
+      console.log('[MIS-COMP] sin datos:', res && res.error, 'pasos:', JSON.stringify(pasos))
+      return { ok: false, error: (res && res.error) || 'sin datos', pasos }
+    }
 
     // Armar los 12 meses (aunque algún mes venga en cero).
     const mensual = []
@@ -1202,13 +1177,12 @@ export async function comprobantesMensuales(cuit, clave) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const mmYYYY = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
       const periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const g = meses[mmYYYY] || { neto: 0, n: 0 }
+      const g = res.meses[mmYYYY] || { neto: 0, n: 0 }
       mensual.push({ periodo, neto: Math.round((g.neto || 0) * 100) / 100, comprobantes: g.n || 0 })
     }
 
-    console.log('[MIS-COMP] total filas:', total, 'meses:', JSON.stringify(mensual.map((m) => [m.periodo, m.neto])))
-    console.log('[MIS-COMP] pasos:', JSON.stringify(pasos))
-    return { ok: true, mensual, total, pasos }
+    console.log('[MIS-COMP] total filas:', res.total, 'meses:', JSON.stringify(mensual.map((m) => [m.periodo, m.neto])))
+    return { ok: true, mensual, total: res.total, pasos }
   } catch (e) {
     console.log('[MIS-COMP] error:', String((e && e.message) || e))
     return { ok: false, error: String((e && e.message) || e), pasos }
