@@ -114,15 +114,19 @@ export default function Home() {
         const dato = r.ok ? j : { vacio: true }
         setResumen(dato)
 
-        // Auto-actualización 1 vez por día: si el dato guardado es de un día
-        // anterior (hora Argentina) y hoy todavía no lo intentamos en este
-        // dispositivo, refrescamos solo, en segundo plano.
+        // Auto-actualización en segundo plano. Dispara si:
+        //  - el dato es de un día anterior (hora Argentina) y hoy no lo intentamos
+        //    todavía en este dispositivo (candado diario), o
+        //  - falta el desglose mensual (recién sale el gráfico): se llena solo la
+        //    primera vez y se auto-repara si alguna vez no vino.
         if (r.ok && dato && !dato.vacio) {
           const hoy = hoyAR()
           let yaHoy = null
           try { yaHoy = localStorage.getItem(AUTO_KEY) } catch { /* sin storage */ }
-          if (fechaAR(dato.calculadoAt) !== hoy && yaHoy !== hoy) {
-            try { localStorage.setItem(AUTO_KEY, hoy) } catch { /* sin storage */ }
+          const staleDia = fechaAR(dato.calculadoAt) !== hoy
+          const faltaMensual = !Array.isArray(dato.mensual) || dato.mensual.length === 0
+          if ((staleDia && yaHoy !== hoy) || faltaMensual) {
+            if (staleDia) { try { localStorage.setItem(AUTO_KEY, hoy) } catch { /* sin storage */ } }
             actualizarResumen(true)
           }
         }
