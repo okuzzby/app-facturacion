@@ -1099,6 +1099,25 @@ export async function comprobantesMensuales(cuit, clave) {
     // string 'DD/MM/YYYY' (lo parsean con el formato del propio picker), así que
     // no dependemos de window.moment.
     await comp.waitForSelector('#fechaEmision', { timeout: 20000 }).catch(() => {})
+    // IMPORTANTE: el input existe en el HTML antes de que jQuery inicialice el
+    // calendario. Esperamos a que jQuery Y el daterangepicker estén listos, si no
+    // el setStartDate falla ("$ is not a function") y busca solo el día de hoy.
+    await comp
+      .waitForFunction(
+        () => {
+          try {
+            return (
+              typeof window.jQuery === 'function' &&
+              window.jQuery('#fechaEmision').length > 0 &&
+              !!window.jQuery('#fechaEmision').data('daterangepicker')
+            )
+          } catch (e) {
+            return false
+          }
+        },
+        { timeout: 25000 }
+      )
+      .catch(() => {})
     const rangoOk = await comp
       .evaluate(
         ({ desde, hasta }) => {
