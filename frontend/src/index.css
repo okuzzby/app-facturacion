@@ -979,11 +979,12 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .fac-card-t { font-family: "Manrope"; font-weight: 800; font-size: 16px; }
 .fac-card-s { color: var(--muted); font-size: 12.5px; }
 
-.fac-chart { margin-top: 16px; }
-.fac-grid { position: relative; height: 200px; border-bottom: 1.5px solid var(--line); }
-.fac-gridline { position: absolute; left: 0; right: 0; border-top: 1px dashed #EEF0F3; }
-.fac-gridline span { position: absolute; left: 0; top: -8px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.fac-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2.5%; padding: 0 2px; }
+.fac-chart { margin-top: 22px; }
+.fac-grid { position: relative; height: 200px; border-bottom: 1.5px solid var(--line); padding-left: 62px; }
+.fac-gridline { position: absolute; left: 62px; right: 0; border-top: 1px dashed #EEF0F3; }
+.fac-gridline span { position: absolute; left: -62px; top: -6px; width: 54px; text-align: right; font-size: 10px;
+  color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+.fac-bars { position: absolute; inset: 0 0 0 62px; display: flex; align-items: flex-end; gap: 2.5%; padding: 0 2px; }
 .fac-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; position: relative; }
 .fac-bar { width: 64%; max-width: 26px; border-radius: 5px 5px 0 0; background: var(--orange); min-height: 2px; transition: filter .15s; }
 .fac-col.cur .fac-bar { background: var(--orange-2); }
@@ -992,7 +993,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none;
   transition: opacity .12s; font-variant-numeric: tabular-nums; z-index: 2; }
 .fac-col:hover .fac-tip { opacity: 1; }
-.fac-xlabels { display: flex; gap: 2.5%; padding: 6px 2px 0; }
+.fac-xlabels { display: flex; gap: 2.5%; padding: 6px 2px 0 64px; }
 .fac-xlabels span { flex: 1; text-align: center; font-size: 10.5px; color: var(--muted); }
 .fac-xlabels span.cur { color: var(--orange-2); font-weight: 800; }
 .fac-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
