@@ -141,8 +141,9 @@ export default function Facturar() {
     if (modo === 'cf') {
       setClienteSel(null)
       setMostrarNuevoCliente(false)
-    } else if (!clienteSel && clientes.length === 0) {
-      // Sin clientes guardados: abrimos directo el alta.
+    } else if (!clienteSel) {
+      // Abrimos directo el alta; el que quiera uno guardado toca
+      // "Elegir un cliente guardado" dentro del formulario.
       setMostrarNuevoCliente(true)
     }
   }
