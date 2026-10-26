@@ -5,7 +5,7 @@ import { COND_IVA_CLIENTE, formatearCUIT, validarClienteForm, esCUITValido, limp
 // Formulario de alta/edición de un cliente. No toca la base: valida y devuelve
 // los datos limpios por onGuardar. Lo usan la página Clientes y el alta al vuelo
 // dentro de Facturar.
-export default function ClienteForm({ inicial, onGuardar, onCancelar, guardando, errorExterno, ctaLabel }) {
+export default function ClienteForm({ inicial, onGuardar, onUsarUnaVez, onCancelar, guardando, errorExterno, ctaLabel }) {
   const [nombre, setNombre] = useState(inicial?.nombre || '')
   const [cuit, setCuit] = useState(inicial?.cuit ? formatearCUIT(inicial.cuit) : '')
   const [condIva, setCondIva] = useState(inicial?.cond_iva || 'Consumidor Final')
@@ -47,12 +47,25 @@ export default function ClienteForm({ inicial, onGuardar, onCancelar, guardando,
     }
   }
 
-  function submit(e) {
-    e?.preventDefault?.()
+  function validarYObtener() {
     setError(null)
     const r = validarClienteForm({ nombre, cuit, condIva, domicilio })
-    if (!r.ok) return setError(r.error)
-    onGuardar(r.datos)
+    if (!r.ok) {
+      setError(r.error)
+      return null
+    }
+    return r.datos
+  }
+
+  function submit(e) {
+    e?.preventDefault?.()
+    const datos = validarYObtener()
+    if (datos) onGuardar(datos)
+  }
+
+  function usarUnaVez() {
+    const datos = validarYObtener()
+    if (datos) onUsarUnaVez(datos)
   }
 
   // Usamos un <div>, no un <form>: este componente se muestra dentro del
@@ -124,6 +137,11 @@ export default function ClienteForm({ inicial, onGuardar, onCancelar, guardando,
         {onCancelar && (
           <button type="button" className="secundario" onClick={onCancelar} disabled={guardando}>
             Cancelar
+          </button>
+        )}
+        {onUsarUnaVez && (
+          <button type="button" className="secundario" onClick={usarUnaVez} disabled={guardando}>
+            Usar solo esta vez
           </button>
         )}
         <button type="button" onClick={submit} disabled={guardando}>

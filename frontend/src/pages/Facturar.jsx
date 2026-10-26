@@ -144,6 +144,14 @@ export default function Facturar() {
     }
   }
 
+  // Cliente ocasional: se usa para esta factura pero no se guarda en la base
+  // (ni queda en "clientes guardados"). El backend acepta cualquier receptor
+  // con CUIT válido sin necesidad de que exista en la tabla `clientes`.
+  function usarClienteAlVuelo(datos) {
+    setClienteSel(datos)
+    setMostrarNuevoCliente(false)
+  }
+
   async function crearClienteAlVuelo(datos) {
     setGuardandoCliente(true)
     setClienteError(null)
@@ -596,6 +604,7 @@ export default function Facturar() {
                 <div className="cli-nuevo-tit">Nuevo cliente</div>
                 <ClienteForm
                   onGuardar={crearClienteAlVuelo}
+                  onUsarUnaVez={usarClienteAlVuelo}
                   onCancelar={clientes.length > 0 || clienteSel ? () => setMostrarNuevoCliente(false) : null}
                   guardando={guardandoCliente}
                   errorExterno={clienteError}
