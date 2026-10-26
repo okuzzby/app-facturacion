@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import CalendarioRango from '../components/CalendarioRango'
 import ClienteForm from '../components/ClienteForm'
-import { condCorta, formatearCUIT, iniciales } from '../lib/clientes'
+import { condCorta, formatearCUIT, iniciales, validarClienteForm } from '../lib/clientes'
 
 const CONCEPTOS = ['Productos', 'Servicios', 'Productos y Servicios']
 const IVA_OPCIONES = [
@@ -79,8 +79,11 @@ export default function Facturar() {
   const [clientes, setClientes] = useState([])
   const [clienteSel, setClienteSel] = useState(null)
   const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false)
+  const [clienteBorrador, setClienteBorrador] = useState(null) // datos crudos mientras se carga un cliente nuevo
   const [guardandoCliente, setGuardandoCliente] = useState(false)
   const [clienteError, setClienteError] = useState(null)
+  const [guardarClienteCheck, setGuardarClienteCheck] = useState(false)
+  const [clienteGuardado, setClienteGuardado] = useState(false)
   // La condición IVA de la factura la define el receptor elegido.
   const condicionIva = facturarA === 'cliente' && clienteSel ? clienteSel.cond_iva : 'Consumidor Final'
 
@@ -144,27 +147,21 @@ export default function Facturar() {
     }
   }
 
-  // Cliente ocasional: se usa para esta factura pero no se guarda en la base
-  // (ni queda en "clientes guardados"). El backend acepta cualquier receptor
-  // con CUIT válido sin necesidad de que exista en la tabla `clientes`.
-  function usarClienteAlVuelo(datos) {
-    setClienteSel(datos)
-    setMostrarNuevoCliente(false)
-  }
-
-  async function crearClienteAlVuelo(datos) {
+  // Guarda en la lista de clientes al cliente ocasional de la factura recién
+  // emitida (se ofrece después de emitir, nunca antes: no tiene sentido
+  // guardar un cliente de una factura que todavía podría fallar).
+  async function guardarClienteDesdeResultado() {
     setGuardandoCliente(true)
     setClienteError(null)
     try {
       const { data, error } = await supabase
         .from('clientes')
-        .insert({ ...datos, user_id: user.id })
+        .insert({ ...clienteSel, user_id: user.id })
         .select('*')
         .single()
       if (error) throw error
       setClientes((prev) => [...prev, data].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '')))
-      setClienteSel(data)
-      setMostrarNuevoCliente(false)
+      setClienteGuardado(true)
     } catch (e) {
       setClienteError(e.message || String(e))
     } finally {
@@ -209,7 +206,13 @@ export default function Facturar() {
     }
     if (total <= 0) return setError('El total de la factura debe ser mayor a 0')
     if (condicionesVenta.length === 0) return setError('Elegí al menos una condición de venta')
-    if (facturarA === 'cliente' && !clienteSel) return setError('Elegí o cargá un cliente, o pasá a Consumidor Final')
+    if (facturarA === 'cliente' && !clienteSel) {
+      if (!mostrarNuevoCliente) return setError('Elegí o cargá un cliente, o pasá a Consumidor Final')
+      // Cliente cargado al vuelo: se valida recién acá, junto con el resto.
+      const r = validarClienteForm(clienteBorrador || {})
+      if (!r.ok) return setError(r.error)
+      setClienteSel(r.datos)
+    }
     setPaso('preview')
   }
 
@@ -271,6 +274,10 @@ export default function Facturar() {
     setFacturarA('cf')
     setClienteSel(null)
     setMostrarNuevoCliente(false)
+    setClienteBorrador(null)
+    setGuardarClienteCheck(false)
+    setClienteGuardado(false)
+    setClienteError(null)
   }
 
   if (cargandoInit) {
@@ -371,6 +378,9 @@ export default function Facturar() {
 
   // Resultado
   if (resultado) {
+    // Cliente cargado al vuelo (no viene de la tabla `clientes`, no tiene id):
+    // se ofrece guardarlo recién acá, ya con la factura emitida.
+    const esClienteOcasional = facturarA === 'cliente' && clienteSel && !clienteSel.id
     return (
       <div className="page">
         <div className="page-head"><h1>Factura emitida ✓</h1></div>
@@ -384,6 +394,34 @@ export default function Facturar() {
               </p>
             )}
           </div>
+
+          {esClienteOcasional && (
+            <div className="setup-box" style={{ marginTop: 12 }}>
+              {clienteGuardado ? (
+                <p className="ok" style={{ margin: 0 }}>Cliente guardado ✓</p>
+              ) : (
+                <>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center', margin: 0, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={guardarClienteCheck}
+                      onChange={(e) => setGuardarClienteCheck(e.target.checked)}
+                    />
+                    Agregar {clienteSel.nombre} a mi lista de clientes
+                  </label>
+                  {guardarClienteCheck && (
+                    <div className="fila-botones" style={{ marginTop: 10 }}>
+                      <button type="button" onClick={guardarClienteDesdeResultado} disabled={guardandoCliente}>
+                        {guardandoCliente ? 'Guardando…' : 'Guardar cliente'}
+                      </button>
+                    </div>
+                  )}
+                  {clienteError && <p className="error" style={{ marginTop: 8 }}>{clienteError}</p>}
+                </>
+              )}
+            </div>
+          )}
+
           <div className="fila-botones" style={{ marginTop: 16 }}>
             <button type="button" onClick={nuevaFactura}>Hacer otra factura</button>
             <Link to="/historial" className="boton-link secundario-link">Ver historial</Link>
@@ -601,15 +639,15 @@ export default function Facturar() {
 
             {mostrarNuevoCliente && (
               <div className="cli-nuevo-box">
-                <div className="cli-nuevo-tit">Nuevo cliente</div>
-                <ClienteForm
-                  onGuardar={crearClienteAlVuelo}
-                  onUsarUnaVez={usarClienteAlVuelo}
-                  onCancelar={clientes.length > 0 || clienteSel ? () => setMostrarNuevoCliente(false) : null}
-                  guardando={guardandoCliente}
-                  errorExterno={clienteError}
-                  ctaLabel="Guardar y usar"
-                />
+                <div className="cli-nuevo-tit" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Datos del cliente</span>
+                  {(clientes.length > 0 || clienteSel) && (
+                    <button type="button" className="cli-chip-x" onClick={() => setMostrarNuevoCliente(false)}>
+                      Elegir un cliente guardado
+                    </button>
+                  )}
+                </div>
+                <ClienteForm sinBotones onChange={setClienteBorrador} />
               </div>
             )}
           </div>

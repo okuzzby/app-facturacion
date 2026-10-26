@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { COND_IVA_CLIENTE, formatearCUIT, validarClienteForm, esCUITValido, limpiarCUIT } from '../lib/clientes'
 
 // Formulario de alta/edición de un cliente. No toca la base: valida y devuelve
-// los datos limpios por onGuardar. Lo usan la página Clientes y el alta al vuelo
-// dentro de Facturar.
-export default function ClienteForm({ inicial, onGuardar, onUsarUnaVez, onCancelar, guardando, errorExterno, ctaLabel }) {
+// los datos limpios por onGuardar. Lo usa la página Clientes (con su propio
+// botón de guardar) y, en modo embebido (sinBotones + onChange), el alta al
+// vuelo dentro de Facturar, donde la validación final la hace el formulario
+// de factura al presionar "Continuar".
+export default function ClienteForm({ inicial, onGuardar, onChange, sinBotones, onCancelar, guardando, errorExterno, ctaLabel }) {
   const [nombre, setNombre] = useState(inicial?.nombre || '')
   const [cuit, setCuit] = useState(inicial?.cuit ? formatearCUIT(inicial.cuit) : '')
   const [condIva, setCondIva] = useState(inicial?.cond_iva || 'Consumidor Final')
@@ -16,6 +18,11 @@ export default function ClienteForm({ inicial, onGuardar, onUsarUnaVez, onCancel
 
   const esCF = condIva === 'Consumidor Final'
   const cuitValido = esCUITValido(cuit)
+
+  useEffect(() => {
+    if (onChange) onChange({ nombre, cuit, condIva, domicilio })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nombre, cuit, condIva, domicilio])
 
   // Trae razón social, domicilio y condición IVA desde el padrón de ARCA.
   async function buscarEnArca() {
@@ -47,25 +54,12 @@ export default function ClienteForm({ inicial, onGuardar, onUsarUnaVez, onCancel
     }
   }
 
-  function validarYObtener() {
-    setError(null)
-    const r = validarClienteForm({ nombre, cuit, condIva, domicilio })
-    if (!r.ok) {
-      setError(r.error)
-      return null
-    }
-    return r.datos
-  }
-
   function submit(e) {
     e?.preventDefault?.()
-    const datos = validarYObtener()
-    if (datos) onGuardar(datos)
-  }
-
-  function usarUnaVez() {
-    const datos = validarYObtener()
-    if (datos) onUsarUnaVez(datos)
+    setError(null)
+    const r = validarClienteForm({ nombre, cuit, condIva, domicilio })
+    if (!r.ok) return setError(r.error)
+    onGuardar(r.datos)
   }
 
   // Usamos un <div>, no un <form>: este componente se muestra dentro del
@@ -133,21 +127,18 @@ export default function ClienteForm({ inicial, onGuardar, onUsarUnaVez, onCancel
 
       {(error || errorExterno) && <p className="error" style={{ margin: '2px 0 0' }}>{error || errorExterno}</p>}
 
-      <div className="fila-botones" style={{ marginTop: 12 }}>
-        {onCancelar && (
-          <button type="button" className="secundario" onClick={onCancelar} disabled={guardando}>
-            Cancelar
+      {!sinBotones && (
+        <div className="fila-botones" style={{ marginTop: 12 }}>
+          {onCancelar && (
+            <button type="button" className="secundario" onClick={onCancelar} disabled={guardando}>
+              Cancelar
+            </button>
+          )}
+          <button type="button" onClick={submit} disabled={guardando}>
+            {guardando ? 'Guardando…' : ctaLabel || 'Guardar cliente'}
           </button>
-        )}
-        {onUsarUnaVez && (
-          <button type="button" className="secundario" onClick={usarUnaVez} disabled={guardando}>
-            Usar solo esta vez
-          </button>
-        )}
-        <button type="button" onClick={submit} disabled={guardando}>
-          {guardando ? 'Guardando…' : ctaLabel || 'Guardar cliente'}
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
