@@ -25,6 +25,8 @@ const primerNombre = (n) => {
 
 // Fecha de Argentina en formato YYYY-MM-DD (para el corte de "una vez por día").
 const hoyAR = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
+// ISO del 1° del mes actual a las 00:00 en hora Argentina (-03:00 fijo, sin horario de verano).
+const primerDiaMesAR = () => `${hoyAR().slice(0, 7)}-01T00:00:00-03:00`
 const fechaAR = (iso) => {
   if (!iso) return ''
   try {
@@ -81,6 +83,9 @@ export default function Home() {
   const [resumen, setResumen] = useState(null)
   const [actualizando, setActualizando] = useState(false)
   const [errorResumen, setErrorResumen] = useState(null)
+  // Total facturado en el mes en curso: se trae aparte (sin límite de filas),
+  // para no depender de las últimas 20 facturas de la lista de abajo.
+  const [mesResumen, setMesResumen] = useState({ total: 0, cantidad: 0 })
 
   useEffect(() => {
     if (!supabase) return
@@ -97,6 +102,20 @@ export default function Home() {
         const { data: mp } = await supabase.from('mp_cobros').select('factura_id').in('factura_id', ids)
         setMpIds(new Set((mp ?? []).map((r) => r.factura_id).filter(Boolean)))
       }
+    })()
+  }, [])
+
+  // Facturado este mes: todas las facturas desde el día 1 (hora AR), sin límite.
+  useEffect(() => {
+    if (!supabase) return
+    ;(async () => {
+      const { data } = await supabase
+        .from('facturas_emitidas')
+        .select('tipo, importe_total, estado')
+        .gte('created_at', primerDiaMesAR())
+      const emitidas = (data ?? []).filter((f) => f.estado === 'emitida' && !/nota de cr/i.test(f.tipo || ''))
+      const total = emitidas.reduce((a, f) => a + (Number(f.importe_total) || 0), 0)
+      setMesResumen({ total, cantidad: emitidas.length })
     })()
   }, [])
 
@@ -162,13 +181,6 @@ export default function Home() {
     }
   }
 
-  const ahora = new Date()
-  const delMes = facturas.filter((f) => {
-    const d = new Date(f.created_at)
-    return d.getMonth() === ahora.getMonth() && d.getFullYear() === ahora.getFullYear()
-  })
-  const emitidasMes = delMes.filter((f) => f.estado === 'emitida' && !/nota de cr/i.test(f.tipo || ''))
-  const totalMes = emitidasMes.reduce((a, f) => a + (Number(f.importe_total) || 0), 0)
   const ultimas = facturas.slice(0, 4)
 
   // Derivados de la barra de tope de categoría.
@@ -200,9 +212,9 @@ export default function Home() {
 
       <div className="mes-card">
         <div className="mes-k">Facturado este mes con la App</div>
-        <div className="mes-v">{money(totalMes)}</div>
+        <div className="mes-v">{money(mesResumen.total)}</div>
         <div className="mes-sub">
-          {emitidasMes.length} {emitidasMes.length === 1 ? 'comprobante emitido' : 'comprobantes emitidos'}
+          {mesResumen.cantidad} {mesResumen.cantidad === 1 ? 'comprobante emitido' : 'comprobantes emitidos'}
         </div>
       </div>
 
@@ -222,7 +234,7 @@ export default function Home() {
               Traemos de ARCA cuánto llevás facturado en el año y te mostramos cuánto te queda antes de
               recategorizar.
             </p>
-            <button type="button" className="tope-btn" onClick={actualizarResumen} disabled={actualizando}>
+            <button type="button" className="tope-btn" onClick={() => actualizarResumen()} disabled={actualizando}>
               {actualizando ? 'Calculando… (puede tardar)' : 'Calcular ahora'}
             </button>
             {errorResumen && <p className="error" style={{ marginTop: 8 }}>{errorResumen}</p>}

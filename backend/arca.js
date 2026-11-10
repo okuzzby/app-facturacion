@@ -947,16 +947,11 @@ async function entrarAMonotributo(page, pasos) {
   return destino || page
 }
 
-// Login + lectura del panel de facturación del Monotributo.
+// Lee el panel de facturación del Monotributo. Asume sesión ya logueada en `page`.
 // Devuelve { ok, categoria, montoFacturado, tope, comprobantesMonto, facturas,
 // notasCredito, periodo, actualizacion }.
-export async function montoFacturadoMonotributo(cuit, clave) {
-  const pasos = []
-  let browser
-  let page
+async function leerMontoMonotributo(page, pasos) {
   try {
-    ;({ browser, page } = await abrir())
-    await loginEnArca(page, cuit, clave, pasos)
     const destino = await entrarAMonotributo(page, pasos)
 
     await destino
@@ -1003,6 +998,22 @@ export async function montoFacturadoMonotributo(cuit, clave) {
       console.log('[MONO-PORTAL] leído:', JSON.stringify({ categoria: out.categoria, monto: out.montoFacturado, tope: out.tope }))
     }
     return out
+  } catch (e) {
+    console.log('[MONO-PORTAL] error:', String((e && e.message) || e))
+    return { ok: false, error: String((e && e.message) || e), pasos }
+  }
+}
+
+// Login + lectura del panel de facturación del Monotributo (abre y cierra su
+// propio browser). Devuelve { ok, categoria, montoFacturado, tope, ... }.
+export async function montoFacturadoMonotributo(cuit, clave) {
+  const pasos = []
+  let browser
+  let page
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    return await leerMontoMonotributo(page, pasos)
   } catch (e) {
     console.log('[MONO-PORTAL] error:', String((e && e.message) || e))
     return { ok: false, error: String((e && e.message) || e), pasos }
@@ -1096,15 +1107,11 @@ async function entrarAMisComprobantes(page, pasos, cuit) {
   return comp
 }
 
-// Login + lectura de comprobantes emitidos de los últimos 12 meses, agrupados por
-// mes. Devuelve { ok, mensual:[{periodo:'YYYY-MM', neto, comprobantes}], total }.
-export async function comprobantesMensuales(cuit, clave) {
-  const pasos = []
-  let browser
-  let page
+// Lee los comprobantes emitidos de los últimos 12 meses, agrupados por mes.
+// Asume sesión ya logueada en `page`. Devuelve
+// { ok, mensual:[{periodo:'YYYY-MM', neto, comprobantes}], total }.
+async function leerComprobantesMensuales(page, pasos, cuit) {
   try {
-    ;({ browser, page } = await abrir())
-    await loginEnArca(page, cuit, clave, pasos)
     const comp = await entrarAMisComprobantes(page, pasos, cuit)
 
     // Rango: desde el 1° de hace 11 meses hasta hoy (12 meses calendario).
@@ -1186,6 +1193,43 @@ export async function comprobantesMensuales(cuit, clave) {
   } catch (e) {
     console.log('[MIS-COMP] error:', String((e && e.message) || e))
     return { ok: false, error: String((e && e.message) || e), pasos }
+  }
+}
+
+// Login + lectura de comprobantes emitidos de los últimos 12 meses (abre y
+// cierra su propio browser). Devuelve { ok, mensual, total }.
+export async function comprobantesMensuales(cuit, clave) {
+  const pasos = []
+  let browser
+  let page
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    return await leerComprobantesMensuales(page, pasos, cuit)
+  } catch (e) {
+    console.log('[MIS-COMP] error:', String((e && e.message) || e))
+    return { ok: false, error: String((e && e.message) || e), pasos }
+  } finally {
+    if (browser) await browser.close()
+  }
+}
+
+// Combinada: un solo login a ARCA para leer el monto facturado del Monotributo
+// y el desglose mensual de "Mis Comprobantes" (en vez de loguearse dos veces).
+// Devuelve { monto, mc } con la misma forma que devolvían las funciones sueltas.
+export async function facturacionAnualCompleta(cuit, clave) {
+  const pasos = []
+  let browser
+  let page
+  try {
+    ;({ browser, page } = await abrir())
+    await loginEnArca(page, cuit, clave, pasos)
+    const monto = await leerMontoMonotributo(page, pasos)
+    const mc = await leerComprobantesMensuales(page, pasos, cuit)
+    return { monto, mc }
+  } catch (e) {
+    const err = { ok: false, error: String((e && e.message) || e), pasos }
+    return { monto: err, mc: err }
   } finally {
     if (browser) await browser.close()
   }

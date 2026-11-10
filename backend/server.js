@@ -10,8 +10,7 @@ import {
   inspeccionarFactura,
   generarFactura,
   inspeccionarNotaCredito,
-  montoFacturadoMonotributo,
-  comprobantesMensuales,
+  facturacionAnualCompleta,
 } from './arca.js'
 import { emitirSpike } from './ws-spike.js' // TEMPORAL Fase 0
 import { emitirFacturaFlow, anularFlow, puntosVentaFlow } from './ws-flow.js'
@@ -464,11 +463,12 @@ async function categoriaDeUsuario(cuit) {
 // Devuelve el resumen ya guardado (sin recalcular). El Inicio lo lee al cargar.
 app.get('/arca/facturacion-anual', requireAuth, async (req, res) => {
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('facturacion_resumen')
     .select('*')
     .eq('user_id', req.user.id)
     .maybeSingle()
+  if (error) console.log('[FACT-ANUAL] error leyendo resumen guardado:', error.message)
   const escala = Object.entries(ESCALA_MONOTRIBUTO.topes).map(([cat, t]) => ({ cat, tope: t }))
   if (!data) return res.json({ vacio: true, escala, vigencia: ESCALA_MONOTRIBUTO.vigencia })
   res.json({
@@ -533,8 +533,9 @@ app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'No tenés la Clave Fiscal cargada para leer tu facturación en ARCA' })
     }
 
-    // Fuente exacta: el panel "Facturación electrónica" del portal del Monotributo.
-    const r = await montoFacturadoMonotributo(cred.cuit, cred.clave)
+    // Un solo login a ARCA para leer el monto del Monotributo y el desglose
+    // mensual de Mis Comprobantes (evita abrir dos navegadores por request).
+    const { monto: r, mc } = await facturacionAnualCompleta(cred.cuit, cred.clave)
     if (!r.ok || r.montoFacturado == null) {
       return res.status(502).json({ error: r.error || 'No se pudo leer tu facturación del portal de ARCA' })
     }
@@ -548,24 +549,24 @@ app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
     // Desglose mes a mes (Mis Comprobantes). Best-effort: si falla, no rompe el
     // total anual, solo se queda sin gráfico hasta el próximo intento.
     let mensual = null
-    try {
-      const mc = await comprobantesMensuales(cred.cuit, cred.clave)
-      if (mc.ok && Array.isArray(mc.mensual)) mensual = mc.mensual
-    } catch (e) {
-      console.log('[FACT-ANUAL] mensual falló:', String((e && e.message) || e))
-    }
+    if (mc.ok && Array.isArray(mc.mensual)) mensual = mc.mensual
+    else console.log('[FACT-ANUAL] mensual falló:', mc.error)
 
-    await supabaseAdmin.from('facturacion_resumen').upsert({
-      user_id: req.user.id,
-      categoria: categoria || null,
-      tope: tope || null,
-      total_12m: r.montoFacturado,
-      aproximado: false,
-      comprobantes: r.facturas || 0,
-      puntos: 0,
-      calculado_at,
-      ...(mensual ? { mensual } : {}),
-    })
+    const { error: upsertErr } = await supabaseAdmin.from('facturacion_resumen').upsert(
+      {
+        user_id: req.user.id,
+        categoria: categoria || null,
+        tope: tope || null,
+        total_12m: r.montoFacturado,
+        aproximado: false,
+        comprobantes: r.facturas || 0,
+        puntos: 0,
+        calculado_at,
+        ...(mensual ? { mensual } : {}),
+      },
+      { onConflict: 'user_id' }
+    )
+    if (upsertErr) console.log('[FACT-ANUAL] error guardando resumen:', upsertErr.message)
 
     res.json({
       categoria: categoria || null,
