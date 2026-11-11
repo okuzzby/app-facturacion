@@ -994,6 +994,7 @@ async function leerMontoMonotributo(page, pasos) {
       console.log('[MONO-PORTAL] no se pudo leer el monto. url:', destino.url(), 'pasos:', JSON.stringify(pasos))
       out.ok = false
       out.error = 'No se pudo leer el monto facturado del portal'
+      out.captura = await captura(destino)
     } else {
       console.log('[MONO-PORTAL] leído:', JSON.stringify({ categoria: out.categoria, monto: out.montoFacturado, tope: out.tope }))
     }
@@ -1175,7 +1176,7 @@ async function leerComprobantesMensuales(page, pasos, cuit) {
 
     if (!res || res.error) {
       console.log('[MIS-COMP] sin datos:', res && res.error, 'pasos:', JSON.stringify(pasos))
-      return { ok: false, error: (res && res.error) || 'sin datos', pasos }
+      return { ok: false, error: (res && res.error) || 'sin datos', pasos, captura: await captura(comp) }
     }
 
     // Armar los 12 meses (aunque algún mes venga en cero).

@@ -520,6 +520,28 @@ app.get('/arca/duplicado/:facturaId', requireAuth, async (req, res) => {
   }
 })
 
+// Sube una captura de diagnóstico (base64) cuando el scraping de ARCA falla,
+// para poder ver qué pantalla le mostró el portal a la automatización.
+async function subirCapturaDebug(userId, tag, base64) {
+  if (!base64 || !supabaseAdmin) return null
+  try {
+    const path = `debug/${userId}-${tag}-${Date.now()}.png`
+    const buf = Buffer.from(base64, 'base64')
+    const { error } = await supabaseAdmin.storage
+      .from('facturas')
+      .upload(path, buf, { contentType: 'image/png', upsert: true })
+    if (error) {
+      console.log('[FACT-ANUAL] no se pudo subir captura debug:', error.message)
+      return null
+    }
+    const { data: signed } = await supabaseAdmin.storage.from('facturas').createSignedUrl(path, 3600)
+    return signed?.signedUrl || path
+  } catch (e) {
+    console.log('[FACT-ANUAL] error subiendo captura debug:', String((e && e.message) || e))
+    return null
+  }
+}
+
 // Recalcula contra ARCA (categoría + suma de los últimos 12 meses) y guarda el
 // resultado. Operación pesada: la dispara el botón "Actualizar" del Inicio.
 app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
@@ -536,6 +558,14 @@ app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
     // Un solo login a ARCA para leer el monto del Monotributo y el desglose
     // mensual de Mis Comprobantes (evita abrir dos navegadores por request).
     const { monto: r, mc } = await facturacionAnualCompleta(cred.cuit, cred.clave)
+    if (r.captura) {
+      const url = await subirCapturaDebug(req.user.id, 'mono', r.captura)
+      console.log('[FACT-ANUAL] captura debug (monotributo):', url)
+    }
+    if (mc.captura) {
+      const url = await subirCapturaDebug(req.user.id, 'miscomp', mc.captura)
+      console.log('[FACT-ANUAL] captura debug (mis-comprobantes):', url)
+    }
     if (!r.ok || r.montoFacturado == null) {
       return res.status(502).json({ error: r.error || 'No se pudo leer tu facturación del portal de ARCA' })
     }
