@@ -1230,7 +1230,7 @@ export async function facturacionAnualCompleta(cuit, clave) {
     await loginEnArca(page, cuit, clave, pasos)
     // loginEnArca no valida: si ARCA nos dejó en el login, la clave fue rechazada.
     await page
-      .waitForURL((u) => !String(u).includes('contribuyente_/login.xhtml'), { timeout: 15000 })
+      .waitForURL((u) => !/contribuyente_\/login/i.test(String(u)), { timeout: 15000 })
       .catch(() => {})
     {
       const u = page.url()
@@ -1240,7 +1240,9 @@ export async function facturacionAnualCompleta(cuit, clave) {
         pasos.push(`Texto tras login: ${txt}`)
       }
     }
-    if (page.url().includes('contribuyente_/login.xhtml')) {
+    if (/contribuyente_\/login/i.test(page.url())) {
+      const body = await page.evaluate(() => document.body.innerText || '').catch(() => '')
+      const pideCaptcha = /captcha/i.test(page.url()) || /captcha/i.test(body)
       const msg = await page
         .evaluate(() => {
           const el = document.querySelector('.ui-messages-error, .ui-message-error, [id$=":msg"], .error, .alert-danger')
@@ -1251,7 +1253,9 @@ export async function facturacionAnualCompleta(cuit, clave) {
       const detalle = String(msg).trim().slice(0, 200)
       const err = {
         ok: false,
-        error: `ARCA no aceptó el login con la Clave Fiscal guardada${detalle ? ` ("${detalle}")` : ''}. Reconectá ARCA en Configuración.`,
+        error: pideCaptcha
+          ? 'ARCA está pidiendo un captcha para este ingreso y el cálculo automático no puede resolverlo. Probá de nuevo más tarde.'
+          : `ARCA no aceptó el login con la Clave Fiscal guardada${detalle ? ` ("${detalle}")` : ''}. Reconectá ARCA en Configuración.`,
         pasos,
         captura: cap,
       }
