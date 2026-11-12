@@ -1229,6 +1229,14 @@ export async function facturacionAnualCompleta(cuit, clave) {
     await page
       .waitForURL((u) => !String(u).includes('contribuyente_/login.xhtml'), { timeout: 15000 })
       .catch(() => {})
+    {
+      const u = page.url()
+      pasos.push(`URL tras login: ${u.slice(0, 120)}`)
+      if (!u.includes('portalcf')) {
+        const txt = await page.evaluate(() => (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 250)).catch(() => '')
+        pasos.push(`Texto tras login: ${txt}`)
+      }
+    }
     if (page.url().includes('contribuyente_/login.xhtml')) {
       const msg = await page
         .evaluate(() => {
