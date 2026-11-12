@@ -189,6 +189,19 @@ export async function loginEnArca(page, cuit, clave, pasos) {
   await page.waitForSelector('[id="F1:password"]', { timeout: 30000 })
   await page.fill('[id="F1:password"]', clave)
   pasos.push('Clave ingresada')
+  // Dejamos que la página termine de cargar sus scripts (incluido el captcha
+  // invisible de ARCA, si lo hay) antes de enviar el formulario.
+  await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {})
+  const capInfo = await page
+    .evaluate(() => {
+      const fr = [...document.querySelectorAll('iframe')].map((f) => (f.src || '').slice(0, 70))
+      const inp = [...document.querySelectorAll('input,textarea,div')]
+        .filter((e) => /captcha/i.test((e.id || '') + (e.name || '') + (e.className || '')))
+        .map((e) => `${e.tagName}#${e.id || ''}`.slice(0, 50))
+      return JSON.stringify({ fr: fr.slice(0, 3), cap: inp.slice(0, 5) })
+    })
+    .catch(() => '')
+  pasos.push(`Captcha en página: ${capInfo}`)
   await page.click('[id="F1:btnIngresar"]')
   // No esperamos networkidle completo del portal (SPA que puede seguir pidiendo
   // datos). Con domcontentloaded + un colchón acotado alcanza; el buscador del
