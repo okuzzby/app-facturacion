@@ -38,6 +38,10 @@ const fechaAR = (iso) => {
 // Candado por dispositivo para no re-disparar la actualización automática el mismo día.
 const AUTO_KEY = 'yafact:facturacionAutoDate'
 
+// DESHABILITADO: ARCA pide captcha al login automático y el cálculo no puede
+// completarse. Poner en true (y FACT_ANUAL_ACTIVA=true en el backend) para reactivar.
+const FACT_ANUAL_ACTIVA = false
+
 // Feriados nacionales de Argentina 2026 (para correr el vencimiento al día hábil
 // siguiente). Actualizar esta lista cuando cambie el año.
 const FERIADOS_AR = new Set([
@@ -121,6 +125,7 @@ export default function Home() {
 
   // Carga el resumen de facturación anual guardado (sin recalcular).
   useEffect(() => {
+    if (!FACT_ANUAL_ACTIVA) return
     ;(async () => {
       try {
         const backend = import.meta.env.VITE_BACKEND_URL
@@ -220,6 +225,7 @@ export default function Home() {
 
       {/* Tu facturación anual vs. el tope de tu categoría (dato de ARCA).
           La card está SIEMPRE presente; si todavía no cargó, avisa. */}
+      {FACT_ANUAL_ACTIVA && (
       <div className="tope-card">
         <div className="tope-top">
           <div className="tope-q">Tu facturación anual</div>
@@ -269,6 +275,7 @@ export default function Home() {
           </>
         )}
       </div>
+      )}
 
       {/* Recordatorio de vencimiento de la cuota del monotributo (solo cuando se
           acerca la fecha). No maneja pagos: es informativo. */}

@@ -545,6 +545,10 @@ async function subirCapturaDebug(userId, tag, base64) {
 // Recalcula contra ARCA (categoría + suma de los últimos 12 meses) y guarda el
 // resultado. Operación pesada: la dispara el botón "Actualizar" del Inicio.
 app.post('/arca/facturacion-anual', requireAuth, async (req, res) => {
+  // DESHABILITADO: ARCA pide captcha al login automático. Reactivar con FACT_ANUAL_ACTIVA=true.
+  if (process.env.FACT_ANUAL_ACTIVA !== 'true') {
+    return res.status(503).json({ error: 'El cálculo de facturación anual está deshabilitado temporalmente.' })
+  }
   if (!supabaseAdmin) return res.status(500).json({ error: 'Backend sin SUPABASE_SERVICE_ROLE_KEY' })
   try {
     // Necesitamos la Clave Fiscal para entrar al portal del Monotributo.
