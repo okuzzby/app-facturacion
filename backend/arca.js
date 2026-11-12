@@ -202,16 +202,23 @@ const RUIDO = /^(salir|ingresar|volver|continuar|aceptar|cancelar|limpiar|siguie
 
 const PORTAL_URL = 'https://portalcf.cloud.afip.gob.ar/portal/app/'
 
+// Tras el login ARCA hace varias redirecciones hasta el portal. Hay que dejar que
+// las termine solo: saltar por URL en el medio corta el SSO y te devuelve al login.
+// Solo si no llega al portal en 30 s usamos la URL directa como último recurso.
+async function irAlPortal(page) {
+  if (page.url().includes('portalcf')) return
+  await page.waitForURL(/portalcf\.cloud\.afip\.gob\.ar/, { timeout: 30000 }).catch(() => {})
+  if (!page.url().includes('portalcf')) {
+    await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+  }
+}
+
 // Desde el portal (ya logueado), busca y abre "Comprobantes en línea".
 // No se puede entrar directo a la URL de RCEL (da Forbidden): hay que
 // clickear el servicio en el portal para que ARCA habilite el acceso.
 async function entrarARcel(page, pasos) {
   const context = page.context()
-  if (!page.url().includes('portalcf')) {
-    await page
-      .goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 })
-      .catch(() => {})
-  }
+  await irAlPortal(page)
   // El buscador se auto-espera al hacer fill; solo dejamos un colchón chico.
   await page.waitForTimeout(600)
   pasos.push('En el portal, buscando el servicio')
@@ -918,9 +925,7 @@ async function esperarPanelMono(context, timeoutMs, pasos) {
 // Monotributo (auth.afip.gov.ar) redirige solo al panel.
 async function entrarAMonotributo(page, pasos) {
   const context = page.context()
-  if (!page.url().includes('portalcf')) {
-    await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
-  }
+  await irAlPortal(page)
   await page.waitForTimeout(1000)
   pasos.push('En el portal de ARCA')
 
@@ -1044,9 +1049,7 @@ function formatearCuit11(cuit) {
 // "Emitidos". Devuelve la página parada en la consulta, con sesión válida.
 async function entrarAMisComprobantes(page, pasos, cuit) {
   const context = page.context()
-  if (!page.url().includes('portalcf')) {
-    await page.goto(PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
-  }
+  await irAlPortal(page)
   await page.waitForTimeout(1000)
   pasos.push('En el portal, buscando Mis Comprobantes')
 
