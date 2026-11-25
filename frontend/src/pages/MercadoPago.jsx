@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -119,21 +119,35 @@ export default function MercadoPago() {
     }
   }
 
-  async function sincronizar() {
-    setError(null)
-    setMsg(null)
+  // auto = true cuando se dispara sola al entrar a la pantalla: silenciosa si no hay
+  // novedades o si falla (la lista ya guardada sigue visible; queda el botón manual).
+  async function sincronizar(auto = false) {
+    if (!auto) {
+      setError(null)
+      setMsg(null)
+    }
     setSincronizando(true)
     try {
       const r = await apiMP('/mp/cobros/sync', { method: 'POST' })
       setPage(0)
       await cargarCobros(0, pageSize)
-      setMsg(r.nuevos > 0 ? `Se trajeron ${r.nuevos} cobro(s) nuevo(s).` : 'No hay cobros nuevos.')
+      if (!auto) setMsg(r.nuevos > 0 ? `Se trajeron ${r.nuevos} cobro(s) nuevo(s).` : 'No hay cobros nuevos.')
+      else if (r.nuevos > 0) setMsg(`Se trajeron ${r.nuevos} cobro(s) nuevo(s).`)
     } catch (e) {
-      setError(e.message ?? String(e))
+      if (!auto) setError(e.message ?? String(e))
     } finally {
       setSincronizando(false)
     }
   }
+
+  // Al entrar (cuenta conectada) se actualiza sola, una vez por visita.
+  const yaSincronizo = useRef(false)
+  useEffect(() => {
+    if (!estado?.conectada || yaSincronizo.current) return
+    yaSincronizo.current = true
+    sincronizar(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado?.conectada])
 
   function toggleSel(id) {
     setSeleccion((prev) => {
@@ -292,7 +306,7 @@ export default function MercadoPago() {
           <section className="seccion">
             <div className="sec-head">
               <h2>Cobros de Mercado Pago</h2>
-              <button type="button" className="secundario" onClick={sincronizar} disabled={sincronizando}>
+              <button type="button" className="secundario" onClick={() => sincronizar()} disabled={sincronizando}>
                 {sincronizando ? 'Actualizando…' : 'Actualizar'}
               </button>
             </div>
