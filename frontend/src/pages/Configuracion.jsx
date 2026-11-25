@@ -29,6 +29,14 @@ export default function Configuracion() {
   const [delAbierto, setDelAbierto] = useState(false) // panel desplegado
   const [delTexto, setDelTexto] = useState('') // debe escribir "ELIMINAR"
   const [delModal, setDelModal] = useState(false) // 2da confirmación (modal)
+
+  // Con un modal abierto, el scroll es del modal y no de la página de atrás.
+  useEffect(() => {
+    if (!checkoutAbierto && !delModal) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [checkoutAbierto, delModal])
   const [delPass, setDelPass] = useState('')
   const [delCargando, setDelCargando] = useState(false)
   const [delError, setDelError] = useState(null)
@@ -1595,7 +1603,8 @@ export default function Configuracion() {
       {/* Modal: checkout de suscripción Pro (tarjeta) */}
       {checkoutAbierto && (
         <div className="modal-overlay" onClick={() => setCheckoutAbierto(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+          <div className="modal-card con-x" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <button type="button" className="modal-x" aria-label="Cerrar" onClick={() => setCheckoutAbierto(false)}>×</button>
             <h3 style={{ color: 'var(--ink)' }}>Suscribirme a Pro</h3>
             <p className="sub" style={{ marginTop: -4 }}>
               {proEstado?.precio ? `$${new Intl.NumberFormat('es-AR').format(proEstado.precio)} por mes` : ''} · pagás con tu tarjeta y se renueva solo cada mes.
